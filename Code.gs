@@ -254,6 +254,12 @@ function doGet(e) {
     result.bannieres = readSheetAsObjects_(ss, BANNIERES_SHEET);
     result.interventions = readSheetAsObjects_(ss, INTERVENTIONS_SHEET);
     result.marketing = getMarketingFiles_();
+    // Diagnostic temporaire : à retirer une fois le problème résolu.
+    result.marketing_debug = {
+      folder_id_configure: MARKETING_FOLDER_ID,
+      nb_fichiers_trouves: result.marketing.length,
+      derniere_erreur: MARKETING_LAST_ERROR
+    };
 
     return jsonOut({ ok: true, data: result });
   } catch (err) {
@@ -288,9 +294,15 @@ function getMarketingFiles_() {
     out.sort(function (a, b) { return String(b.updated).localeCompare(String(a.updated)); });
     return out;
   } catch (err) {
+    // NE PAS avaler l'erreur silencieusement : on la remonte dans le JSON
+    // (champ marketing_error) pour pouvoir diagnostiquer depuis le
+    // navigateur en ouvrant simplement l'URL du Web App. À retirer une
+    // fois que le dossier Marketing fonctionne normalement.
+    MARKETING_LAST_ERROR = String(err);
     return [];
   }
 }
+var MARKETING_LAST_ERROR = '';
 
 function readSheetAsObjects_(ss, sheetName) {
   const sheet = ss.getSheetByName(sheetName);
