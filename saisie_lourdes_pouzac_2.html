@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Franchise MJ — Saisie KPI</title>
+<style>
+/* ============================================================================
+   FRANCHISE MJ — Thème partagé (repris de la palette franchise-py)
+   Chargé par saisie_lourdes_pouzac.html et dashboard_lourdes_pouzac.html
+   ==========================================================================*/
+:root {
+  --bg: #f0f2f5;
+  --card: #ffffff;
+  --border: #dde1ea;
+  --gold: #b8860b;
+  --gold2: #d4a017;
+  --text: #1a1d2e;
+  --muted: #6b7280;
+  --green: #27ae60;
+  --red: #c0392b;
+}
+body.dark-mode {
+  --bg: #0f1117;
+  --card: #1a1d2e;
+  --border: #2e3347;
+  --gold: #d4a017;
+  --gold2: #e8b820;
+  --text: #e8eaf0;
+  --muted: #8892a4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  transition: background .2s, color .2s;
+}
+header {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding: 12px 20px; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 12px; justify-content: space-between;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; }
+.brand-title { font-size: 1.05rem; font-weight: 800; color: var(--text); line-height: 1.2; }
+.brand-sub { font-size: .72rem; color: var(--muted); }
+.header-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── Barre d'outils (période, actions) ──────────────────────────────── */
+.toolbar-group {
+  display: flex; align-items: center; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px;
+}
+.toolbar-group button {
+  border: none; background: transparent; color: var(--muted);
+  padding: 6px 12px; border-radius: 7px; font-size: .78rem; font-weight: 700; cursor: pointer;
+}
+.toolbar-group button.active { background: var(--card); color: var(--gold); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.toolbar-group button:disabled { opacity: .4; cursor: not-allowed; }
+.toolbar-btn {
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  padding: 7px 13px; border-radius: 10px; font-size: .78rem; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.toolbar-btn:hover { border-color: var(--gold); }
+
+/* ── Onglets "espaces" (Pilotage Opérationnel, Performance...) ──────── */
+.espace-tabs { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.espace-pill {
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  padding: 6px 16px; border-radius: 13px; font-size: .82rem; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.espace-pill.active { border: 2px solid var(--gold); color: var(--gold); padding: 5px 15px; }
+.espace-pill .soon-badge {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--muted); background: var(--border); padding: 1px 6px; border-radius: 999px;
+}
+
+/* ── Onglets restaurant (avec icône arche colorée) ──────────────────── */
+.resto-tabs { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
+.resto-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+  padding: 6px 14px 6px 6px; border-radius: 12px; font-size: .85rem; font-weight: 700; cursor: pointer;
+}
+.resto-tab .arch-badge {
+  width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+}
+.resto-tab .arch-badge .arch-icon { width: 15px; height: 11px; }
+.resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+
+/* ── Grille de tuiles catégories ─────────────────────────────────────── */
+.category-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px; margin-top: 4px;
+}
+.category-tile {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 22px 16px; text-align: center; cursor: pointer; transition: all .15s;
+}
+.category-tile:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.category-tile .cat-icon {
+  width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+}
+.category-tile .cat-label { font-size: .82rem; font-weight: 800; color: var(--text); margin-bottom: 3px; }
+.category-tile .cat-count { font-size: .7rem; color: var(--muted); }
+
+/* ── Fil d'ariane retour ─────────────────────────────────────────────── */
+.breadcrumb-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.breadcrumb-back {
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  padding: 7px 14px; border-radius: 10px; font-size: .82rem; font-weight: 700; cursor: pointer;
+}
+.breadcrumb-back:hover { border-color: var(--gold); }
+.breadcrumb-title { font-size: 1rem; font-weight: 800; color: var(--text); }
+
+.soon-panel {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.soon-panel .soon-emoji { font-size: 2.2rem; margin-bottom: 12px; }
+
+.resto-switch {
+  display: flex; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px; gap: 3px;
+}
+.resto-switch button {
+  border: none; background: transparent; padding: 7px 16px;
+  border-radius: 999px; font-size: .82rem; font-weight: 700;
+  color: var(--muted); cursor: pointer; transition: all .15s;
+}
+.resto-switch button.active { background: var(--gold); color: #fff; }
+
+.dark-toggle {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--card);
+  cursor: pointer; font-size: 16px; display: flex;
+  align-items: center; justify-content: center;
+  transition: border-color .2s, transform .2s;
+}
+.dark-toggle:hover { border-color: var(--gold); transform: scale(1.05); }
+
+.page-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--border); background: var(--card);
+  color: var(--gold); text-decoration: none; font-weight: 700;
+  font-size: .82rem; padding: 8px 16px; border-radius: 999px;
+  transition: border-color .2s;
+}
+.page-link:hover { border-color: var(--gold); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; margin-bottom: 18px;
+}
+
+.sub-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.sub-tabs button {
+  border: 1.5px solid var(--border); background: var(--card);
+  color: var(--muted); padding: 8px 16px; border-radius: 999px;
+  font-size: .82rem; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.sub-tabs button.active { border-color: var(--gold); color: var(--gold); background: rgba(184,134,11,.08); }
+
+.form-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: .76rem; font-weight: 700; color: var(--muted); }
+.field input, .field select, .field textarea {
+  padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: .9rem;
+  font-family: inherit; outline: none; transition: border-color .2s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--gold); }
+.field input[readonly] { color: var(--muted); background: var(--border); cursor: not-allowed; }
+.field.wide { grid-column: 1 / -1; }
+.field textarea { min-height: 70px; resize: vertical; }
+.field .unit-hint { font-size: .68rem; color: var(--muted); margin-top: -2px; }
+
+.form-actions { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+.btn-submit {
+  background: var(--gold); color: #fff; border: none; padding: 12px 26px;
+  border-radius: 10px; font-size: .9rem; font-weight: 700; cursor: pointer;
+  transition: background .2s;
+}
+.btn-submit:hover { background: var(--gold2); }
+.btn-submit:disabled { opacity: .6; cursor: default; }
+.form-status { font-size: .82rem; font-weight: 600; }
+.form-status.ok { color: var(--green); }
+.form-status.err { color: var(--red); }
+
+.section-title {
+  font-size: .95rem; font-weight: 800; color: var(--text);
+  margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+}
+.section-title .freq-badge {
+  font-size: .65rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--gold); background: rgba(184,134,11,.1);
+  padding: 3px 9px; border-radius: 999px;
+}
+
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.kpi-tile {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  background: var(--bg);
+}
+.kpi-tile .kpi-label { font-size: .72rem; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.kpi-tile .kpi-value { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+.kpi-tile .kpi-value .unit { font-size: .7rem; font-weight: 600; color: var(--muted); margin-left: 3px; }
+.kpi-tile .kpi-period { font-size: .68rem; color: var(--muted); margin-top: 4px; }
+.kpi-tile.empty .kpi-value { color: var(--muted); font-weight: 600; font-size: .95rem; }
+
+.chart-wrap { height: 220px; margin-bottom: 8px; }
+
+table.data-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+table.data-table th, table.data-table td {
+  padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left;
+  white-space: nowrap;
+}
+table.data-table th { color: var(--muted); font-weight: 700; font-size: .7rem; text-transform: uppercase; }
+.table-scroll { overflow-x: auto; }
+
+.empty-note { color: var(--muted); font-size: .85rem; padding: 20px 0; text-align: center; }
+.config-warning {
+  background: #fdf6e3; border: 1.5px solid var(--gold); color: #7a5c00;
+  border-radius: 10px; padding: 14px 16px; font-size: .82rem; margin-bottom: 18px;
+  line-height: 1.5;
+}
+body.dark-mode .config-warning { background: rgba(212,160,23,.1); color: var(--gold2); }
+.config-warning code {
+  background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; font-size: .78rem;
+}
+body.dark-mode .config-warning code { background: rgba(255,255,255,.1); }
+
+/* ── ÉCRAN DE CONNEXION ──────────────────────────────────────────────── */
+#login-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.login-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.12);
+  padding: 48px 40px; width: 340px; text-align: center;
+}
+.login-title { font-size: 1.2rem; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
+.login-sub { font-size: .82rem; color: var(--muted); margin-bottom: 28px; }
+.login-box input[type=password] {
+  width: 100%; padding: 12px 16px; border-radius: 8px;
+  border: 1.5px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: 1rem; outline: none; letter-spacing: 2px;
+  box-sizing: border-box; margin-bottom: 12px;
+}
+.login-box input[type=password]:focus { border-color: var(--gold); }
+.login-btn {
+  width: 100%; padding: 12px; border-radius: 8px;
+  background: var(--gold); color: #fff; border: none;
+  font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+.login-btn:hover { background: var(--gold2); }
+.login-error { color: var(--red); font-size: .82rem; margin-top: 10px; min-height: 20px; font-weight: 600; }
+
+/* ── BANNIÈRES D'ACTUALITÉ ──────────────────────────────────────────── */
+.banners-wrap { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.banner {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 18px; border-radius: 14px;
+  border-left: 5px solid var(--gold); background: var(--card);
+  border: 1px solid var(--border); border-left: 5px solid var(--gold);
+}
+.banner-ico {
+  width: 36px; height: 36px; border-radius: 10px; background: var(--gold);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.banner-body { flex: 1; min-width: 0; }
+.banner-type { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--gold); margin-bottom: 3px; }
+.banner-title { font-size: .9rem; font-weight: 800; color: var(--text); margin-bottom: 3px; }
+.banner-msg { font-size: .8rem; color: var(--muted); line-height: 1.5; }
+.banner-del {
+  cursor: pointer; color: var(--muted); font-size: 1rem; border: none; background: none;
+  padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+}
+.banner-del:hover { background: var(--bg); color: var(--red); }
+.banner-form { display: flex; flex-direction: column; gap: 10px; }
+.banner-form-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.banner-form-row > * { flex: 1; min-width: 140px; }
+
+/* ── INTERVENTIONS MAINTENANCE ──────────────────────────────────────── */
+.interv-list { display: flex; flex-direction: column; gap: 10px; }
+.interv-item {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  background: var(--bg);
+}
+.interv-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; }
+.interv-urg { font-size: .65rem; font-weight: 800; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+.interv-urg.low { background: rgba(39,174,96,.12); color: var(--green); }
+.interv-urg.medium { background: rgba(212,160,23,.15); color: var(--gold); }
+.interv-urg.high { background: rgba(192,57,43,.12); color: var(--red); }
+.interv-tech-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.interv-tech-card {
+  border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 12px;
+  cursor: pointer; font-size: .82rem; text-align: center; transition: all .15s;
+}
+.interv-tech-card.selected { border-color: var(--gold); background: rgba(184,134,11,.08); color: var(--gold); font-weight: 700; }
+.urg-btn-row { display: flex; gap: 8px; }
+.urg-btn {
+  flex: 1; padding: 10px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: var(--bg); color: var(--muted); font-size: .82rem; font-weight: 700; cursor: pointer;
+}
+.urg-btn.sel-low { border-color: var(--green); color: var(--green); background: rgba(39,174,96,.08); }
+.urg-btn.sel-medium { border-color: var(--gold); color: var(--gold); background: rgba(184,134,11,.08); }
+.urg-btn.sel-high { border-color: var(--red); color: var(--red); background: rgba(192,57,43,.08); }
+.setup-note {
+  font-size: .75rem; color: var(--muted); background: var(--bg);
+  border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  header { padding: 12px 14px; }
+  main { padding: 14px; }
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div>
+      <div class="brand-title">Franchise MJ</div>
+      <div class="brand-sub">Saisie KPI — Lourdes &amp; Pouzac</div>
+    </div>
+  </div>
+  <div class="header-controls">
+    <div class="resto-switch" id="restoSwitch"></div>
+    <a class="page-link" href="dashboard_lourdes_pouzac.html">Voir le dashboard →</a>
+    <button class="dark-toggle" id="darkToggle" title="Basculer le mode sombre">🌙</button>
+  </div>
+</header>
+
+<main>
+
+  <div id="configWarning" class="config-warning" style="display:none;">
+    ⚠️ L'URL de l'Apps Script n'est pas encore configurée. Ouvrez ce fichier et
+    remplacez la valeur de <code>APPS_SCRIPT_URL</code> en haut du script par
+    l'URL de votre Web App (voir GUIDE_MISE_EN_PLACE.md).
+  </div>
+
+  <div class="sub-tabs" id="freqTabs"></div>
+  <div class="card">
+    <div class="section-title">
+      <span id="freqTitle"></span>
+      <span class="freq-badge" id="freqBadge"></span>
+    </div>
+    <form id="entryForm">
+      <div class="form-grid" id="formFields"></div>
+      <div class="form-actions">
+        <button type="submit" class="btn-submit" id="submitBtn">Enregistrer</button>
+        <span class="form-status" id="formStatus"></span>
+      </div>
+    </form>
+  </div>
+
+</main>
+
+<script>
+/**
+ * ============================================================================
+ *  FRANCHISE MJ — Référentiel KPI partagé (Lourdes & Pouzac)
+ *  Chargé à la fois par saisie_lourdes_pouzac.html et dashboard_lourdes_pouzac.html
+ *  pour que les deux pages restent toujours alignées sur les mêmes KPI.
+ *
+ *  IMPORTANT : si vous ajoutez/renommez un KPI ici, faites le même changement
+ *  dans la liste "columns" du bon onglet dans Code.gs (voir ce fichier).
+ * ============================================================================
+ */
+
+const RESTAURANTS = [
+  { id: 'LOURDES', label: 'Lourdes' },
+  { id: 'POUZAC',  label: 'Pouzac' }
+];
+
+const KPI_CONFIG = {
+  quotidien: {
+    label: 'Quotidien',
+    period: { field: 'date', type: 'date', label: 'Date' },
+    kpis: [
+      { id: 'ca_net_total',  label: 'CA Net Total',         unit: '€', aggregate: 'sum' },
+      { id: 'ca_net_alim',   label: 'CA Net Alimentaire',   unit: '€', aggregate: 'sum' },
+      { id: 'transactions',  label: "Transactions (TAC'S)", unit: '',  aggregate: 'sum' },
+      { id: 'panier_moyen',  label: 'Panier Moyen (PM)',    unit: '€',
+        computed: true, dependsOn: ['ca_net_total', 'transactions'] },
+      { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' }
+    ]
+  },
+  hebdomadaire: {
+    label: 'Hebdomadaire',
+    period: { field: 'semaine', type: 'week', label: 'Semaine' },
+    kpis: [
+      { id: 'oepe',              label: 'OEPE',                          unit: 'sec', aggregate: 'avg' },
+      { id: 'r2p',               label: 'R2P (Ready To Present)',        unit: 'sec', aggregate: 'avg' },
+      { id: 'oph',               label: 'OPH (Opportunités / 100k)',     unit: '',    aggregate: 'avg' },
+      { id: 'hello_mcdo',        label: 'Hello McDo',                    unit: '%',   aggregate: 'avg' },
+      { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
+      { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
+      { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
+      { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
+    ]
+  },
+  mensuel: {
+    label: 'Mensuel',
+    period: { field: 'mois', type: 'month', label: 'Mois' },
+    kpis: [
+      { id: 'effectif',        label: 'Effectif',                     unit: 'pers.', aggregate: 'sum' },
+      { id: 'etp',             label: 'ETP',                          unit: '',      aggregate: 'sum' },
+      { id: 'heures_comp',     label: 'Heures Complémentaires',       unit: 'h',     aggregate: 'sum' },
+      { id: 'heures_sup',      label: 'Heures Supplémentaires',       unit: 'h',     aggregate: 'sum' },
+      { id: 'turnover_12m',    label: 'Turn Over 12 mois',            unit: '%',     aggregate: 'avg' },
+      { id: 'turnover_90j',    label: 'Turn Over 90 jours',           unit: '%',     aggregate: 'avg' },
+      { id: 'absent_imprevu',  label: 'Absentéisme imprévu',          unit: '%',     aggregate: 'avg' },
+      { id: 'absent_injust',   label: 'Absentéisme injustifié',       unit: '%',     aggregate: 'avg' },
+      { id: 'marge',           label: 'Marge',                        unit: '€',     aggregate: 'sum' },
+      { id: 'pac',             label: 'PAC (Profit Après Contrôlables)', unit: '€',  aggregate: 'sum' },
+      { id: 'cout_mo',         label: "Coût Main d'Œuvre",            unit: '€',     aggregate: 'sum' },
+      { id: 'cash_flow',       label: 'Cash Flow',                    unit: '€',     aggregate: 'sum' },
+      { id: 'resultat_net',    label: 'Résultat Net',                 unit: '€',     aggregate: 'sum' },
+      { id: 'remboursement',   label: 'Remboursement',                unit: '€',     aggregate: 'sum' },
+      { id: 'ecart_rendement', label: 'Écart de Rendement',           unit: '%',     aggregate: 'avg' }
+    ]
+  },
+  ponctuel: {
+    label: 'Ponctuel',
+    period: { field: 'date', type: 'date', label: 'Date de la visite' },
+    isEvent: true,
+    eventTypes: ['RGRV', 'CFV', 'PPFV'],
+    kpis: [
+      { id: 'score', label: 'Score', unit: 'pts', aggregate: 'avg' }
+    ],
+    extraFields: [
+      { id: 'commentaire', label: 'Commentaire', type: 'textarea' }
+    ]
+  }
+};
+
+// Restaurants + la vue agrégée "Franchise" (somme/moyenne des deux restaurants)
+const FRANCHISE_VIEW = { id: 'FRANCHISE', label: 'Franchise MJ' };
+
+// Couleurs des icônes arche par vue (badge pastel + couleur de l'arche elle-même)
+const RESTO_META = {
+  FRANCHISE: { icon: '#8b5cf6', badge: '#ede9fe' },
+  LOURDES:   { icon: '#b8860b', badge: '#fff8e1' },
+  POUZAC:    { icon: '#1e88e5', badge: '#e3f2fd' }
+};
+
+// Icône "arche" (silhouette noire, fond transparent) encodée en data URI :
+// utilisée comme masque CSS (mask-image) recoloré par restaurant/franchise.
+// Encodée en base64 plutôt que référencée par fichier séparé pour éviter les
+// blocages CORS des navigateurs quand la page est ouverte en double-clic
+// (protocole file://) plutôt que via un serveur web.
+const ARCH_ICON_DATA_URI = 'data:image/png;base64,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';
+
+// Catégories thématiques (reprises de franchise-py) — regroupent les KPI pour
+// la navigation par tuiles du dashboard. Chaque catégorie correspond à une
+// seule fréquence de saisie (voir "freq" ci-dessous).
+const CATEGORIES = {
+  ca:              { label: 'CA',                  freq: 'quotidien',    icon: '€', color: '#b8860b', bg: '#fdf3d9' },
+  digital:         { label: 'Digital',              freq: 'hebdomadaire', icon: '📱', color: '#1e88e5', bg: '#e3f2fd' },
+  qsp:             { label: 'QSP',                  freq: 'hebdomadaire', icon: '✔️', color: '#2e7d32', bg: '#e8f5e9' },
+  heures_equipier: { label: 'KPI / Heures Équipier', freq: 'hebdomadaire', icon: '📊', color: '#00897b', bg: '#e0f2f1' },
+  rh:              { label: 'RH',                   freq: 'mensuel',      icon: '👥', color: '#7c3aed', bg: '#ede9fe' },
+  financier:       { label: 'Financier',            freq: 'mensuel',      icon: '📈', color: '#3949ab', bg: '#e8eaf6' },
+  excellence_ope:  { label: 'Excellence Opé.',      freq: 'ponctuel',     icon: '⭐', color: '#c2185b', bg: '#fce4ec' }
+};
+
+// Association KPI → catégorie (par id de KPI)
+const KPI_CATEGORY = {
+  ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
+  hello_mcdo: 'digital', reseaux_sociaux: 'digital',
+  oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
+  vphe: 'heures_equipier', vphg: 'heures_equipier', uvhe: 'heures_equipier', tche: 'heures_equipier',
+  effectif: 'rh', etp: 'rh', heures_comp: 'rh', heures_sup: 'rh',
+  turnover_12m: 'rh', turnover_90j: 'rh', absent_imprevu: 'rh', absent_injust: 'rh',
+  marge: 'financier', pac: 'financier', cout_mo: 'financier', cash_flow: 'financier',
+  resultat_net: 'financier', remboursement: 'financier', ecart_rendement: 'financier',
+  score: 'excellence_ope'
+};
+
+function kpisForCategory(catId) {
+  const cfg = KPI_CONFIG[CATEGORIES[catId].freq];
+  return cfg.kpis.filter(k => KPI_CATEGORY[k.id] === catId);
+}
+
+// Formules pour les KPI calculés automatiquement (jamais saisis à la main)
+const COMPUTED_KPIS = {
+  panier_moyen: function (values) {
+    const ca = Number(values.ca_net_total);
+    const tac = Number(values.transactions);
+    if (!tac || isNaN(ca) || isNaN(tac)) return '';
+    return Math.round((ca / tac) * 100) / 100;
+  }
+};
+
+/* ============================================================================
+ *  Fonctions utilitaires partagées
+ * ==========================================================================*/
+function defaultPeriodValue(type) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  if (type === 'date') {
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+  if (type === 'month') {
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  }
+  if (type === 'week') {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function formatNumber(n) {
+  if (typeof n !== 'number') return n;
+  return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+}
+
+function escapeAttr(str) {
+  return String(str || '').replace(/"/g, '&quot;');
+}
+
+/**
+ * Décale une valeur de période (date / semaine / mois — toutes commencent
+ * par une année sur 4 chiffres) d'un certain nombre d'années. Sert à la
+ * comparaison N-1 : tant qu'il n'y a pas d'historique, la ligne correspondante
+ * n'existe simplement pas encore dans le Sheet et la comparaison reste vide.
+ */
+function shiftPeriodYear(value, deltaYears) {
+  const m = String(value || '').match(/^(\d{4})(.*)$/);
+  if (!m) return '';
+  return (Number(m[1]) + deltaYears) + m[2];
+}
+
+/**
+ * Agrège les lignes de deux restaurants en une seule série "Franchise" par
+ * période (somme ou moyenne selon le KPI, recalcul pour les KPI calculés).
+ * Pour les KPI ponctuels (événements), pas de fusion par période : on
+ * renvoie simplement toutes les lignes des deux restaurants, triées.
+ */
+function computeFranchiseRows(freq, allRows) {
+  const cfg = KPI_CONFIG[freq];
+  const rows = allRows || [];
+
+  if (cfg.isEvent) {
+    return rows.slice().sort((a, b) => String(a[cfg.period.field]).localeCompare(String(b[cfg.period.field])));
+  }
+
+  const byPeriod = {};
+  rows.forEach(r => {
+    const key = r[cfg.period.field];
+    if (!byPeriod[key]) byPeriod[key] = [];
+    byPeriod[key].push(r);
+  });
+
+  return Object.keys(byPeriod).sort().map(key => {
+    const group = byPeriod[key];
+    const out = { restaurant: 'FRANCHISE' };
+    out[cfg.period.field] = key;
+
+    cfg.kpis.filter(k => !k.computed).forEach(k => {
+      const vals = group
+        .map(r => r[k.id])
+        .filter(v => v !== '' && v !== undefined && v !== null && !isNaN(Number(v)))
+        .map(Number);
+      if (!vals.length) { out[k.id] = ''; return; }
+      const sum = vals.reduce((a, b) => a + b, 0);
+      out[k.id] = k.aggregate === 'avg' ? Math.round((sum / vals.length) * 100) / 100 : sum;
+    });
+
+    cfg.kpis.filter(k => k.computed).forEach(k => {
+      out[k.id] = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](out) : '';
+    });
+
+    return out;
+  });
+}
+
+</script>
+<script>
+/* ============================================================================
+ * Collez ici l'URL /exec de votre Web App Apps Script (voir GUIDE_MISE_EN_PLACE.md)
+ * ==========================================================================*/
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzd6lTfPMQR4uglwrYg7RWXqZJD3To_5Id4nekU600tmTOYwNgudaImPlB3HobfHYtfaQ/exec';
+
+let currentResto = RESTAURANTS[0].id;
+let currentFreq = 'quotidien';
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) {
+    document.getElementById('configWarning').style.display = 'block';
+  }
+
+  renderRestoSwitch();
+  renderFreqTabs();
+  renderForm();
+
+  document.getElementById('darkToggle').addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+    document.getElementById('darkToggle').textContent =
+      document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+  });
+
+  document.getElementById('entryForm').addEventListener('submit', handleSubmit);
+});
+
+function renderRestoSwitch() {
+  const wrap = document.getElementById('restoSwitch');
+  wrap.innerHTML = RESTAURANTS.map(r =>
+    `<button data-resto="${r.id}" class="${r.id === currentResto ? 'active' : ''}">${r.label}</button>`
+  ).join('');
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentResto = btn.dataset.resto;
+      wrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
+function renderFreqTabs() {
+  const wrap = document.getElementById('freqTabs');
+  wrap.innerHTML = Object.keys(KPI_CONFIG).map(freq =>
+    `<button data-freq="${freq}" class="${freq === currentFreq ? 'active' : ''}">${KPI_CONFIG[freq].label}</button>`
+  ).join('');
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFreq = btn.dataset.freq;
+      wrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderForm();
+    });
+  });
+}
+
+function renderForm() {
+  const cfg = KPI_CONFIG[currentFreq];
+  document.getElementById('freqTitle').textContent = 'Saisie — ' + cfg.label;
+  document.getElementById('freqBadge').textContent = cfg.label;
+
+  const fields = [];
+
+  fields.push(`
+    <div class="field">
+      <label>${cfg.period.label} *</label>
+      <input type="${cfg.period.type}" id="f_period" required>
+    </div>
+  `);
+
+  if (cfg.isEvent) {
+    fields.push(`
+      <div class="field">
+        <label>Type de visite *</label>
+        <select id="f_type" required>
+          <option value="" disabled selected>Choisir…</option>
+          ${cfg.eventTypes.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>
+    `);
+  }
+
+  cfg.kpis.forEach(k => {
+    if (k.computed) {
+      fields.push(`
+        <div class="field">
+          <label>${k.label}${k.unit ? ' (' + k.unit + ')' : ''}</label>
+          <input type="text" id="f_${k.id}" data-kpi="${k.id}" readonly placeholder="calculé automatiquement">
+        </div>
+      `);
+    } else {
+      fields.push(`
+        <div class="field">
+          <label>${k.label}${k.unit ? ' (' + k.unit + ')' : ''}</label>
+          <input type="number" step="any" id="f_${k.id}" data-kpi="${k.id}">
+        </div>
+      `);
+    }
+  });
+
+  (cfg.extraFields || []).forEach(f => {
+    const tag = f.type === 'textarea'
+      ? `<textarea id="f_${f.id}" data-extra="${f.id}"></textarea>`
+      : `<input type="text" id="f_${f.id}" data-extra="${f.id}">`;
+    fields.push(`
+      <div class="field wide">
+        <label>${f.label}</label>
+        ${tag}
+      </div>
+    `);
+  });
+
+  document.getElementById('formFields').innerHTML = fields.join('');
+  document.getElementById('formStatus').textContent = '';
+  document.getElementById('formStatus').className = 'form-status';
+
+  const periodInput = document.getElementById('f_period');
+  periodInput.value = defaultPeriodValue(cfg.period.type);
+
+  // Brancher les recalculs automatiques (ex : Panier Moyen = CA Net Total / TAC'S)
+  cfg.kpis.filter(k => k.computed).forEach(k => {
+    const recompute = () => {
+      const values = {};
+      (k.dependsOn || []).forEach(depId => {
+        const depEl = document.getElementById('f_' + depId);
+        values[depId] = depEl ? depEl.value : '';
+      });
+      const result = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
+      document.getElementById('f_' + k.id).value = result;
+    };
+    (k.dependsOn || []).forEach(depId => {
+      const depEl = document.getElementById('f_' + depId);
+      if (depEl) depEl.addEventListener('input', recompute);
+    });
+    recompute();
+  });
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  const cfg = KPI_CONFIG[currentFreq];
+  const submitBtn = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+
+  const payload = {
+    frequence: currentFreq,
+    restaurant: currentResto
+  };
+  payload[cfg.period.field] = document.getElementById('f_period').value;
+
+  if (cfg.isEvent) {
+    payload.type = document.getElementById('f_type').value;
+    if (!payload.type) {
+      status.textContent = 'Merci de choisir un type de visite.';
+      status.className = 'form-status err';
+      return;
+    }
+  }
+
+  cfg.kpis.forEach(k => {
+    const el = document.getElementById('f_' + k.id);
+    payload[k.id] = el.value === '' ? '' : Number(el.value);
+  });
+
+  (cfg.extraFields || []).forEach(f => {
+    payload[f.id] = document.getElementById('f_' + f.id).value;
+  });
+
+  if (!payload[cfg.period.field]) {
+    status.textContent = 'Merci de renseigner la période.';
+    status.className = 'form-status err';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  status.textContent = 'Enregistrement…';
+  status.className = 'form-status';
+
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.ok) {
+      status.textContent = json.updated ? '✓ Saisie mise à jour.' : '✓ Saisie enregistrée.';
+      status.className = 'form-status ok';
+    } else {
+      status.textContent = 'Erreur : ' + (json.error || 'inconnue');
+      status.className = 'form-status err';
+    }
+  } catch (err) {
+    status.textContent = "Erreur d'envoi — vérifiez l'URL Apps Script et la connexion.";
+    status.className = 'form-status err';
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
