@@ -66,30 +66,42 @@ header {
 .toolbar-btn:hover { border-color: var(--gold); }
 
 /* ── Onglets "espaces" (Pilotage Opérationnel, Performance...) ──────── */
-.espace-tabs { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-.espace-pill {
-  border: 1px solid var(--border); background: var(--card); color: var(--text);
-  padding: 6px 16px; border-radius: 13px; font-size: .82rem; font-weight: 700; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.espace-pill.active { border: 2px solid var(--gold); color: var(--gold); padding: 5px 15px; }
-.espace-pill .soon-badge {
-  font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
-  color: var(--muted); background: var(--border); padding: 1px 6px; border-radius: 999px;
-}
+   .espace-tabs { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+   .espace-pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+        padding: 6px 16px 6px 6px; border-radius: 13px; font-size: .84rem; font-weight: 700; cursor: pointer;
+        transition: border-color .15s, background .15s, color .15s;
+   }
+   .espace-pill .espace-badge {
+        width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; background: var(--e-bg, var(--border)); color: var(--e-color, var(--muted));
+   }
+   .espace-pill .espace-badge svg { width: 14px; height: 14px; display: block; }
+   .espace-pill.active {
+        border-color: var(--e-color, var(--gold)); background: var(--e-bg, rgba(184,134,11,.08));
+        color: var(--e-color, var(--gold));
+   }
+   .espace-pill:not(.active):hover { border-color: var(--e-color, var(--gold)); }
+   .espace-pill .soon-badge {
+        font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+        color: var(--muted); background: var(--border); padding: 1px 6px; border-radius: 999px;
+   }
 
-/* ── Onglets restaurant (avec icône arche colorée) ──────────────────── */
-.resto-tabs { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
-.resto-tab {
-  display: inline-flex; align-items: center; gap: 8px;
-  border: 1.5px solid var(--border); background: var(--card); color: var(--text);
-  padding: 6px 14px 6px 6px; border-radius: 12px; font-size: .85rem; font-weight: 700; cursor: pointer;
-}
-.resto-tab .arch-badge {
-  width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-}
-.resto-tab .arch-badge .arch-icon { width: 15px; height: 11px; }
-.resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+   /* ── Onglets restaurant (avec icône arche colorée) ──────────────────── */
+   .resto-tabs { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
+   .resto-tab {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+        padding: 6px 14px 6px 6px; border-radius: 12px; font-size: .85rem; font-weight: 700; cursor: pointer;
+        transition: border-color .15s, background .15s, color .15s;
+   }
+   .resto-tab .arch-badge {
+        width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+   }
+   .resto-tab .arch-badge .arch-icon { width: 15px; height: 11px; }
+   .resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+   .resto-tab:not(.active):hover { border-color: var(--gold); }
 
 /* ── Grille de tuiles catégories ─────────────────────────────────────── */
 .category-grid {
