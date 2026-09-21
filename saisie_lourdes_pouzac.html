@@ -219,17 +219,27 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
 }
 
 .kpi-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
 }
 .kpi-tile {
-  border: 1px solid var(--border); border-radius: 12px; padding: 14px;
-  background: var(--bg);
+  position: relative; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  background: var(--card);
+  transition: border-color .2s, box-shadow .2s;
 }
-.kpi-tile .kpi-label { font-size: .72rem; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
-.kpi-tile .kpi-value { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+.kpi-tile:hover { border-color: var(--gold2); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+.kpi-tile::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--cat-color, var(--gold));
+}
+.kpi-tile .kpi-label {
+  font-size: .72rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px;
+}
+.kpi-tile .kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1; }
 .kpi-tile .kpi-value .unit { font-size: .7rem; font-weight: 600; color: var(--muted); margin-left: 3px; }
-.kpi-tile .kpi-period { font-size: .68rem; color: var(--muted); margin-top: 4px; }
+.kpi-tile .kpi-period { font-size: .68rem; color: var(--muted); margin-top: 6px; }
 .kpi-tile.empty .kpi-value { color: var(--muted); font-weight: 600; font-size: .95rem; }
 
 .chart-wrap { height: 220px; margin-bottom: 8px; }
@@ -414,12 +424,31 @@ const KPI_CONFIG = {
       { id: 'transactions',  label: "Transactions (TAC'S)", unit: '',  aggregate: 'sum' },
       { id: 'panier_moyen',  label: 'Panier Moyen (PM)',    unit: '€',
         computed: true, dependsOn: ['ca_net_total', 'transactions'] },
-      { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' }
+      { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' },
+      { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
+      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' }
     ]
   },
   hebdomadaire: {
     label: 'Hebdomadaire',
     period: { field: 'semaine', type: 'week', label: 'Semaine' },
+    kpis: [
+      { id: 'oepe',              label: 'OEPE',                          unit: 'sec', aggregate: 'avg' },
+      { id: 'r2p',               label: 'R2P (Ready To Present)',        unit: 'sec', aggregate: 'avg' },
+      { id: 'oph',               label: 'OPH (Opportunités / 100k)',     unit: '',    aggregate: 'avg' },
+      { id: 'hello_mcdo',        label: 'Hello McDo',                    unit: '%',   aggregate: 'avg' },
+      { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
+      { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
+      { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
+      { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
+    ]
+  },
+  hebdo_mensuel: {
+    label: 'Hebdo — Bilan mensuel',
+    period: { field: 'mois', type: 'month', label: 'Mois' },
     kpis: [
       { id: 'oepe',              label: 'OEPE',                          unit: 'sec', aggregate: 'avg' },
       { id: 'r2p',               label: 'R2P (Ready To Present)',        unit: 'sec', aggregate: 'avg' },
@@ -491,6 +520,7 @@ const ARCH_ICON_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAA
 // seule fréquence de saisie (voir "freq" ci-dessous).
 const CATEGORIES = {
   ca:              { label: 'CA',                  freq: 'quotidien',    icon: '€', color: '#b8860b', bg: '#fdf3d9' },
+  heures:          { label: 'Heures',               freq: 'quotidien',    icon: '⏱️', color: '#f4511e', bg: '#fbe9e7' },
   digital:         { label: 'Digital',              freq: 'hebdomadaire', icon: '📱', color: '#1e88e5', bg: '#e3f2fd' },
   qsp:             { label: 'QSP',                  freq: 'hebdomadaire', icon: '✔️', color: '#2e7d32', bg: '#e8f5e9' },
   heures_equipier: { label: 'KPI / Heures Équipier', freq: 'hebdomadaire', icon: '📊', color: '#00897b', bg: '#e0f2f1' },
@@ -502,6 +532,7 @@ const CATEGORIES = {
 // Association KPI → catégorie (par id de KPI)
 const KPI_CATEGORY = {
   ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
+  heures_totales: 'heures', heures_equipier: 'heures',
   hello_mcdo: 'digital', reseaux_sociaux: 'digital',
   oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
   vphe: 'heures_equipier', vphg: 'heures_equipier', uvhe: 'heures_equipier', tche: 'heures_equipier',
@@ -569,6 +600,69 @@ function shiftPeriodYear(value, deltaYears) {
   const m = String(value || '').match(/^(\d{4})(.*)$/);
   if (!m) return '';
   return (Number(m[1]) + deltaYears) + m[2];
+}
+
+/**
+ * Convertit une valeur <input type="week"> ("AAAA-Www") en date du jeudi de
+ * cette semaine ISO (norme ISO 8601 : une semaine "appartient" au mois qui
+ * contient son jeudi). Sert à savoir à quel mois rattacher une saisie
+ * hebdomadaire pour le bilan mensuel.
+ */
+function isoWeekThursday(weekStr) {
+  const m = String(weekStr || '').match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]), week = Number(m[2]);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7; // lundi=1 … dimanche=7
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const thursday = new Date(week1Monday);
+  thursday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7 + 3);
+  return thursday;
+}
+
+/** true si la semaine ISO donnée appartient au mois "AAAA-MM" donné. */
+function weekBelongsToMonth(weekStr, monthStr) {
+  const thu = isoWeekThursday(weekStr);
+  if (!thu) return false;
+  const ym = thu.getUTCFullYear() + '-' + String(thu.getUTCMonth() + 1).padStart(2, '0');
+  return ym === monthStr;
+}
+
+/**
+ * Calcule une suggestion de bilan mensuel pour l'onglet "Hebdo — Bilan
+ * mensuel" : moyenne (selon la règle "aggregate" de chaque KPI) des saisies
+ * hebdomadaires du restaurant courant qui tombent dans le mois choisi.
+ * Ne fait rien si aucune semaine du mois n'a encore été saisie.
+ */
+function suggestHebdoMensuel(monthVal) {
+  const cfg = KPI_CONFIG.hebdo_mensuel;
+  const status = document.getElementById('formStatus');
+  if (!dataCache || !monthVal) return;
+  const weekRows = (dataCache.hebdomadaire || []).filter(r =>
+    String(r.restaurant) === String(currentResto) && weekBelongsToMonth(r.semaine, monthVal)
+  );
+  if (!weekRows.length) return;
+
+  cfg.kpis.forEach(k => {
+    const vals = weekRows
+      .map(r => r[k.id])
+      .filter(v => v !== undefined && v !== null && v !== '')
+      .map(Number)
+      .filter(v => !isNaN(v));
+    if (!vals.length) return;
+    const sum = vals.reduce((a, b) => a + b, 0);
+    const result = k.aggregate === 'sum' ? sum : Math.round((sum / vals.length) * 100) / 100;
+    const el = document.getElementById('f_' + k.id);
+    if (el) el.value = result;
+  });
+
+  const now = new Date();
+  const currentYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const notTerminated = monthVal >= currentYm;
+  status.textContent = `💡 Suggestion calculée à partir de ${weekRows.length} semaine${weekRows.length > 1 ? 's' : ''} saisie${weekRows.length > 1 ? 's' : ''} ce mois-ci — vérifiez puis enregistrez pour finaliser.` +
+    (notTerminated ? ' ⚠️ Ce mois n\'est pas encore terminé, toutes les semaines ne sont peut-être pas saisies.' : '');
+  status.className = 'form-status info';
 }
 
 /**
@@ -741,6 +835,10 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
                });
                status.textContent = '';
                status.className = 'form-status';
+
+               // Onglet "Hebdo — Bilan mensuel" : pas de bilan déjà enregistré pour ce
+               // mois → proposer une suggestion calculée à partir des saisies hebdo.
+               if (currentFreq === 'hebdo_mensuel') suggestHebdoMensuel(period);
         }
    }
 
