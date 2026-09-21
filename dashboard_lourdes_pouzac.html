@@ -107,22 +107,42 @@ header {
    .resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
    .resto-tab:not(.active):hover { border-color: var(--gold); }
 
-/* ── Grille de tuiles catégories ─────────────────────────────────────── */
+/* ── Grille de tuiles catégories (aligné sur le style Franchise PY) ──── */
 .category-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 14px; margin-top: 4px;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; padding: 8px 0 24px;
 }
+@media (max-width: 760px) { .category-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 480px) { .category-grid { grid-template-columns: repeat(2,1fr); gap:10px; } }
 .category-tile {
-  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-  padding: 22px 16px; text-align: center; cursor: pointer; transition: all .15s;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px 12px; border-radius: 16px; cursor: pointer;
+  border: 2px solid transparent; background: var(--card);
+  box-shadow: 0 2px 8px rgba(0,0,0,.07);
+  transition: all .22s cubic-bezier(.4,0,.2,1);
+  user-select: none; min-height: 110px; text-align: center;
 }
-.category-tile:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.category-tile:hover {
+  transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.13);
+  border-color: var(--cat-color, var(--gold));
+}
 .category-tile .cat-icon {
-  width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 12px;
-  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  width: 62px; height: 62px; border-radius: 18px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.06);
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
 }
-.category-tile .cat-label { font-size: .82rem; font-weight: 800; color: var(--text); margin-bottom: 3px; }
-.category-tile .cat-count { font-size: .7rem; color: var(--muted); }
+.category-tile:hover .cat-icon {
+  transform: scale(1.12) translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08);
+}
+.category-tile .cat-label {
+  font-size: .72rem; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--muted); text-align: center; transition: color .2s;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.category-tile:hover .cat-label { color: var(--cat-color, var(--gold)); }
+.category-tile .cat-count { font-size: .65rem; color: var(--muted); }
 
 /* ── Marketing — documents issus d'un dossier Google Drive ───────────── */
 .mkt-grid { display: flex; flex-direction: column; gap: 10px; }
@@ -1110,7 +1130,7 @@ function renderCategoryGrid() {
     const cat = CATEGORIES[catId];
     const kpiCount = kpisForCategory(catId).length;
     html += `
-      <div class="category-tile" data-cat="${catId}">
+      <div class="category-tile" data-cat="${catId}" style="--cat-color:${cat.color}">
         <div class="cat-icon" style="background:${cat.bg};color:${cat.color};">${cat.icon}</div>
         <div class="cat-label">${cat.label}</div>
         <div class="cat-count">${kpiCount} KPI${kpiCount > 1 ? 's' : ''}</div>
