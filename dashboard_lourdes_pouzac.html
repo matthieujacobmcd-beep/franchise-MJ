@@ -61,39 +61,51 @@ header {
 .toolbar-group button.active { background: var(--card); color: var(--gold); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .toolbar-group button:disabled { opacity: .4; cursor: not-allowed; }
 .toolbar-btn {
-  border: 1px solid var(--border); background: var(--card); color: var(--text);
-  padding: 7px 13px; border-radius: 10px; font-size: .78rem; font-weight: 700; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 5px;
+     border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+     padding: 7px 14px; border-radius: 10px; font-size: .78rem; font-weight: 700; cursor: pointer;
+     display: inline-flex; align-items: center; gap: 6px; transition: border-color .15s, background .15s;
 }
-.toolbar-btn:hover { border-color: var(--gold); }
-.toolbar-btn.accent-blue { border-color: #1e88e5; color: #1e88e5; }
-.toolbar-btn.accent-blue:hover { border-color: #1565c0; }
+   .toolbar-btn:hover { border-color: var(--gold); }
+   .toolbar-btn.accent-blue { border-color: #1e88e5; color: #1e88e5; background: rgba(30,136,229,.07); }
+   .toolbar-btn.accent-blue:hover { border-color: #1565c0; background: rgba(30,136,229,.13); }
 
-/* ── Onglets "espaces" (Pilotage Opérationnel, Performance...) ──────── */
-.espace-tabs { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-.espace-pill {
-  border: 1px solid var(--border); background: var(--card); color: var(--text);
-  padding: 6px 16px; border-radius: 13px; font-size: .82rem; font-weight: 700; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.espace-pill.active { border: 2px solid var(--gold); color: var(--gold); padding: 5px 15px; }
-.espace-pill .soon-badge {
-  font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
-  color: var(--muted); background: var(--border); padding: 1px 6px; border-radius: 999px;
-}
+   /* ── Onglets "espaces" (Pilotage Opérationnel, Performance...) ──────── */
+   .espace-tabs { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+   .espace-pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+        padding: 6px 16px 6px 6px; border-radius: 13px; font-size: .84rem; font-weight: 700; cursor: pointer;
+        transition: border-color .15s, background .15s, color .15s;
+   }
+   .espace-pill .espace-badge {
+        width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; background: var(--e-bg, var(--border)); color: var(--e-color, var(--muted));
+   }
+   .espace-pill .espace-badge svg { width: 14px; height: 14px; display: block; }
+   .espace-pill.active {
+        border-color: var(--e-color, var(--gold)); background: var(--e-bg, rgba(184,134,11,.08));
+        color: var(--e-color, var(--gold));
+   }
+   .espace-pill:not(.active):hover { border-color: var(--e-color, var(--gold)); }
+   .espace-pill .soon-badge {
+        font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+        color: var(--muted); background: var(--border); padding: 1px 6px; border-radius: 999px;
+   }
 
-/* ── Onglets restaurant (avec icône arche colorée) ──────────────────── */
-.resto-tabs { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
-.resto-tab {
-  display: inline-flex; align-items: center; gap: 8px;
-  border: 1.5px solid var(--border); background: var(--card); color: var(--text);
-  padding: 6px 14px 6px 6px; border-radius: 12px; font-size: .85rem; font-weight: 700; cursor: pointer;
-}
-.resto-tab .arch-badge {
-  width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-}
-.resto-tab .arch-badge .arch-icon { width: 15px; height: 11px; }
-.resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+   /* ── Onglets restaurant (avec icône arche colorée) ──────────────────── */
+   .resto-tabs { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
+   .resto-tab {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1.5px solid var(--border); background: var(--card); color: var(--text);
+        padding: 6px 14px 6px 6px; border-radius: 12px; font-size: .85rem; font-weight: 700; cursor: pointer;
+        transition: border-color .15s, background .15s, color .15s;
+   }
+   .resto-tab .arch-badge {
+        width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+   }
+   .resto-tab .arch-badge .arch-icon { width: 15px; height: 11px; }
+   .resto-tab.active { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+   .resto-tab:not(.active):hover { border-color: var(--gold); }
 
 /* ── Grille de tuiles catégories ─────────────────────────────────────── */
 .category-grid {
@@ -776,12 +788,36 @@ const EMAILJS_READY = EMAILJS_PUBLIC_KEY !== 'A_COMPLETER';
  * ==========================================================================*/
 const RESTO_OPTIONS = RESTAURANTS.concat([FRANCHISE_VIEW]);
 const ESPACES = [
-  { id: 'pilotage',      label: 'Pilotage Opérationnel', icon: '🧭', enabled: true },
-  { id: 'performance',   label: 'Performance',           icon: '📊', enabled: false },
-  { id: 'interventions', label: 'Interventions',         icon: '🔧', enabled: true },
-  { id: 'formation',     label: 'Formation',             icon: '🎓', enabled: false },
-  { id: 'marketing',     label: 'Marketing',             icon: '📣', enabled: true }
-];
+   { id: 'pilotage',      label: 'Pilotage Opérationnel', enabled: true },
+   { id: 'performance',   label: 'Performance',           enabled: false },
+   { id: 'interventions', label: 'Interventions',         enabled: true },
+   { id: 'formation',     label: 'Formation',             enabled: false },
+   { id: 'marketing',     label: 'Marketing',             enabled: true }
+   ];
+   // Couleur d'accent + icône (SVG trait, style "feather") par espace — reprend
+   // le langage visuel des bandeaux de franchise-py (badge pastel + icône colorée).
+   const ESPACE_META = {
+        pilotage: {
+               color: '#b8860b', bg: '#fdf3d9',
+               svg: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/>'
+        },
+        performance: {
+               color: '#1e88e5', bg: '#e3f2fd',
+               svg: '<path d="M4 20V11"/><path d="M12 20V4"/><path d="M20 20v-6"/>'
+        },
+        interventions: {
+               color: '#27ae60', bg: '#e6f7ed',
+               svg: '<path d="M20.5 15.2a4.3 4.3 0 0 1-5.7 4.1L6 21l1.7-8.8a4.3 4.3 0 0 1 4.1-5.7c.5 0 1 .1 1.4.2l-3.6 3.6 2.1 2.1 3.6-3.6c.1.4.2.9.2 1.4z"/>'
+        },
+        formation: {
+               color: '#8b5cf6', bg: '#ede9fe',
+               svg: '<path d="M2 9l10-4.5L22 9l-10 4.5L2 9z"/><path d="M6 11v4.2c0 1.1 2.7 2.3 6 2.3s6-1.2 6-2.3V11"/>'
+        },
+        marketing: {
+               color: '#e8593a', bg: '#fdece7',
+               svg: '<path d="M3 10.5v3a1 1 0 0 0 1 1h2.3l4.7 3.4V6.1L6.3 9.5H4a1 1 0 0 0-1 1z"/><path d="M14.5 9.3a3.3 3.3 0 0 1 0 5.4"/><path d="M17.3 6.8a7 7 0 0 1 0 10.4"/>'
+        }
+   };
 let currentResto = RESTAURANTS[0].id;
 let currentEspace = 'pilotage';
 let currentCategory = null;
@@ -882,11 +918,19 @@ function initApp() {
  * ==========================================================================*/
 function renderEspaceTabs() {
   const wrap = document.getElementById('espaceTabs');
-  wrap.innerHTML = ESPACES.map(e => `
-    <button class="espace-pill ${e.id === currentEspace ? 'active' : ''}" data-espace="${e.id}">
-      <span>${e.icon}</span> ${e.label}${e.enabled ? '' : '<span class="soon-badge">Bientôt</span>'}
-    </button>
-  `).join('');
+wrap.innerHTML = ESPACES.map(e => {
+       const meta = ESPACE_META[e.id];
+       const active = e.id === currentEspace;
+       const style = `--e-color:${meta.color};--e-bg:${meta.bg};`;
+       return `
+           <button class="espace-pill ${active ? 'active' : ''}" data-espace="${e.id}" style="${style}">
+                 <span class="espace-badge">
+                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${meta.svg}</svg>
+                               </span>
+                                     ${e.label}${e.enabled ? '' : '<span class="soon-badge">Bientôt</span>'}
+                                         </button>
+                                           `;
+}).join('');
   wrap.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       currentEspace = btn.dataset.espace;
@@ -915,7 +959,7 @@ function renderRestoTabs() {
   wrap.innerHTML = RESTO_OPTIONS.map(r => {
     const meta = RESTO_META[r.id];
     const active = r.id === currentResto;
-    const style = active ? `border-color:${meta.icon};background:${meta.badge};` : '';
+        const style = active ? `border-color:${meta.icon};background:${meta.badge};color:${meta.icon};` : '';
     return `
       <button class="resto-tab ${active ? 'active' : ''}" data-resto="${r.id}" style="${style}">
         <span class="arch-badge" style="background:${meta.badge};">
