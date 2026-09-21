@@ -251,19 +251,29 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
 }
 
 .kpi-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
 }
 .kpi-tile {
-  border: 1px solid var(--border); border-radius: 12px; padding: 14px;
-  background: var(--bg);
+  position: relative; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  background: var(--card);
+  transition: border-color .2s, box-shadow .2s;
 }
-.kpi-tile .kpi-label { font-size: .72rem; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
-.kpi-tile .kpi-value { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+.kpi-tile:hover { border-color: var(--gold2); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+.kpi-tile::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--cat-color, var(--gold));
+}
+.kpi-tile .kpi-label {
+  font-size: .72rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px;
+}
+.kpi-tile .kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1; }
 .kpi-tile .kpi-value .unit { font-size: .7rem; font-weight: 600; color: var(--muted); margin-left: 3px; }
-.kpi-tile .kpi-period { font-size: .68rem; color: var(--muted); margin-top: 4px; }
+.kpi-tile .kpi-period { font-size: .68rem; color: var(--muted); margin-top: 6px; }
 .kpi-tile.empty .kpi-value { color: var(--muted); font-weight: 600; font-size: .95rem; }
-.kpi-tile .kpi-delta { font-size: .7rem; font-weight: 700; margin-top: 4px; }
+.kpi-tile .kpi-delta { font-size: .72rem; font-weight: 700; margin-top: 6px; }
 .kpi-tile .kpi-delta.up { color: var(--green); }
 .kpi-tile .kpi-delta.down { color: var(--red); }
 .kpi-tile .kpi-delta.flat { color: var(--muted); }
@@ -551,12 +561,31 @@ const KPI_CONFIG = {
       { id: 'transactions',  label: "Transactions (TAC'S)", unit: '',  aggregate: 'sum' },
       { id: 'panier_moyen',  label: 'Panier Moyen (PM)',    unit: '€',
         computed: true, dependsOn: ['ca_net_total', 'transactions'] },
-      { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' }
+      { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' },
+      { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
+      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' }
     ]
   },
   hebdomadaire: {
     label: 'Hebdomadaire',
     period: { field: 'semaine', type: 'week', label: 'Semaine' },
+    kpis: [
+      { id: 'oepe',              label: 'OEPE',                          unit: 'sec', aggregate: 'avg' },
+      { id: 'r2p',               label: 'R2P (Ready To Present)',        unit: 'sec', aggregate: 'avg' },
+      { id: 'oph',               label: 'OPH (Opportunités / 100k)',     unit: '',    aggregate: 'avg' },
+      { id: 'hello_mcdo',        label: 'Hello McDo',                    unit: '%',   aggregate: 'avg' },
+      { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
+      { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
+      { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
+      { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
+    ]
+  },
+  hebdo_mensuel: {
+    label: 'Hebdo — Bilan mensuel',
+    period: { field: 'mois', type: 'month', label: 'Mois' },
     kpis: [
       { id: 'oepe',              label: 'OEPE',                          unit: 'sec', aggregate: 'avg' },
       { id: 'r2p',               label: 'R2P (Ready To Present)',        unit: 'sec', aggregate: 'avg' },
@@ -628,6 +657,7 @@ const ARCH_ICON_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAA
 // seule fréquence de saisie (voir "freq" ci-dessous).
 const CATEGORIES = {
   ca:              { label: 'CA',                  freq: 'quotidien',    icon: '€', color: '#b8860b', bg: '#fdf3d9' },
+  heures:          { label: 'Heures',               freq: 'quotidien',    icon: '⏱️', color: '#f4511e', bg: '#fbe9e7' },
   digital:         { label: 'Digital',              freq: 'hebdomadaire', icon: '📱', color: '#1e88e5', bg: '#e3f2fd' },
   qsp:             { label: 'QSP',                  freq: 'hebdomadaire', icon: '✔️', color: '#2e7d32', bg: '#e8f5e9' },
   heures_equipier: { label: 'KPI / Heures Équipier', freq: 'hebdomadaire', icon: '📊', color: '#00897b', bg: '#e0f2f1' },
@@ -639,6 +669,7 @@ const CATEGORIES = {
 // Association KPI → catégorie (par id de KPI)
 const KPI_CATEGORY = {
   ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
+  heures_totales: 'heures', heures_equipier: 'heures',
   hello_mcdo: 'digital', reseaux_sociaux: 'digital',
   oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
   vphe: 'heures_equipier', vphg: 'heures_equipier', uvhe: 'heures_equipier', tche: 'heures_equipier',
@@ -1128,7 +1159,7 @@ function renderCategoryDetail(catId) {
     cfg.eventTypes.forEach(t => {
       const evRows = rows.filter(r => r.type === t);
       const lastEv = evRows[evRows.length - 1];
-      html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? lastEv[cfg.period.field] : null, null);
+      html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? lastEv[cfg.period.field] : null, null, cat.color);
     });
   } else {
     kpis.forEach(k => {
@@ -1139,7 +1170,7 @@ function renderCategoryDetail(catId) {
         const n1Row = findByPeriod(rows, cfg, n1Period);
         n1Val = n1Row ? n1Row[k.id] : undefined;
       }
-      html += kpiTile(k.label, val, k.unit, last ? last[cfg.period.field] : null, n1Val);
+      html += kpiTile(k.label, val, k.unit, last ? last[cfg.period.field] : null, n1Val, cat.color);
     });
   }
   html += '</div>';
@@ -1154,7 +1185,7 @@ function renderCategoryDetail(catId) {
   if (chartKpi) renderTrendChart('chart_cat_' + catId, cat.freq, chartKpi.id, chartKpi.label);
 }
 
-function kpiTile(label, value, unit, period, n1Value) {
+function kpiTile(label, value, unit, period, n1Value, color) {
   const empty = value === null || value === undefined || value === '';
   let deltaHtml = '';
   if (n1Value === undefined) {
@@ -1168,7 +1199,7 @@ function kpiTile(label, value, unit, period, n1Value) {
     deltaHtml = `<div class="kpi-delta ${dir}">${sign}${pct !== null ? formatNumber(Math.abs(pct)) + '%' : ''} · ${deltaSign}${formatNumber(Math.abs(delta))}${unit ? ' ' + unit : ''} vs N-1</div>`;
   }
   return `
-    <div class="kpi-tile ${empty ? 'empty' : ''}">
+    <div class="kpi-tile ${empty ? 'empty' : ''}" style="--cat-color:${color || 'var(--gold)'}">
       <div class="kpi-label">${label}</div>
       <div class="kpi-value">${empty ? 'Pas de donnée' : formatNumber(value) + (unit ? `<span class="unit">${unit}</span>` : '')}</div>
       ${period ? `<div class="kpi-period">${period}</div>` : ''}
