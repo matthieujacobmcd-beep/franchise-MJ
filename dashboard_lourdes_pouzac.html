@@ -649,9 +649,34 @@ const KPI_CONFIG = {
     kpis: [
       { id: 'score', label: 'Score', unit: 'pts', aggregate: 'avg' }
     ],
+    // Une visite RGRV se note par domaine plutôt que par un score unique
+    // (voir saisie_lourdes_pouzac.html) — repris ici pour les libellés de
+    // colonnes du tableau et l'export CSV.
+    kpisByType: {
+      RGRV: [
+        { id: 'rgrv_qualite',             label: 'Qualité',              unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_service',             label: 'Service',              unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_proprete',            label: 'Propreté',             unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_gestion_quart',       label: 'Gestion de Quart',     unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_securite_prevention', label: 'Sécurité/Prévention',  unit: 'pts', aggregate: 'avg' },
+        { id: 'score', label: 'Score global', unit: 'pts', aggregate: 'avg', computed: true,
+          dependsOn: ['rgrv_qualite', 'rgrv_service', 'rgrv_proprete', 'rgrv_gestion_quart', 'rgrv_securite_prevention'] }
+      ]
+    },
     extraFields: [
       { id: 'commentaire', label: 'Commentaire', type: 'textarea' }
-    ]
+    ],
+    extraFieldsByType: {
+      RGRV: [
+        { id: 'rgrv_securite_alimentaire', label: 'Sécurité alimentaire', type: 'select',
+          options: [
+            { value: '', label: 'Choisir…' },
+            { value: 'acceptable', label: 'Acceptable' },
+            { value: 'non_validee', label: 'Non validée' }
+          ]
+        }
+      ]
+    }
   }
 };
 
@@ -1235,12 +1260,25 @@ function renderTable(freq, rows, kpiIds) {
   const idsToShow = kpiIds || cfg.kpis.map(k => k.id);
   let cols;
   if (cfg.isEvent) {
-    cols = [cfg.period.field, 'type', 'score', 'commentaire'];
+    // Colonnes spécifiques à certains types de visite (ex : les domaines notés
+    // RGRV) affichées en plus des colonnes génériques date / type / score —
+    // vides pour les lignes CFV / PPFV qui ne les renseignent pas.
+    const typeCols = [];
+    if (cfg.kpisByType) {
+      Object.keys(cfg.kpisByType).forEach(t => {
+        cfg.kpisByType[t].forEach(k => { if (!cfg.kpis.some(bk => bk.id === k.id) && typeCols.indexOf(k.id) === -1) typeCols.push(k.id); });
+      });
+    }
+    if (cfg.extraFieldsByType) {
+      Object.keys(cfg.extraFieldsByType).forEach(t => {
+        cfg.extraFieldsByType[t].forEach(f => { if (typeCols.indexOf(f.id) === -1) typeCols.push(f.id); });
+      });
+    }
+    cols = [cfg.period.field, 'type', 'score', ...typeCols, 'commentaire'];
   } else {
     cols = [cfg.period.field, ...idsToShow];
   }
-  if (currentResto === 'FRANCHISE' && !cfg.isEvent) cols = [cfg.period.field, 'restaurant'].concat(cols.slice(1));
-  if (currentResto === 'FRANCHISE' && cfg.isEvent) cols = [cfg.period.field, 'restaurant', 'type', 'score', 'commentaire'];
+  if (currentResto === 'FRANCHISE') cols = [cfg.period.field, 'restaurant'].concat(cols.slice(1));
 
   const labelFor = (c) => {
     if (c === cfg.period.field) return cfg.period.label;
@@ -1248,8 +1286,37 @@ function renderTable(freq, rows, kpiIds) {
     if (c === 'commentaire') return 'Commentaire';
     if (c === 'type') return 'Type';
     if (c === 'score') return 'Score';
+    if (cfg.kpisByType) {
+      for (const t of Object.keys(cfg.kpisByType)) {
+        const k = cfg.kpisByType[t].find(k => k.id === c);
+        if (k) return k.label;
+      }
+    }
+    if (cfg.extraFieldsByType) {
+      for (const t of Object.keys(cfg.extraFieldsByType)) {
+        const f = cfg.extraFieldsByType[t].find(f => f.id === c);
+        if (f) return f.label;
+      }
+    }
     const k = cfg.kpis.find(k => k.id === c);
     return k ? k.label : c;
+  };
+
+  // Pour un champ "select" type par type de visite (ex : Sécurité alimentaire),
+  // affiche le libellé plutôt que la valeur brute enregistrée.
+  const displayValue = (c, r) => {
+    const raw = r[c];
+    if (raw === undefined || raw === '') return '—';
+    if (cfg.extraFieldsByType) {
+      for (const t of Object.keys(cfg.extraFieldsByType)) {
+        const f = cfg.extraFieldsByType[t].find(f => f.id === c && f.type === 'select');
+        if (f) {
+          const opt = (f.options || []).find(o => o.value === raw);
+          return opt ? opt.label : raw;
+        }
+      }
+    }
+    return raw;
   };
 
   let html = '<table class="data-table"><thead><tr>';
@@ -1257,7 +1324,7 @@ function renderTable(freq, rows, kpiIds) {
   html += '</tr></thead><tbody>';
   rows.forEach(r => {
     html += '<tr>';
-    cols.forEach(c => html += `<td>${r[c] !== undefined && r[c] !== '' ? r[c] : '—'}</td>`);
+    cols.forEach(c => html += `<td>${displayValue(c, r)}</td>`);
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -1408,8 +1475,23 @@ function exportCSV() {
     const rows = rowsFor(freq);
     if (!rows.length) return;
     csv += `\n# ${cfg.label}\n`;
+    let eventCols = [];
+    if (cfg.isEvent) {
+      const typeCols = [];
+      if (cfg.kpisByType) {
+        Object.keys(cfg.kpisByType).forEach(t => {
+          cfg.kpisByType[t].forEach(k => { if (!cfg.kpis.some(bk => bk.id === k.id) && typeCols.indexOf(k.id) === -1) typeCols.push(k.id); });
+        });
+      }
+      if (cfg.extraFieldsByType) {
+        Object.keys(cfg.extraFieldsByType).forEach(t => {
+          cfg.extraFieldsByType[t].forEach(f => { if (typeCols.indexOf(f.id) === -1) typeCols.push(f.id); });
+        });
+      }
+      eventCols = typeCols;
+    }
     const cols = cfg.isEvent
-      ? [cfg.period.field, 'restaurant', 'type', 'score', 'commentaire']
+      ? [cfg.period.field, 'restaurant', 'type', 'score', ...eventCols, 'commentaire']
       : [cfg.period.field, 'restaurant', ...cfg.kpis.map(k => k.id)];
     csv += cols.join(';') + '\n';
     rows.forEach(r => {
