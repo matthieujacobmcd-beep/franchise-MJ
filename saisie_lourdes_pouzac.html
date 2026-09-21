@@ -147,7 +147,7 @@ header {
   padding: 7px 14px; border-radius: 10px; font-size: .82rem; font-weight: 700; cursor: pointer;
 }
 .breadcrumb-back:hover { border-color: var(--gold); }
-.breadcrumb-title { font-size: 1rem; font-weight: 800; color: var(--text); }
+.breadcrumb-title { font-size: 1rem; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 6px; }
 
 .soon-panel {
   text-align: center; padding: 60px 20px; color: var(--muted);
@@ -539,14 +539,14 @@ const ARCH_ICON_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAA
 // la navigation par tuiles du dashboard. Chaque catégorie correspond à une
 // seule fréquence de saisie (voir "freq" ci-dessous).
 const CATEGORIES = {
-  ca:              { label: 'CA',                  freq: 'quotidien',    icon: '€', color: '#b8860b', bg: '#fdf3d9' },
-  heures:          { label: 'Heures',               freq: 'quotidien',    icon: '⏱️', color: '#f4511e', bg: '#fbe9e7' },
-  digital:         { label: 'Digital',              freq: 'hebdomadaire', icon: '📱', color: '#1e88e5', bg: '#e3f2fd' },
-  qsp:             { label: 'QSP',                  freq: 'hebdomadaire', icon: '✔️', color: '#2e7d32', bg: '#e8f5e9' },
-  heures_equipier: { label: 'KPI / Heures Équipier', freq: 'hebdomadaire', icon: '📊', color: '#00897b', bg: '#e0f2f1' },
-  rh:              { label: 'RH',                   freq: 'mensuel',      icon: '👥', color: '#7c3aed', bg: '#ede9fe' },
-  financier:       { label: 'Financier',            freq: 'mensuel',      icon: '📈', color: '#3949ab', bg: '#e8eaf6' },
-  excellence_ope:  { label: 'Excellence Opé.',      freq: 'ponctuel',     icon: '⭐', color: '#c2185b', bg: '#fce4ec' }
+  ca:              { label: 'CA',                  freq: 'quotidien',    icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></svg>`, color: '#b8860b', bg: '#fdf3d9' },
+  heures:          { label: 'Heures',               freq: 'quotidien',    icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, color: '#f4511e', bg: '#fbe9e7' },
+  digital:         { label: 'Digital',              freq: 'hebdomadaire', icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>`, color: '#1e88e5', bg: '#e3f2fd' },
+  qsp:             { label: 'QSP',                  freq: 'hebdomadaire', icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`, color: '#2e7d32', bg: '#e8f5e9' },
+  heures_equipier: { label: 'KPI / Heures Équipier', freq: 'hebdomadaire', icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`, color: '#00897b', bg: '#e0f2f1' },
+  rh:              { label: 'RH',                   freq: 'mensuel',      icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`, color: '#7c3aed', bg: '#ede9fe' },
+  financier:       { label: 'Financier',            freq: 'mensuel',      icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`, color: '#3949ab', bg: '#e8eaf6' },
+  excellence_ope:  { label: 'Excellence Opé.',      freq: 'ponctuel',     icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`, color: '#c2185b', bg: '#fce4ec' }
 };
 
 // Association KPI → catégorie (par id de KPI)
