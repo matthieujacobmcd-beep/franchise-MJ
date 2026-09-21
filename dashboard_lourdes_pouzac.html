@@ -987,27 +987,34 @@ function renderRestoTabs() {
 /* ============================================================================
  * CHARGEMENT DES DONNÉES
  * ==========================================================================*/
-async function loadDashboard() {
-  const note = document.getElementById('loadingNote');
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) {
-    note.textContent = "Configurez d'abord APPS_SCRIPT_URL en haut du script.";
-    note.style.display = 'block';
-    return;
-  }
-  note.textContent = 'Chargement des données…';
-  note.style.display = 'block';
-  try {
-    const res = await fetch(APPS_SCRIPT_URL + '?_=' + Date.now());
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error || 'réponse invalide');
-    dashboardData = json.data;
-    note.style.display = 'none';
-    renderBanners();
-    refreshCurrentEspace();
-  } catch (err) {
-    note.textContent = `Impossible de charger les données (${err.message}).`;
-    note.style.display = 'block';
-  }
+async function loadDashboard(attempt) {
+     attempt = attempt || 1;
+     const note = document.getElementById('loadingNote');
+     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) {
+            note.textContent = "Configurez d'abord APPS_SCRIPT_URL en haut du script.";
+            note.style.display = 'block';
+            return;
+     }
+     note.textContent = 'Chargement des données…';
+     note.style.display = 'block';
+     try {
+            const res = await fetch(APPS_SCRIPT_URL + '?_=' + Date.now());
+            const json = await res.json();
+            if (!json.ok) throw new Error(json.error || 'réponse invalide');
+            dashboardData = json.data;
+            note.style.display = 'none';
+            renderBanners();
+            refreshCurrentEspace();
+     } catch (err) {
+            if (attempt < 3) {
+                     setTimeout(() => loadDashboard(attempt + 1), 1200 * attempt);
+                     return;
+            }
+            note.innerHTML = `Impossible de charger les données (${err.message}). <button class="toolbar-btn" id="retryLoadBtn" style="padding:4px 10px;">Réessayer</button>`;
+            note.style.display = 'block';
+            const retryBtn = document.getElementById('retryLoadBtn');
+            if (retryBtn) retryBtn.addEventListener('click', () => loadDashboard(1));
+     }
 }
 
 /* ============================================================================
