@@ -202,6 +202,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
 }
+.dynamic-fields { display: contents; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: .76rem; font-weight: 700; color: var(--muted); }
 .field input, .field select, .field textarea {
@@ -512,9 +513,34 @@ const KPI_CONFIG = {
     kpis: [
       { id: 'score', label: 'Score', unit: 'pts', aggregate: 'avg' }
     ],
+    // Une visite RGRV se note par domaine plutôt que par un score unique :
+    // le "Score" global est alors recalculé automatiquement (moyenne des
+    // 5 domaines notés). CFV / PPFV gardent le simple champ "Score" ci-dessus.
+    kpisByType: {
+      RGRV: [
+        { id: 'rgrv_qualite',             label: 'Qualité',              unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_service',             label: 'Service',              unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_proprete',            label: 'Propreté',             unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_gestion_quart',       label: 'Gestion de Quart',     unit: 'pts', aggregate: 'avg' },
+        { id: 'rgrv_securite_prevention', label: 'Sécurité/Prévention',  unit: 'pts', aggregate: 'avg' },
+        { id: 'score', label: 'Score global', unit: 'pts', aggregate: 'avg', computed: true,
+          dependsOn: ['rgrv_qualite', 'rgrv_service', 'rgrv_proprete', 'rgrv_gestion_quart', 'rgrv_securite_prevention'] }
+      ]
+    },
     extraFields: [
       { id: 'commentaire', label: 'Commentaire', type: 'textarea' }
-    ]
+    ],
+    extraFieldsByType: {
+      RGRV: [
+        { id: 'rgrv_securite_alimentaire', label: 'Sécurité alimentaire', type: 'select',
+          options: [
+            { value: '', label: 'Choisir…' },
+            { value: 'acceptable', label: 'Acceptable' },
+            { value: 'non_validee', label: 'Non validée' }
+          ]
+        }
+      ]
+    }
   }
 };
 
@@ -568,6 +594,23 @@ function kpisForCategory(catId) {
   return cfg.kpis.filter(k => KPI_CATEGORY[k.id] === catId);
 }
 
+/**
+ * Renvoie les KPI / champs annexes à afficher dans le formulaire pour la
+ * fréquence en cours, en tenant compte du type de visite sélectionné
+ * (ex : RGRV a ses propres champs de notation par domaine — voir
+ * kpisByType / extraFieldsByType dans KPI_CONFIG.ponctuel). Pour toute
+ * fréquence sans variante par type, on retombe simplement sur les champs
+ * génériques cfg.kpis / cfg.extraFields.
+ */
+function activeKpisFor(cfg, typeVal) {
+  if (cfg.kpisByType && typeVal && cfg.kpisByType[typeVal]) return cfg.kpisByType[typeVal];
+  return cfg.kpis;
+}
+function activeExtraFieldsFor(cfg, typeVal) {
+  const specific = (cfg.extraFieldsByType && typeVal && cfg.extraFieldsByType[typeVal]) || [];
+  return specific.concat(cfg.extraFields || []);
+}
+
 // Formules pour les KPI calculés automatiquement (jamais saisis à la main)
 const COMPUTED_KPIS = {
   panier_moyen: function (values) {
@@ -575,6 +618,12 @@ const COMPUTED_KPIS = {
     const tac = Number(values.transactions);
     if (!tac || isNaN(ca) || isNaN(tac)) return '';
     return Math.round((ca / tac) * 100) / 100;
+  },
+  score: function (values) {
+    const ids = ['rgrv_qualite', 'rgrv_service', 'rgrv_proprete', 'rgrv_gestion_quart', 'rgrv_securite_prevention'];
+    const vals = ids.map(id => values[id]).filter(v => v !== '' && v !== undefined && v !== null && !isNaN(Number(v))).map(Number);
+    if (!vals.length) return '';
+    return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
   }
 };
 
@@ -809,7 +858,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
 
         const rows = dataCache[currentFreq] || [];
         const typeEl = cfg.isEvent ? document.getElementById('f_type') : null;
-        const typeVal = typeEl ? typeEl.value : '';
+        let typeVal = typeEl ? typeEl.value : '';
 
         const match = rows.find(r =>
                String(r.restaurant) === String(currentResto) &&
@@ -818,17 +867,24 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
              );
 
         if (match) {
-               if (typeEl && !typeVal && match.type) typeEl.value = match.type;
+               if (typeEl && !typeVal && match.type) {
+                        typeEl.value = match.type;
+                        typeVal = match.type;
+                        renderDynamicFields();
+               }
 
-               cfg.kpis.filter(k => !k.computed).forEach(k => {
+               const kpis = activeKpisFor(cfg, typeVal);
+               const extraFields = activeExtraFieldsFor(cfg, typeVal);
+
+               kpis.filter(k => !k.computed).forEach(k => {
                         const el = document.getElementById('f_' + k.id);
                         if (el) el.value = (match[k.id] === undefined || match[k.id] === '') ? '' : match[k.id];
                });
-               (cfg.extraFields || []).forEach(f => {
+               extraFields.forEach(f => {
                         const el = document.getElementById('f_' + f.id);
                         if (el) el.value = match[f.id] || '';
                });
-               cfg.kpis.filter(k => k.computed).forEach(k => {
+               kpis.filter(k => k.computed).forEach(k => {
                         const values = {};
                         (k.dependsOn || []).forEach(depId => {
                                    const depEl = document.getElementById('f_' + depId);
@@ -841,15 +897,18 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
                status.textContent = '📝 Une saisie existe déjà pour cette période — la voici, modifiez-la puis enregistrez pour la mettre à jour.';
                status.className = 'form-status info';
         } else {
-               cfg.kpis.filter(k => !k.computed).forEach(k => {
+               const kpis = activeKpisFor(cfg, typeVal);
+               const extraFields = activeExtraFieldsFor(cfg, typeVal);
+
+               kpis.filter(k => !k.computed).forEach(k => {
                         const el = document.getElementById('f_' + k.id);
                         if (el) el.value = '';
                });
-               (cfg.extraFields || []).forEach(f => {
+               extraFields.forEach(f => {
                         const el = document.getElementById('f_' + f.id);
                         if (el) el.value = '';
                });
-               cfg.kpis.filter(k => k.computed).forEach(k => {
+               kpis.filter(k => k.computed).forEach(k => {
                         const el = document.getElementById('f_' + k.id);
                         if (el) el.value = '';
                });
@@ -918,7 +977,50 @@ function renderForm() {
     `);
   }
 
-  cfg.kpis.forEach(k => {
+  fields.push('<div id="dynamicFields" class="dynamic-fields"></div>');
+
+  document.getElementById('formFields').innerHTML = fields.join('');
+  document.getElementById('formStatus').textContent = '';
+  document.getElementById('formStatus').className = 'form-status';
+
+const periodInput = document.getElementById('f_period');
+     periodInput.value = defaultPeriodValue(cfg.period.type);
+
+     // Dès que la période (ou, pour le Ponctuel, le type de visite) change,
+     // vérifier si une saisie existe déjà pour la recharger automatiquement.
+     periodInput.addEventListener('change', refreshExistingEntry);
+     periodInput.addEventListener('input', refreshExistingEntry);
+     if (cfg.isEvent) {
+            const typeEl = document.getElementById('f_type');
+            if (typeEl) typeEl.addEventListener('change', () => {
+                     renderDynamicFields();
+                     refreshExistingEntry();
+            });
+     }
+
+     renderDynamicFields();
+     refreshExistingEntry();
+}
+
+/**
+ * Construit les champs KPI + champs annexes du formulaire, en tenant compte
+ * du type de visite sélectionné pour le Ponctuel (ex : RGRV affiche 6 champs
+ * de notation par domaine au lieu du simple "Score" de CFV / PPFV). Rejoué
+ * à chaque changement de type de visite, en plus du premier rendu.
+ */
+function renderDynamicFields() {
+  const cfg = KPI_CONFIG[currentFreq];
+  const wrap = document.getElementById('dynamicFields');
+  if (!wrap) return;
+
+  const typeEl = cfg.isEvent ? document.getElementById('f_type') : null;
+  const typeVal = typeEl ? typeEl.value : '';
+  const kpis = activeKpisFor(cfg, typeVal);
+  const extraFields = activeExtraFieldsFor(cfg, typeVal);
+
+  const fields = [];
+
+  kpis.forEach(k => {
     if (k.computed) {
       fields.push(`
         <div class="field">
@@ -936,10 +1038,15 @@ function renderForm() {
     }
   });
 
-  (cfg.extraFields || []).forEach(f => {
-    const tag = f.type === 'textarea'
-      ? `<textarea id="f_${f.id}" data-extra="${f.id}"></textarea>`
-      : `<input type="text" id="f_${f.id}" data-extra="${f.id}">`;
+  extraFields.forEach(f => {
+    let tag;
+    if (f.type === 'textarea') {
+      tag = `<textarea id="f_${f.id}" data-extra="${f.id}"></textarea>`;
+    } else if (f.type === 'select') {
+      tag = `<select id="f_${f.id}" data-extra="${f.id}">${(f.options || []).map(o => `<option value="${o.value}">${o.label}</option>`).join('')}</select>`;
+    } else {
+      tag = `<input type="text" id="f_${f.id}" data-extra="${f.id}">`;
+    }
     fields.push(`
       <div class="field wide">
         <label>${f.label}</label>
@@ -948,41 +1055,26 @@ function renderForm() {
     `);
   });
 
-  document.getElementById('formFields').innerHTML = fields.join('');
-  document.getElementById('formStatus').textContent = '';
-  document.getElementById('formStatus').className = 'form-status';
+  wrap.innerHTML = fields.join('');
 
-const periodInput = document.getElementById('f_period');
-     periodInput.value = defaultPeriodValue(cfg.period.type);
-
-     // Dès que la période (ou, pour le Ponctuel, le type de visite) change,
-     // vérifier si une saisie existe déjà pour la recharger automatiquement.
-     periodInput.addEventListener('change', refreshExistingEntry);
-     periodInput.addEventListener('input', refreshExistingEntry);
-     if (cfg.isEvent) {
-            const typeEl = document.getElementById('f_type');
-            if (typeEl) typeEl.addEventListener('change', refreshExistingEntry);
-     }
-
-     // Brancher les recalculs automatiques (ex : Panier Moyen = CA Net Total / TAC'S)
-     cfg.kpis.filter(k => k.computed).forEach(k => {
-            const recompute = () => {
-                     const values = {};
-                     (k.dependsOn || []).forEach(depId => {
-                                const depEl = document.getElementById('f_' + depId);
-                                values[depId] = depEl ? depEl.value : '';
-                     });
-                     const result = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
-                     document.getElementById('f_' + k.id).value = result;
-            };
-            (k.dependsOn || []).forEach(depId => {
-                     const depEl = document.getElementById('f_' + depId);
-                     if (depEl) depEl.addEventListener('input', recompute);
-            });
-            recompute();
+  // Brancher les recalculs automatiques (ex : Panier Moyen = CA Net Total / TAC'S,
+  // ou le Score global RGRV = moyenne des domaines notés).
+  kpis.filter(k => k.computed).forEach(k => {
+     const recompute = () => {
+              const values = {};
+              (k.dependsOn || []).forEach(depId => {
+                         const depEl = document.getElementById('f_' + depId);
+                         values[depId] = depEl ? depEl.value : '';
+              });
+              const result = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
+              document.getElementById('f_' + k.id).value = result;
+     };
+     (k.dependsOn || []).forEach(depId => {
+              const depEl = document.getElementById('f_' + depId);
+              if (depEl) depEl.addEventListener('input', recompute);
      });
-
-     refreshExistingEntry();
+     recompute();
+  });
 }
 
 async function handleSubmit(e) {
@@ -1006,13 +1098,17 @@ async function handleSubmit(e) {
     }
   }
 
-  cfg.kpis.forEach(k => {
+  const activeKpis = activeKpisFor(cfg, payload.type || '');
+  const activeExtras = activeExtraFieldsFor(cfg, payload.type || '');
+
+  activeKpis.forEach(k => {
     const el = document.getElementById('f_' + k.id);
-    payload[k.id] = el.value === '' ? '' : Number(el.value);
+    payload[k.id] = (!el || el.value === '') ? '' : Number(el.value);
   });
 
-  (cfg.extraFields || []).forEach(f => {
-    payload[f.id] = document.getElementById('f_' + f.id).value;
+  activeExtras.forEach(f => {
+    const el = document.getElementById('f_' + f.id);
+    payload[f.id] = el ? el.value : '';
   });
 
   if (!payload[cfg.period.field]) {
