@@ -318,16 +318,16 @@ body.dark-mode .config-warning code { background: rgba(255,255,255,.1); }
 .banner {
   display: flex; align-items: flex-start; gap: 14px;
   padding: 14px 18px; border-radius: 14px;
-  border-left: 5px solid var(--gold); background: var(--card);
-  border: 1px solid var(--border); border-left: 5px solid var(--gold);
+  background: var(--b-bg, var(--card));
+  border: 1px solid var(--border); border-left: 5px solid var(--b-color, var(--gold));
 }
 .banner-ico {
-  width: 36px; height: 36px; border-radius: 10px; background: var(--gold);
+  width: 36px; height: 36px; border-radius: 10px; background: var(--b-color, var(--gold));
   color: #fff; display: flex; align-items: center; justify-content: center;
-  font-size: 18px; flex-shrink: 0;
+  font-size: 18px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 .banner-body { flex: 1; min-width: 0; }
-.banner-type { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--gold); margin-bottom: 3px; }
+.banner-type { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--b-color, var(--gold)); margin-bottom: 3px; }
 .banner-title { font-size: .9rem; font-weight: 800; color: var(--text); margin-bottom: 3px; }
 .banner-msg { font-size: .8rem; color: var(--muted); line-height: 1.5; }
 .banner-del {
