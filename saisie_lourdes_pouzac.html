@@ -206,6 +206,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
 .form-status { font-size: .82rem; font-weight: 600; }
 .form-status.ok { color: var(--green); }
 .form-status.err { color: var(--red); }
+   .form-status.info { color: var(--gold); }
 
 .section-title {
   font-size: .95rem; font-weight: 800; color: var(--text);
@@ -621,40 +622,137 @@ function computeFranchiseRows(freq, allRows) {
  * ==========================================================================*/
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qhixLo-LPfV9445v7OgGuXgFx564cVVsgbEde7rxr1yItxELN6sPS_JA/exec';
 
-let currentResto = RESTAURANTS[0].id;
-let currentFreq = 'quotidien';
+   let currentResto = RESTAURANTS[0].id;
+   let currentFreq = 'quotidien';
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) {
-    document.getElementById('configWarning').style.display = 'block';
-  }
+   // Cache local de toutes les saisies déjà enregistrées (chargé au démarrage
+   // depuis le Sheet), pour retrouver et réafficher une saisie existante dès
+   // qu'on sélectionne une période déjà renseignée — évite les resaisies.
+   let dataCache = null;
 
-  renderRestoSwitch();
-  renderFreqTabs();
-  renderForm();
+   document.addEventListener('DOMContentLoaded', () => {
+        if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) {
+               document.getElementById('configWarning').style.display = 'block';
+        }
 
-  document.getElementById('darkToggle').addEventListener('click', () => {
-    document.body.classList.toggle('dark-mode');
-    document.getElementById('darkToggle').textContent =
-      document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
-  });
+        renderRestoSwitch();
+        renderFreqTabs();
+        renderForm();
+        loadDataCache();
 
-  document.getElementById('entryForm').addEventListener('submit', handleSubmit);
-});
+        document.getElementById('darkToggle').addEventListener('click', () => {
+               document.body.classList.toggle('dark-mode');
+               document.getElementById('darkToggle').textContent =
+                        document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+        });
 
-function renderRestoSwitch() {
-  const wrap = document.getElementById('restoSwitch');
-  wrap.innerHTML = RESTAURANTS.map(r =>
-    `<button data-resto="${r.id}" class="${r.id === currentResto ? 'active' : ''}">${r.label}</button>`
-  ).join('');
-  wrap.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentResto = btn.dataset.resto;
-      wrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-}
+        document.getElementById('entryForm').addEventListener('submit', handleSubmit);
+   });
+
+   /**
+    * Charge (ou recharge) toutes les saisies existantes depuis le Sheet, pour
+     * pouvoir pré-remplir le formulaire dès qu'une période déjà saisie est
+      * sélectionnée. Best-effort : en cas d'échec (hors-ligne, URL non configurée),
+       * le formulaire reste utilisable normalement, juste sans pré-remplissage.
+        */
+   async function loadDataCache() {
+        if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) return;
+        try {
+               const res = await fetch(APPS_SCRIPT_URL + '?_=' + Date.now());
+               const json = await res.json();
+               if (json.ok) {
+                        dataCache = json.data;
+                        refreshExistingEntry();
+               }
+        } catch (err) {
+               // Silencieux : le formulaire reste utilisable sans pré-remplissage.
+        }
+   }
+
+   /**
+    * Regarde si une saisie existe déjà pour le restaurant / la période (/ le
+     * type de visite pour le Ponctuel) actuellement sélectionnés, et si oui
+      * pré-remplit les champs avec ces valeurs pour éviter de resaisir ce qui
+       * est déjà enregistré. Sinon, vide le formulaire (nouvelle saisie).
+        */
+   function refreshExistingEntry() {
+        const cfg = KPI_CONFIG[currentFreq];
+        const periodInput = document.getElementById('f_period');
+        const status = document.getElementById('formStatus');
+        if (!cfg || !periodInput || !status) return;
+
+        const period = periodInput.value;
+        if (!period || !dataCache) {
+               status.textContent = '';
+               status.className = 'form-status';
+               return;
+        }
+
+        const rows = dataCache[currentFreq] || [];
+        const typeEl = cfg.isEvent ? document.getElementById('f_type') : null;
+        const typeVal = typeEl ? typeEl.value : '';
+
+        const match = rows.find(r =>
+               String(r.restaurant) === String(currentResto) &&
+               String(r[cfg.period.field]) === String(period) &&
+               (!cfg.isEvent || !typeVal || String(r.type) === String(typeVal))
+             );
+
+        if (match) {
+               if (typeEl && !typeVal && match.type) typeEl.value = match.type;
+
+               cfg.kpis.filter(k => !k.computed).forEach(k => {
+                        const el = document.getElementById('f_' + k.id);
+                        if (el) el.value = (match[k.id] === undefined || match[k.id] === '') ? '' : match[k.id];
+               });
+               (cfg.extraFields || []).forEach(f => {
+                        const el = document.getElementById('f_' + f.id);
+                        if (el) el.value = match[f.id] || '';
+               });
+               cfg.kpis.filter(k => k.computed).forEach(k => {
+                        const values = {};
+                        (k.dependsOn || []).forEach(depId => {
+                                   const depEl = document.getElementById('f_' + depId);
+                                   values[depId] = depEl ? depEl.value : '';
+                        });
+                        const el = document.getElementById('f_' + k.id);
+                        if (el) el.value = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
+               });
+
+               status.textContent = '📝 Une saisie existe déjà pour cette période — la voici, modifiez-la puis enregistrez pour la mettre à jour.';
+               status.className = 'form-status info';
+        } else {
+               cfg.kpis.filter(k => !k.computed).forEach(k => {
+                        const el = document.getElementById('f_' + k.id);
+                        if (el) el.value = '';
+               });
+               (cfg.extraFields || []).forEach(f => {
+                        const el = document.getElementById('f_' + f.id);
+                        if (el) el.value = '';
+               });
+               cfg.kpis.filter(k => k.computed).forEach(k => {
+                        const el = document.getElementById('f_' + k.id);
+                        if (el) el.value = '';
+               });
+               status.textContent = '';
+               status.className = 'form-status';
+        }
+   }
+
+   function renderRestoSwitch() {
+        const wrap = document.getElementById('restoSwitch');
+        wrap.innerHTML = RESTAURANTS.map(r =>
+               `<button data-resto="${r.id}" class="${r.id === currentResto ? 'active' : ''}">${r.label}</button>`
+             ).join('');
+        wrap.querySelectorAll('button').forEach(btn => {
+               btn.addEventListener('click', () => {
+                        currentResto = btn.dataset.resto;
+                        wrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        refreshExistingEntry();
+               });
+        });
+   }
 
 function renderFreqTabs() {
   const wrap = document.getElementById('freqTabs');
@@ -731,26 +829,37 @@ function renderForm() {
   document.getElementById('formStatus').textContent = '';
   document.getElementById('formStatus').className = 'form-status';
 
-  const periodInput = document.getElementById('f_period');
-  periodInput.value = defaultPeriodValue(cfg.period.type);
+const periodInput = document.getElementById('f_period');
+     periodInput.value = defaultPeriodValue(cfg.period.type);
 
-  // Brancher les recalculs automatiques (ex : Panier Moyen = CA Net Total / TAC'S)
-  cfg.kpis.filter(k => k.computed).forEach(k => {
-    const recompute = () => {
-      const values = {};
-      (k.dependsOn || []).forEach(depId => {
-        const depEl = document.getElementById('f_' + depId);
-        values[depId] = depEl ? depEl.value : '';
-      });
-      const result = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
-      document.getElementById('f_' + k.id).value = result;
-    };
-    (k.dependsOn || []).forEach(depId => {
-      const depEl = document.getElementById('f_' + depId);
-      if (depEl) depEl.addEventListener('input', recompute);
-    });
-    recompute();
-  });
+     // Dès que la période (ou, pour le Ponctuel, le type de visite) change,
+     // vérifier si une saisie existe déjà pour la recharger automatiquement.
+     periodInput.addEventListener('change', refreshExistingEntry);
+     periodInput.addEventListener('input', refreshExistingEntry);
+     if (cfg.isEvent) {
+            const typeEl = document.getElementById('f_type');
+            if (typeEl) typeEl.addEventListener('change', refreshExistingEntry);
+     }
+
+     // Brancher les recalculs automatiques (ex : Panier Moyen = CA Net Total / TAC'S)
+     cfg.kpis.filter(k => k.computed).forEach(k => {
+            const recompute = () => {
+                     const values = {};
+                     (k.dependsOn || []).forEach(depId => {
+                                const depEl = document.getElementById('f_' + depId);
+                                values[depId] = depEl ? depEl.value : '';
+                     });
+                     const result = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
+                     document.getElementById('f_' + k.id).value = result;
+            };
+            (k.dependsOn || []).forEach(depId => {
+                     const depEl = document.getElementById('f_' + depId);
+                     if (depEl) depEl.addEventListener('input', recompute);
+            });
+            recompute();
+     });
+
+     refreshExistingEntry();
 }
 
 async function handleSubmit(e) {
@@ -802,7 +911,20 @@ async function handleSubmit(e) {
     const json = await res.json();
     if (json.ok) {
       status.textContent = json.updated ? '✓ Saisie mise à jour.' : '✓ Saisie enregistrée.';
-      status.className = 'form-status ok';
+             status.className = 'form-status ok';
+
+             // Mettre à jour le cache local tout de suite, pour que la saisie
+             // apparaisse comme "déjà enregistrée" sans attendre un rechargement.
+             if (dataCache) {
+                        if (!dataCache[currentFreq]) dataCache[currentFreq] = [];
+                        const rows = dataCache[currentFreq];
+                        const idx = rows.findIndex(r =>
+                                     String(r.restaurant) === String(payload.restaurant) &&
+                                     String(r[cfg.period.field]) === String(payload[cfg.period.field]) &&
+                                     (!cfg.isEvent || String(r.type) === String(payload.type))
+                                                           );
+                        if (idx > -1) rows[idx] = payload; else rows.push(payload);
+             }
     } else {
       status.textContent = 'Erreur : ' + (json.error || 'inconnue');
       status.className = 'form-status err';
