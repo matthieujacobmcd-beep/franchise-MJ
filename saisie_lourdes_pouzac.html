@@ -655,7 +655,8 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
       * sélectionnée. Best-effort : en cas d'échec (hors-ligne, URL non configurée),
        * le formulaire reste utilisable normalement, juste sans pré-remplissage.
         */
-   async function loadDataCache() {
+   async function loadDataCache(attempt) {
+        attempt = attempt || 1;
         if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('COLLER_ICI') === 0) return;
         try {
                const res = await fetch(APPS_SCRIPT_URL + '?_=' + Date.now());
@@ -663,9 +664,13 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
                if (json.ok) {
                         dataCache = json.data;
                         refreshExistingEntry();
+               } else if (attempt < 3) {
+                        setTimeout(() => loadDataCache(attempt + 1), 1200 * attempt);
                }
         } catch (err) {
-               // Silencieux : le formulaire reste utilisable sans pré-remplissage.
+               if (attempt < 3) {
+                        setTimeout(() => loadDataCache(attempt + 1), 1200 * attempt);
+               }
         }
    }
 
