@@ -648,6 +648,8 @@ const KPI_CONFIG = {
       { id: 'panier_moyen',  label: 'Panier Moyen (PM)',    unit: '€',
         computed: true, dependsOn: ['ca_net_total', 'transactions'] },
       { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' },
+      { id: 'remboursement', label: 'Remboursement',      unit: '€', aggregate: 'sum' },
+      { id: 'promotion',     label: 'Promotion',           unit: '€', aggregate: 'sum' },
       { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
       { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' }
     ]
