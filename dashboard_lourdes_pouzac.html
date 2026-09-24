@@ -1449,13 +1449,31 @@ function renderCategoryGrid() {
   });
 }
 
+// Niveau minimum des tuiles pour certaines catégories : pour le CA, une
+// tuile "au jour" seule est trop bruitée pour être pertinente (test en cours
+// avec peu de recul), donc les tuiles démarrent à la Semaine. Le graphique de
+// tendance, lui, reste toujours au grain le plus fin (Jour) pour ces
+// catégories, indépendamment du niveau choisi pour les tuiles.
+const TILE_MIN_LEVEL = { ca: 'semaine' };
+const LEVEL_ORDER = ['jour', 'semaine', 'mois', 'annee'];
+
+function tileLevelsFor_(catId, freqKey) {
+  const all = levelsAvailableFor_(freqKey);
+  const min = TILE_MIN_LEVEL[catId];
+  if (!min) return all;
+  const minIdx = LEVEL_ORDER.indexOf(min);
+  return all.filter(lv => LEVEL_ORDER.indexOf(lv) >= minIdx);
+}
+
 function renderCategoryDetail(catId) {
   const cat = CATEGORIES[catId];
   const cfg = KPI_CONFIG[cat.freq];
   const kpis = kpisForCategory(catId);
 
-  const levels = levelsAvailableFor_(cat.freq);
-  if (!aggLevelByCategory[catId]) aggLevelByCategory[catId] = nativeLevelFor_(cat.freq);
+  const levels = tileLevelsFor_(catId, cat.freq);
+  if (!aggLevelByCategory[catId] || levels.indexOf(aggLevelByCategory[catId]) === -1) {
+    aggLevelByCategory[catId] = levels[0] || nativeLevelFor_(cat.freq);
+  }
   const level = aggLevelByCategory[catId];
   const desc = level ? periodDescriptorForLevel_(cat.freq, level) : cfg.period;
 
@@ -1475,6 +1493,9 @@ function renderCategoryDetail(catId) {
   detailWrap.style.display = 'block';
 
   const chartKpi = !cfg.isEvent ? (kpis.find(k => !k.computed) || kpis[0]) : null;
+  const chartFixed = !!TILE_MIN_LEVEL[catId];
+  const chartRows = chartFixed ? rowsFor(cat.freq) : rows;
+  const chartField = chartFixed ? cfg.period.field : desc.field;
 
   let html = '<div class="card">';
 
@@ -1525,7 +1546,7 @@ function renderCategoryDetail(catId) {
     });
   }
 
-  if (chartKpi) renderTrendChart('chart_cat_' + catId, rows, desc.field, chartKpi.id, chartKpi.label);
+  if (chartKpi) renderTrendChart('chart_cat_' + catId, chartRows, chartField, chartKpi.id, chartKpi.label);
 }
 
 function kpiTile(label, value, unit, period, n1Value, color) {
