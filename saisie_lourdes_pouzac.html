@@ -229,6 +229,14 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
 .form-status.err { color: var(--red); }
    .form-status.info { color: var(--gold); }
 
+.existing-entry-banner {
+  display: none; align-items: flex-start; gap: 10px;
+  background: rgba(184,134,11,.1); border: 1.5px solid var(--gold); color: #7a5c00;
+  border-radius: 10px; padding: 12px 16px; font-size: .84rem; font-weight: 600;
+  margin-bottom: 16px; line-height: 1.5;
+}
+body.dark-mode .existing-entry-banner { background: rgba(212,160,23,.12); color: var(--gold2); }
+
 .section-title {
   font-size: .95rem; font-weight: 800; color: var(--text);
   margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
@@ -403,6 +411,10 @@ body.dark-mode .config-warning code { background: rgba(255,255,255,.1); }
 
   <div class="sub-tabs" id="freqTabs"></div>
   <div class="card">
+    <div id="existingEntryBanner" class="existing-entry-banner">
+      <span>📝</span>
+      <span>Une saisie existe déjà pour cette période — les valeurs ci-dessous sont celles déjà enregistrées. Modifiez-les puis cliquez sur « Enregistrer » pour les mettre à jour.</span>
+    </div>
     <div class="section-title">
       <span id="freqTitle"></span>
       <span class="freq-badge" id="freqBadge"></span>
@@ -849,12 +861,14 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
         const cfg = KPI_CONFIG[currentFreq];
         const periodInput = document.getElementById('f_period');
         const status = document.getElementById('formStatus');
-        if (!cfg || !periodInput || !status) return;
+        const banner = document.getElementById('existingEntryBanner');
+        if (!cfg || !periodInput || !status || !banner) return;
 
         const period = periodInput.value;
         if (!period || !dataCache) {
                status.textContent = '';
                status.className = 'form-status';
+               banner.style.display = 'none';
                return;
         }
 
@@ -896,9 +910,11 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7doP8RjnYl2qh
                         if (el) el.value = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](values) : '';
                });
 
-               status.textContent = '📝 Une saisie existe déjà pour cette période — la voici, modifiez-la puis enregistrez pour la mettre à jour.';
-               status.className = 'form-status info';
+               status.textContent = '';
+               status.className = 'form-status';
+               banner.style.display = 'flex';
         } else {
+               banner.style.display = 'none';
                const kpis = activeKpisFor(cfg, typeVal);
                const extraFields = activeExtraFieldsFor(cfg, typeVal);
 
