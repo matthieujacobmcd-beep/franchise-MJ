@@ -461,7 +461,11 @@ const KPI_CONFIG = {
       { id: 'remboursement', label: 'Remboursement',      unit: '€', aggregate: 'sum' },
       { id: 'promotion',     label: 'Promotion',           unit: '€', aggregate: 'sum' },
       { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
-      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' }
+      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' },
+      { id: 'vphe', label: 'VPHE (Vente / h équipier)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_total', 'heures_equipier'] },
+      { id: 'vphg', label: 'VPHG (Vente / h globale)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_total', 'heures_totales'] }
     ]
   },
   hebdomadaire: {
@@ -475,8 +479,8 @@ const KPI_CONFIG = {
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
       { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
-      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
-      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
       { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
     ]
@@ -492,8 +496,8 @@ const KPI_CONFIG = {
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
       { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
-      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
-      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
       { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
     ]
@@ -638,6 +642,18 @@ const COMPUTED_KPIS = {
     const vals = ids.map(id => values[id]).filter(v => v !== '' && v !== undefined && v !== null && !isNaN(Number(v))).map(Number);
     if (!vals.length) return '';
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+  },
+  vphe: function (values) {
+    const ca = Number(values.ca_net_total);
+    const he = Number(values.heures_equipier);
+    if (!he || isNaN(ca) || isNaN(he)) return '';
+    return Math.round((ca / he) * 100) / 100;
+  },
+  vphg: function (values) {
+    const ca = Number(values.ca_net_total);
+    const ht = Number(values.heures_totales);
+    if (!ht || isNaN(ca) || isNaN(ht)) return '';
+    return Math.round((ca / ht) * 100) / 100;
   }
 };
 
@@ -1039,6 +1055,7 @@ function renderDynamicFields() {
   const fields = [];
 
   kpis.forEach(k => {
+    if (k.formHidden) return;
     if (k.computed) {
       fields.push(`
         <div class="field">
