@@ -1943,10 +1943,12 @@ function renderMaintenance() {
 
   const filtered = filteredInterventions_();
 
+  // Remarque interne (dev) : tant que EMAILJS_PUBLIC_KEY / MAINTENANCE_EMAIL valent 'A_COMPLETER'
+  // (voir plus haut), aucun email n'est envoyé pour les demandes d'intervention -- elles sont
+  // toutefois bien enregistrées dans le Google Sheet. Le statut affiché après envoi (plus bas,
+  // "Demande envoyée (email pas encore configuré)") informe déjà l'utilisateur sans afficher de
+  // bandeau alarmant à chaque ouverture de l'onglet Interventions.
   let html = '';
-  if (!EMAILJS_READY) {
-    html += `<div class="setup-note">L'envoi d'email n'est pas encore configuré (EMAILJS_PUBLIC_KEY / MAINTENANCE_EMAIL). Les demandes sont bien enregistrées dans le Google Sheet, mais aucun email n'est envoyé pour le moment. Donnez-moi les identifiants EmailJS et l'adresse à utiliser pour que je les active.</div>`;
-  }
 
   html += `
     <div class="interv-header">
