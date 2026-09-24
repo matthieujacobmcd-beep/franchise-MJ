@@ -1617,7 +1617,7 @@ function exportExcel() {
   });
   if (!any) { alert('Aucune donnée à exporter pour cette période.'); return; }
   XLSX.writeFile(wb, `franchise_mj_${periodFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-}}
+}
 
 function showHelp() {
   alert(
