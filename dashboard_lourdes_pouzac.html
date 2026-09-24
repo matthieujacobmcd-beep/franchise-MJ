@@ -1470,15 +1470,20 @@ function renderCategoryDetail(catId) {
   const cfg = KPI_CONFIG[cat.freq];
   const kpis = kpisForCategory(catId);
 
-  const levels = tileLevelsFor_(catId, cat.freq);
-  if (!aggLevelByCategory[catId] || levels.indexOf(aggLevelByCategory[catId]) === -1) {
-    aggLevelByCategory[catId] = levels[0] || nativeLevelFor_(cat.freq);
-  }
+  const levels = levelsAvailableFor_(cat.freq);
+  if (!aggLevelByCategory[catId]) aggLevelByCategory[catId] = nativeLevelFor_(cat.freq);
   const level = aggLevelByCategory[catId];
   const desc = level ? periodDescriptorForLevel_(cat.freq, level) : cfg.period;
 
   const rows = (cfg.isEvent || !level) ? rowsFor(cat.freq) : rowsForCategoryLevel_(cat, level);
   const last = rows[rows.length - 1];
+
+  // Pour certaines catégories (ex : CA), les tuiles au grain le plus fin ne
+  // sont pas pertinentes -- on les masque seulement en dessous du niveau
+  // minimum défini, sans retirer l'onglet correspondant (le graphique et le
+  // tableau restent consultables à tous les niveaux, y compris "Jour").
+  const tileMin = TILE_MIN_LEVEL[catId];
+  const tilesHidden = !!(tileMin && level && LEVEL_ORDER.indexOf(level) < LEVEL_ORDER.indexOf(tileMin));
 
   document.getElementById('categoryGridWrap').style.display = 'none';
   const bc = document.getElementById('pilotageBreadcrumb');
@@ -1509,26 +1514,30 @@ function renderCategoryDetail(catId) {
 
   if (chartKpi) html += `<div class="chart-wrap"><canvas id="chart_cat_${catId}"></canvas></div>`;
 
-  html += '<div class="kpi-grid">';
-  if (cfg.isEvent) {
-    cfg.eventTypes.forEach(t => {
-      const evRows = rows.filter(r => r.type === t);
-      const lastEv = evRows[evRows.length - 1];
-      html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? lastEv[cfg.period.field] : null, null, cat.color);
-    });
+  if (!tilesHidden) {
+    html += '<div class="kpi-grid">';
+    if (cfg.isEvent) {
+      cfg.eventTypes.forEach(t => {
+        const evRows = rows.filter(r => r.type === t);
+        const lastEv = evRows[evRows.length - 1];
+        html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? lastEv[cfg.period.field] : null, null, cat.color);
+      });
+    } else {
+      kpis.forEach(k => {
+        const val = last ? last[k.id] : null;
+        let n1Val = null;
+        if (last) {
+          const n1Period = shiftPeriodYear(last[desc.field], -1);
+          const n1Row = findByPeriod(rows, desc.field, n1Period);
+          n1Val = n1Row ? n1Row[k.id] : undefined;
+        }
+        html += kpiTile(k.label, val, k.unit, last ? last[desc.field] : null, n1Val, cat.color);
+      });
+    }
+    html += '</div>';
   } else {
-    kpis.forEach(k => {
-      const val = last ? last[k.id] : null;
-      let n1Val = null;
-      if (last) {
-        const n1Period = shiftPeriodYear(last[desc.field], -1);
-        const n1Row = findByPeriod(rows, desc.field, n1Period);
-        n1Val = n1Row ? n1Row[k.id] : undefined;
-      }
-      html += kpiTile(k.label, val, k.unit, last ? last[desc.field] : null, n1Val, cat.color);
-    });
+    html += '<p class="empty-note">Les tuiles démarrent à partir de "' + AGG_LEVEL_LABELS[tileMin] + '" pour cette catégorie.</p>';
   }
-  html += '</div>';
 
   html += '<div class="table-scroll" style="margin-top:16px;">';
   html += renderTable(cat.freq, rows.slice(-8).reverse(), kpis.map(k => k.id), desc);
