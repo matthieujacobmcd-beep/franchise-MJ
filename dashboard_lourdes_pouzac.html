@@ -6,7 +6,7 @@
 <title>Franchise MJ — Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ============================================================================
    FRANCHISE MJ — Thème partagé (repris de la palette franchise-py)
@@ -652,7 +652,11 @@ const KPI_CONFIG = {
       { id: 'remboursement', label: 'Remboursement',      unit: '€', aggregate: 'sum' },
       { id: 'promotion',     label: 'Promotion',           unit: '€', aggregate: 'sum' },
       { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
-      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' }
+      { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' },
+      { id: 'vphe', label: 'VPHE (Vente / h équipier)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_total', 'heures_equipier'] },
+      { id: 'vphg', label: 'VPHG (Vente / h globale)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_total', 'heures_totales'] }
     ]
   },
   hebdomadaire: {
@@ -666,8 +670,8 @@ const KPI_CONFIG = {
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
       { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
-      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
-      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
       { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
     ]
@@ -683,8 +687,8 @@ const KPI_CONFIG = {
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
       { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
-      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg' },
-      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg' },
+      { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
+      { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
       { id: 'tche',              label: 'TCHE (Transactions / h équipier)',   unit: '', aggregate: 'avg' }
     ]
@@ -806,6 +810,18 @@ const COMPUTED_KPIS = {
     const tac = Number(values.transactions);
     if (!tac || isNaN(ca) || isNaN(tac)) return '';
     return Math.round((ca / tac) * 100) / 100;
+  },
+  vphe: function (values) {
+    const ca = Number(values.ca_net_total);
+    const he = Number(values.heures_equipier);
+    if (!he || isNaN(ca) || isNaN(he)) return '';
+    return Math.round((ca / he) * 100) / 100;
+  },
+  vphg: function (values) {
+    const ca = Number(values.ca_net_total);
+    const ht = Number(values.heures_totales);
+    if (!ht || isNaN(ca) || isNaN(ht)) return '';
+    return Math.round((ca / ht) * 100) / 100;
   }
 };
 
@@ -1133,6 +1149,61 @@ function renderRestoTabs() {
 }
 
 /* ============================================================================
+ * CALCUL AUTOMATIQUE VPHE / VPHG (Vente / Heure Équipier / Globale)
+ * — dérivé du CA et des heures saisis quotidiennement, plutôt que ressaisi
+ *   manuellement chaque semaine ou chaque mois (colonnes vphe/vphg cachées
+ *   du formulaire de saisie hebdomadaire et "Hebdo — Bilan mensuel", voir
+ *   formHidden dans KPI_CONFIG).
+ * ==========================================================================*/
+function isoWeekOf_(dateStr) {
+  const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function computeVphFromDaily_(data) {
+  const quotidien = data.quotidien || [];
+  const byWeek = {};
+  const byMonth = {};
+  quotidien.forEach(r => {
+    const ca = Number(r.ca_net_total);
+    if (isNaN(ca)) return;
+    const he = Number(r.heures_equipier);
+    const ht = Number(r.heures_totales);
+    const week = isoWeekOf_(r.date);
+    const month = String(r.date || '').slice(0, 7);
+    if (week) {
+      const key = r.restaurant + '|' + week;
+      const b = byWeek[key] || (byWeek[key] = { ca: 0, he: 0, ht: 0 });
+      b.ca += ca;
+      if (!isNaN(he)) b.he += he;
+      if (!isNaN(ht)) b.ht += ht;
+    }
+    if (month) {
+      const key = r.restaurant + '|' + month;
+      const b = byMonth[key] || (byMonth[key] = { ca: 0, he: 0, ht: 0 });
+      b.ca += ca;
+      if (!isNaN(he)) b.he += he;
+      if (!isNaN(ht)) b.ht += ht;
+    }
+  });
+  const applyTo = (rows, field, table) => {
+    (rows || []).forEach(r => {
+      const b = table[r.restaurant + '|' + r[field]];
+      r.vphe = (b && b.he) ? Math.round((b.ca / b.he) * 100) / 100 : '';
+      r.vphg = (b && b.ht) ? Math.round((b.ca / b.ht) * 100) / 100 : '';
+    });
+  };
+  applyTo(data.hebdomadaire, 'semaine', byWeek);
+  applyTo(data.hebdo_mensuel, 'mois', byMonth);
+}
+
+/* ============================================================================
  * CHARGEMENT DES DONNÉES
  * ==========================================================================*/
 async function loadDashboard(attempt) {
@@ -1150,6 +1221,7 @@ async function loadDashboard(attempt) {
             const json = await res.json();
             if (!json.ok) throw new Error(json.error || 'réponse invalide');
             dashboardData = json.data;
+            computeVphFromDaily_(dashboardData);
             note.style.display = 'none';
             renderBanners();
             refreshCurrentEspace();
@@ -1552,8 +1624,38 @@ function rowsForRestoExport_(freq, restoId) {
   return rows.slice().sort((a, b) => String(a[cfg.period.field]).localeCompare(String(b[cfg.period.field])));
 }
 
-function buildRestoSheetData_(restoId) {
-  const aoa = [];
+// Formats numériques Excel lisibles par unité de KPI — '' (aucune unité)
+// bascule automatiquement entre entier et 2 décimales selon les valeurs réelles
+// de la colonne, pour éviter des ".00" superflus sur des compteurs entiers.
+function numFmtForUnit_(unit, values) {
+  const allInt = values.length > 0 && values.every(v => Number.isInteger(v));
+  switch (unit) {
+    case '€': return '#,##0.00" €"';
+    case '€/h': return '#,##0.00" €/h"';
+    case '%': return (allInt ? '#,##0' : '#,##0.0') + '"%"';
+    case 'h': return allInt ? '#,##0" h"' : '#,##0.00" h"';
+    case 'pers.': return '#,##0" pers."';
+    case 'pts': return allInt ? '#,##0" pts"' : '#,##0.0" pts"';
+    case 'sec': return '#,##0" sec"';
+    default: return allInt ? '#,##0' : '#,##0.00';
+  }
+}
+
+const EXPORT_FREQ_LABEL_ = {
+  quotidien: 'Quotidien',
+  hebdomadaire: 'Hebdomadaire',
+  hebdo_mensuel: 'Bilan mensuel',
+  mensuel: 'Mensuel',
+  ponctuel: 'Ponctuel'
+};
+
+// Un onglet Excel par restaurant x fréquence (plutôt qu'un seul onglet par
+// restaurant mêlant toutes les fréquences empilées) : colonnes homogènes par
+// onglet, ce qui permet des largeurs de colonnes et des formats de nombre
+// cohérents — donc un fichier réellement lisible une fois téléchargé.
+function buildRestoSheets_(restoId) {
+  const restoLabel = (RESTAURANTS.find(r => r.id === restoId) || {}).label || restoId;
+  const sheets = [];
   Object.keys(KPI_CONFIG).forEach(freq => {
     const cfg = KPI_CONFIG[freq];
     const rows = rowsForRestoExport_(freq, restoId);
@@ -1587,36 +1689,83 @@ function buildRestoSheetData_(restoId) {
       const k = allKpiDefs.find(kk => kk.id === c);
       return k ? (k.label + (k.unit ? ' (' + k.unit + ')' : '')) : c;
     };
-    aoa.push([cfg.label]);
-    aoa.push(cols.map(labelFor));
-    rows.forEach(r => {
-      aoa.push(cols.map(c => {
+    const unitFor = c => {
+      const k = allKpiDefs.find(kk => kk.id === c);
+      return k ? (k.unit || '') : '';
+    };
+    const isTextCol = c => (c === cfg.period.field || c === 'type' || c === 'commentaire');
+    const colValues = {};
+    cols.forEach(c => { colValues[c] = []; });
+    const rowObjs = rows.map(r => {
+      const obj = {};
+      cols.forEach(c => {
         const v = r[c];
-        if (v === undefined || v === '') return '';
-        if (c === cfg.period.field || c === 'type' || c === 'commentaire') return v;
+        if (v === undefined || v === '') { obj[c] = ''; return; }
+        if (isTextCol(c)) { obj[c] = v; return; }
         const num = Number(v);
-        return isNaN(num) ? v : num;
-      }));
+        if (isNaN(num)) { obj[c] = v; } else { obj[c] = num; colValues[c].push(num); }
+      });
+      return obj;
     });
-    aoa.push([]);
+    const columns = cols.map(c => {
+      const label = labelFor(c);
+      const width = Math.max(label.length + 2, c === 'commentaire' ? 32 : (isTextCol(c) ? 14 : 11));
+      const col = { header: label, key: c, width };
+      if (!isTextCol(c)) col.style = { numFmt: numFmtForUnit_(unitFor(c), colValues[c]) };
+      return col;
+    });
+    sheets.push({
+      name: (restoLabel + ' - ' + (EXPORT_FREQ_LABEL_[freq] || cfg.label)).substring(0, 31),
+      columns,
+      rows: rowObjs
+    });
   });
-  return aoa;
+  return sheets;
 }
 
-function exportExcel() {
+async function exportExcel() {
   if (!dashboardData) return;
-  if (typeof XLSX === 'undefined') { alert("La bibliothèque d'export Excel n'a pas pu être chargée — vérifiez la connexion internet."); return; }
-  const wb = XLSX.utils.book_new();
+  if (typeof ExcelJS === 'undefined') { alert("La bibliothèque d'export Excel n'a pas pu être chargée — vérifiez la connexion internet."); return; }
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Franchise MJ Dashboard';
+  wb.created = new Date();
   let any = false;
   RESTAURANTS.forEach(r => {
-    const aoa = buildRestoSheetData_(r.id);
-    if (!aoa.length) return;
-    any = true;
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    XLSX.utils.book_append_sheet(wb, ws, r.label.substring(0, 31));
+    buildRestoSheets_(r.id).forEach(sheetDef => {
+      any = true;
+      const ws = wb.addWorksheet(sheetDef.name, { views: [{ state: 'frozen', ySplit: 1 }] });
+      ws.columns = sheetDef.columns;
+      sheetDef.rows.forEach(row => ws.addRow(row));
+      const header = ws.getRow(1);
+      header.eachCell(cell => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB8860B' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      });
+      header.height = 24;
+      ws.eachRow(row => {
+        row.eachCell(cell => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFDDE1EA' } },
+            left: { style: 'thin', color: { argb: 'FFDDE1EA' } },
+            bottom: { style: 'thin', color: { argb: 'FFDDE1EA' } },
+            right: { style: 'thin', color: { argb: 'FFDDE1EA' } }
+          };
+        });
+      });
+    });
   });
   if (!any) { alert('Aucune donnée à exporter pour cette période.'); return; }
-  XLSX.writeFile(wb, `franchise_mj_${periodFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `franchise_mj_${periodFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function showHelp() {
@@ -1624,7 +1773,7 @@ function showHelp() {
     'Aide rapide — Franchise MJ\n\n' +
     '• Cliquez sur une tuile de catégorie (CA, Digital, RH…) pour voir le détail des KPI.\n' +
     '• Année / S1 / S2 filtrent les données affichées par période.\n' +
-    '• « Exporter » télécharge un fichier Excel avec un onglet séparé pour Lourdes et un pour Pouzac.\n' +
+    '• « Exporter » télécharge un fichier Excel avec un onglet par restaurant et par fréquence (Quotidien, Hebdomadaire…), mis en forme pour être lisible directement.\n' +
     '• Les onglets Franchise MJ / Lourdes / Pouzac changent la vue restaurant partout dans le dashboard.\n' +
     '• Les espaces Performance, Formation et Marketing arriveront avec davantage d\'historique.'
   );
