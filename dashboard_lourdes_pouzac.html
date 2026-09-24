@@ -653,10 +653,10 @@ const KPI_CONFIG = {
       { id: 'promotion',     label: 'Promotion',           unit: '€', aggregate: 'sum' },
       { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
       { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' },
-      { id: 'vphe', label: 'VPHE (Vente / h équipier)', unit: '€/h',
-        computed: true, dependsOn: ['ca_net_total', 'heures_equipier'] },
-      { id: 'vphg', label: 'VPHG (Vente / h globale)', unit: '€/h',
-        computed: true, dependsOn: ['ca_net_total', 'heures_totales'] }
+      { id: 'vphe_jour', label: 'VPHE (Vente / h équipier)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_alim', 'heures_equipier'] },
+      { id: 'vphg_jour', label: 'VPHG (Vente / h globale)', unit: '€/h',
+        computed: true, dependsOn: ['ca_net_alim', 'heures_totales'] }
     ]
   },
   hebdomadaire: {
@@ -787,7 +787,7 @@ const CATEGORIES = {
 // Association KPI → catégorie (par id de KPI)
 const KPI_CATEGORY = {
   ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
-  heures_totales: 'heures', heures_equipier: 'heures',
+  heures_totales: 'heures', heures_equipier: 'heures', vphe_jour: 'heures', vphg_jour: 'heures',
   hello_mcdo: 'digital', reseaux_sociaux: 'digital',
   oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
   vphe: 'heures_equipier', vphg: 'heures_equipier', uvhe: 'heures_equipier', tche: 'heures_equipier',
@@ -811,14 +811,14 @@ const COMPUTED_KPIS = {
     if (!tac || isNaN(ca) || isNaN(tac)) return '';
     return Math.round((ca / tac) * 100) / 100;
   },
-  vphe: function (values) {
-    const ca = Number(values.ca_net_total);
+  vphe_jour: function (values) {
+    const ca = Number(values.ca_net_alim);
     const he = Number(values.heures_equipier);
     if (!he || isNaN(ca) || isNaN(he)) return '';
     return Math.round((ca / he) * 100) / 100;
   },
-  vphg: function (values) {
-    const ca = Number(values.ca_net_total);
+  vphg_jour: function (values) {
+    const ca = Number(values.ca_net_alim);
     const ht = Number(values.heures_totales);
     if (!ht || isNaN(ca) || isNaN(ht)) return '';
     return Math.round((ca / ht) * 100) / 100;
@@ -1171,7 +1171,7 @@ function computeVphFromDaily_(data) {
   const byWeek = {};
   const byMonth = {};
   quotidien.forEach(r => {
-    const ca = Number(r.ca_net_total);
+    const ca = Number(r.ca_net_alim);
     if (isNaN(ca)) return;
     const he = Number(r.heures_equipier);
     const ht = Number(r.heures_totales);
@@ -1203,6 +1203,20 @@ function computeVphFromDaily_(data) {
   applyTo(data.hebdo_mensuel, 'mois', byMonth);
 }
 
+/**
+ * VPHE / VPHG au niveau Quotidien : contrairement à l'hebdo (agrégé sur
+ * plusieurs jours), chaque ligne quotidienne a déjà son CA et ses heures du
+ * jour -- inutile d'agréger, on applique juste la formule ligne par ligne
+ * (même calcul que COMPUTED_KPIS.vphe_jour/vphg_jour, utilisé aussi pour la
+ * vue "Franchise" où le CA/les heures sont sommés avant division).
+ */
+function applyQuotidienComputedKpis_(data) {
+  (data.quotidien || []).forEach(r => {
+    r.vphe_jour = COMPUTED_KPIS.vphe_jour(r);
+    r.vphg_jour = COMPUTED_KPIS.vphg_jour(r);
+  });
+}
+
 /* ============================================================================
  * CHARGEMENT DES DONNÉES
  * ==========================================================================*/
@@ -1222,6 +1236,7 @@ async function loadDashboard(attempt) {
             if (!json.ok) throw new Error(json.error || 'réponse invalide');
             dashboardData = json.data;
             computeVphFromDaily_(dashboardData);
+            applyQuotidienComputedKpis_(dashboardData);
             note.style.display = 'none';
             renderBanners();
             refreshCurrentEspace();
