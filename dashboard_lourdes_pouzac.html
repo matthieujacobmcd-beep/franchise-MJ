@@ -6,6 +6,7 @@
 <title>Franchise MJ — Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================================
    FRANCHISE MJ — Thème partagé (repris de la palette franchise-py)
@@ -537,7 +538,7 @@ table.interv-table td.urg-urgent-text { font-weight: 800; color: var(--red); }
       <button data-period="S1">S1</button>
       <button data-period="S2">S2</button>
     </div>
-    <button class="toolbar-btn accent-blue" id="exportBtn" title="Exporter les données affichées en CSV">⬇ Exporter</button>
+    <button class="toolbar-btn accent-blue" id="exportBtn" title="Exporter les données par restaurant au format Excel (un onglet par restaurant)">⬇ Exporter (Excel)</button>
     <button class="toolbar-btn" id="helpBtn" title="Aide">❓ Aide</button>
     <a class="page-link" href="saisie_lourdes_pouzac.html">Saisir des données →</a>
     <button class="dark-toggle" id="darkToggle" title="Basculer le mode sombre">🌙</button>
@@ -1034,7 +1035,7 @@ function initApp() {
     if (dashboardData) refreshCurrentEspace();
   });
 
-  document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  document.getElementById('exportBtn').addEventListener('click', exportExcel);
   document.getElementById('helpBtn').addEventListener('click', showHelp);
 
   document.getElementById('darkToggle').addEventListener('click', () => {
@@ -1536,16 +1537,27 @@ function renderMarketingDetail(idx) {
 }
 
 /* ============================================================================
- * EXPORT CSV / AIDE
+ * EXPORT EXCEL / AIDE
  * ==========================================================================*/
-function exportCSV() {
-  if (!dashboardData) return;
-  let csv = '';
+function rowsForRestoExport_(freq, restoId) {
+  const cfg = KPI_CONFIG[freq];
+  let rows = (dashboardData[freq] || []).filter(r => r.restaurant === restoId);
+  if (periodFilter !== 'all') {
+    rows = rows.filter(r => {
+      const month = periodMonth(r[cfg.period.field], cfg.period.type);
+      if (month === null) return true;
+      return periodFilter === 'S1' ? month <= 6 : month >= 7;
+    });
+  }
+  return rows.slice().sort((a, b) => String(a[cfg.period.field]).localeCompare(String(b[cfg.period.field])));
+}
+
+function buildRestoSheetData_(restoId) {
+  const aoa = [];
   Object.keys(KPI_CONFIG).forEach(freq => {
     const cfg = KPI_CONFIG[freq];
-    const rows = rowsFor(freq);
+    const rows = rowsForRestoExport_(freq, restoId);
     if (!rows.length) return;
-    csv += `\n# ${cfg.label}\n`;
     let eventCols = [];
     if (cfg.isEvent) {
       const typeCols = [];
@@ -1562,31 +1574,57 @@ function exportCSV() {
       eventCols = typeCols;
     }
     const cols = cfg.isEvent
-      ? [cfg.period.field, 'restaurant', 'type', 'score', ...eventCols, 'commentaire']
-      : [cfg.period.field, 'restaurant', ...cfg.kpis.map(k => k.id)];
-    csv += cols.join(';') + '\n';
+      ? [cfg.period.field, 'type', 'score', ...eventCols, 'commentaire']
+      : [cfg.period.field, ...cfg.kpis.map(k => k.id)];
+    const allKpiDefs = cfg.isEvent
+      ? cfg.kpis.concat(cfg.kpisByType ? Object.values(cfg.kpisByType).flat() : [])
+      : cfg.kpis;
+    const labelFor = c => {
+      if (c === cfg.period.field) return cfg.period.label;
+      if (c === 'type') return 'Type';
+      if (c === 'score') return 'Score';
+      if (c === 'commentaire') return 'Commentaire';
+      const k = allKpiDefs.find(kk => kk.id === c);
+      return k ? (k.label + (k.unit ? ' (' + k.unit + ')' : '')) : c;
+    };
+    aoa.push([cfg.label]);
+    aoa.push(cols.map(labelFor));
     rows.forEach(r => {
-      csv += cols.map(c => (r[c] !== undefined && r[c] !== '') ? String(r[c]).replace(/;/g, ',') : '').join(';') + '\n';
+      aoa.push(cols.map(c => {
+        const v = r[c];
+        if (v === undefined || v === '') return '';
+        if (c === cfg.period.field || c === 'type' || c === 'commentaire') return v;
+        const num = Number(v);
+        return isNaN(num) ? v : num;
+      }));
     });
+    aoa.push([]);
   });
-  if (!csv.trim()) { alert('Aucune donnée à exporter pour cette vue.'); return; }
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `franchise_mj_${currentResto.toLowerCase()}_${periodFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  return aoa;
 }
+
+function exportExcel() {
+  if (!dashboardData) return;
+  if (typeof XLSX === 'undefined') { alert("La bibliothèque d'export Excel n'a pas pu être chargée — vérifiez la connexion internet."); return; }
+  const wb = XLSX.utils.book_new();
+  let any = false;
+  RESTAURANTS.forEach(r => {
+    const aoa = buildRestoSheetData_(r.id);
+    if (!aoa.length) return;
+    any = true;
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, r.label.substring(0, 31));
+  });
+  if (!any) { alert('Aucune donnée à exporter pour cette période.'); return; }
+  XLSX.writeFile(wb, `franchise_mj_${periodFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}}
 
 function showHelp() {
   alert(
     'Aide rapide — Franchise MJ\n\n' +
     '• Cliquez sur une tuile de catégorie (CA, Digital, RH…) pour voir le détail des KPI.\n' +
     '• Année / S1 / S2 filtrent les données affichées par période.\n' +
-    '• « Exporter » télécharge un CSV des données actuellement affichées.\n' +
+    '• « Exporter » télécharge un fichier Excel avec un onglet séparé pour Lourdes et un pour Pouzac.\n' +
     '• Les onglets Franchise MJ / Lourdes / Pouzac changent la vue restaurant partout dans le dashboard.\n' +
     '• Les espaces Performance, Formation et Marketing arriveront avec davantage d\'historique.'
   );
