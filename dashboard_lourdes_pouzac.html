@@ -1269,6 +1269,123 @@ function periodMonth(value, type) {
   return null;
 }
 
+/* ============================================================================
+ * AGRÉGATION JOUR → SEMAINE / MOIS / ANNÉE (et Semaine → Mois/Année,
+ * Mois → Année) : permet de visualiser une catégorie alimentée par une
+ * saisie plus fine (Quotidien, Hebdomadaire) à un niveau plus large sans
+ * ressaisie -- les vues se construisent au fur et à mesure des saisies.
+ * ==========================================================================*/
+function isoWeekToThursday_(weekStr) {
+  const m = String(weekStr || '').match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]), week = Number(m[2]);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const thursday = new Date(week1Monday);
+  thursday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7 + 3);
+  return thursday;
+}
+
+function nativeLevelFor_(freqKey) {
+  if (freqKey === 'quotidien') return 'jour';
+  if (freqKey === 'hebdomadaire') return 'semaine';
+  if (freqKey === 'mensuel') return 'mois';
+  return null;
+}
+
+function levelsAvailableFor_(freqKey) {
+  const order = ['jour', 'semaine', 'mois', 'annee'];
+  const nativeLevel = nativeLevelFor_(freqKey);
+  if (!nativeLevel) return [];
+  return order.slice(order.indexOf(nativeLevel));
+}
+
+const AGG_LEVEL_LABELS = { jour: 'Jour', semaine: 'Semaine', mois: 'Mois', annee: 'Année' };
+
+function periodKeyFor_(baseType, value, level) {
+  const pad = n => String(n).padStart(2, '0');
+  const s = String(value || '');
+  if (baseType === 'date') {
+    if (level === 'jour') return s;
+    if (level === 'semaine') return isoWeekOf_(s);
+    if (level === 'mois') return s.slice(0, 7);
+    if (level === 'annee') return s.slice(0, 4);
+  }
+  if (baseType === 'week') {
+    if (level === 'semaine') return s;
+    if (level === 'mois') {
+      const d = isoWeekToThursday_(s);
+      return d ? `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}` : null;
+    }
+    if (level === 'annee') return s.slice(0, 4);
+  }
+  if (baseType === 'month') {
+    if (level === 'mois') return s;
+    if (level === 'annee') return s.slice(0, 4);
+  }
+  return null;
+}
+
+function periodDescriptorForLevel_(freqKey, level) {
+  const cfg = KPI_CONFIG[freqKey];
+  const nativeLevel = nativeLevelFor_(freqKey);
+  if (level === nativeLevel) return { field: cfg.period.field, label: cfg.period.label, type: cfg.period.type };
+  const types = { semaine: 'week', mois: 'month', annee: 'year' };
+  return { field: '_agg_' + level, label: AGG_LEVEL_LABELS[level], type: types[level] };
+}
+
+/**
+ * Regroupe des lignes déjà résolues (un seul restaurant, ou Franchise déjà
+ * fusionnée par rowsFor/computeFranchiseRows) par la clé de période cible :
+ * on resomme les KPI "sum"/"avg" puis on recalcule les KPI "computed" à
+ * partir des totaux (même logique que computeFranchiseRows, mais on agrège
+ * des périodes plutôt que des restaurants).
+ */
+function aggregateRows_(cfg, rows, level, periodField) {
+  const buckets = {};
+  rows.forEach(r => {
+    const key = periodKeyFor_(cfg.period.type, r[cfg.period.field], level);
+    if (!key) return;
+    if (!buckets[key]) {
+      buckets[key] = { restaurant: r.restaurant, _members: [] };
+      buckets[key][periodField] = key;
+    }
+    buckets[key]._members.push(r);
+  });
+  return Object.keys(buckets).sort().map(key => {
+    const b = buckets[key];
+    const members = b._members;
+    const out = { restaurant: b.restaurant };
+    out[periodField] = key;
+    cfg.kpis.filter(k => !k.computed).forEach(k => {
+      const vals = members
+        .map(r => r[k.id])
+        .filter(v => v !== '' && v !== undefined && v !== null && !isNaN(Number(v)))
+        .map(Number);
+      if (!vals.length) { out[k.id] = ''; return; }
+      const sum = vals.reduce((a, c) => a + c, 0);
+      out[k.id] = k.aggregate === 'avg' ? Math.round((sum / vals.length) * 100) / 100 : sum;
+    });
+    cfg.kpis.filter(k => k.computed).forEach(k => {
+      out[k.id] = COMPUTED_KPIS[k.id] ? COMPUTED_KPIS[k.id](out) : '';
+    });
+    return out;
+  });
+}
+
+function rowsForCategoryLevel_(cat, level) {
+  const baseRows = rowsFor(cat.freq);
+  const nativeLevel = nativeLevelFor_(cat.freq);
+  if (!nativeLevel || level === nativeLevel) return baseRows;
+  const cfg = KPI_CONFIG[cat.freq];
+  const desc = periodDescriptorForLevel_(cat.freq, level);
+  return aggregateRows_(cfg, baseRows, level, desc.field);
+}
+
+let aggLevelByCategory = {};
+
 function rowsFor(freq) {
   const cfg = KPI_CONFIG[freq];
   let rows;
@@ -1288,8 +1405,8 @@ function rowsFor(freq) {
   return rows;
 }
 
-function findByPeriod(rows, cfg, periodValue) {
-  return rows.find(r => r[cfg.period.field] === periodValue);
+function findByPeriod(rows, fieldName, periodValue) {
+  return rows.find(r => r[fieldName] === periodValue);
 }
 
 /* ============================================================================
@@ -1336,7 +1453,13 @@ function renderCategoryDetail(catId) {
   const cat = CATEGORIES[catId];
   const cfg = KPI_CONFIG[cat.freq];
   const kpis = kpisForCategory(catId);
-  const rows = rowsFor(cat.freq);
+
+  const levels = levelsAvailableFor_(cat.freq);
+  if (!aggLevelByCategory[catId]) aggLevelByCategory[catId] = nativeLevelFor_(cat.freq);
+  const level = aggLevelByCategory[catId];
+  const desc = level ? periodDescriptorForLevel_(cat.freq, level) : cfg.period;
+
+  const rows = (cfg.isEvent || !level) ? rowsFor(cat.freq) : rowsForCategoryLevel_(cat, level);
   const last = rows[rows.length - 1];
 
   document.getElementById('categoryGridWrap').style.display = 'none';
@@ -1354,7 +1477,14 @@ function renderCategoryDetail(catId) {
   const chartKpi = !cfg.isEvent ? (kpis.find(k => !k.computed) || kpis[0]) : null;
 
   let html = '<div class="card">';
-  html += `<div class="section-title">${cat.label} <span class="freq-badge">${cfg.label} · ${rows.length} saisie${rows.length > 1 ? 's' : ''}</span></div>`;
+
+  if (levels.length > 1) {
+    html += '<div class="sub-tabs">' + levels.map(lv =>
+      `<button type="button" data-level="${lv}" class="${lv === level ? 'active' : ''}">${AGG_LEVEL_LABELS[lv]}</button>`
+    ).join('') + '</div>';
+  }
+
+  html += `<div class="section-title">${cat.label} <span class="freq-badge">${desc.label} · ${rows.length} période${rows.length > 1 ? 's' : ''}</span></div>`;
 
   if (chartKpi) html += `<div class="chart-wrap"><canvas id="chart_cat_${catId}"></canvas></div>`;
 
@@ -1370,23 +1500,32 @@ function renderCategoryDetail(catId) {
       const val = last ? last[k.id] : null;
       let n1Val = null;
       if (last) {
-        const n1Period = shiftPeriodYear(last[cfg.period.field], -1);
-        const n1Row = findByPeriod(rows, cfg, n1Period);
+        const n1Period = shiftPeriodYear(last[desc.field], -1);
+        const n1Row = findByPeriod(rows, desc.field, n1Period);
         n1Val = n1Row ? n1Row[k.id] : undefined;
       }
-      html += kpiTile(k.label, val, k.unit, last ? last[cfg.period.field] : null, n1Val, cat.color);
+      html += kpiTile(k.label, val, k.unit, last ? last[desc.field] : null, n1Val, cat.color);
     });
   }
   html += '</div>';
 
   html += '<div class="table-scroll" style="margin-top:16px;">';
-  html += renderTable(cat.freq, rows.slice(-8).reverse(), kpis.map(k => k.id));
+  html += renderTable(cat.freq, rows.slice(-8).reverse(), kpis.map(k => k.id), desc);
   html += '</div>';
   html += '</div>';
 
   detailWrap.innerHTML = html;
 
-  if (chartKpi) renderTrendChart('chart_cat_' + catId, cat.freq, chartKpi.id, chartKpi.label);
+  if (levels.length > 1) {
+    detailWrap.querySelectorAll('[data-level]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        aggLevelByCategory[catId] = btn.dataset.level;
+        renderCategoryDetail(catId);
+      });
+    });
+  }
+
+  if (chartKpi) renderTrendChart('chart_cat_' + catId, rows, desc.field, chartKpi.id, chartKpi.label);
 }
 
 function kpiTile(label, value, unit, period, n1Value, color) {
@@ -1412,8 +1551,9 @@ function kpiTile(label, value, unit, period, n1Value, color) {
   `;
 }
 
-function renderTable(freq, rows, kpiIds) {
+function renderTable(freq, rows, kpiIds, periodDescriptor) {
   const cfg = KPI_CONFIG[freq];
+  const pd = periodDescriptor || cfg.period;
   if (!rows.length) return '<p class="empty-note">Aucune saisie pour cette vue.</p>';
 
   const idsToShow = kpiIds || cfg.kpis.map(k => k.id);
@@ -1433,14 +1573,14 @@ function renderTable(freq, rows, kpiIds) {
         cfg.extraFieldsByType[t].forEach(f => { if (typeCols.indexOf(f.id) === -1) typeCols.push(f.id); });
       });
     }
-    cols = [cfg.period.field, 'type', 'score', ...typeCols, 'commentaire'];
+    cols = [pd.field, 'type', 'score', ...typeCols, 'commentaire'];
   } else {
-    cols = [cfg.period.field, ...idsToShow];
+    cols = [pd.field, ...idsToShow];
   }
-  if (currentResto === 'FRANCHISE') cols = [cfg.period.field, 'restaurant'].concat(cols.slice(1));
+  if (currentResto === 'FRANCHISE') cols = [pd.field, 'restaurant'].concat(cols.slice(1));
 
   const labelFor = (c) => {
-    if (c === cfg.period.field) return cfg.period.label;
+    if (c === pd.field) return pd.label;
     if (c === 'restaurant') return 'Restaurant';
     if (c === 'commentaire') return 'Commentaire';
     if (c === 'type') return 'Type';
@@ -1490,11 +1630,10 @@ function renderTable(freq, rows, kpiIds) {
   return html;
 }
 
-function renderTrendChart(canvasId, freq, kpiId, label) {
+function renderTrendChart(canvasId, rows, periodField, kpiId, label) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const cfg = KPI_CONFIG[freq];
-  const rows = rowsFor(freq).slice(-30);
+  rows = rows.slice(-30);
 
   if (charts[canvasId]) charts[canvasId].destroy();
 
@@ -1511,7 +1650,7 @@ function renderTrendChart(canvasId, freq, kpiId, label) {
   charts[canvasId] = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: rows.map(r => r[cfg.period.field]),
+      labels: rows.map(r => r[periodField]),
       datasets: [{
         label,
         data: rows.map(r => r[kpiId] === '' ? null : r[kpiId]),
