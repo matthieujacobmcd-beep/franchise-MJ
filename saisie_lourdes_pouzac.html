@@ -458,8 +458,9 @@ const KPI_CONFIG = {
       { id: 'panier_moyen',  label: 'Panier Moyen (PM)',    unit: '€',
         computed: true, dependsOn: ['ca_net_total', 'transactions'] },
       { id: 'pertes',        label: 'Pertes',               unit: '€', aggregate: 'sum' },
-      { id: 'remboursement', label: 'Remboursement',      unit: '€', aggregate: 'sum' },
+      { id: 'remboursement_jour', label: 'Remboursement', unit: '€', aggregate: 'sum' },
       { id: 'promotion',     label: 'Promotion',           unit: '€', aggregate: 'sum' },
+      { id: 'ecart_caisse',  label: 'Écart de Caisse',      unit: '€', aggregate: 'sum' },
       { id: 'heures_totales',  label: 'Heures Totales',    unit: 'h', aggregate: 'sum' },
       { id: 'heures_equipier', label: 'Heures Équipier',   unit: 'h', aggregate: 'sum' },
       { id: 'vphe_jour', label: 'VPHE (Vente / h équipier)', unit: '€/h',
@@ -596,6 +597,7 @@ const CATEGORIES = {
 // Association KPI → catégorie (par id de KPI)
 const KPI_CATEGORY = {
   ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
+  remboursement_jour: 'ca', promotion: 'ca', ecart_caisse: 'ca',
   heures_totales: 'heures', heures_equipier: 'heures', vphe_jour: 'heures', vphg_jour: 'heures',
   hello_mcdo: 'digital', reseaux_sociaux: 'digital',
   oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
