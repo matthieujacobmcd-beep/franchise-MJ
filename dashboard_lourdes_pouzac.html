@@ -1647,6 +1647,12 @@ function renderTable(freq, rows, kpiIds, periodDescriptor) {
         }
       }
     }
+    // Valeurs numériques : format FR + unité du KPI (ex : "36 846,71 €"),
+    // pour éviter les nombres bruts / artefacts de virgule flottante.
+    const kdef = cfg.kpis.find(k => k.id === c);
+    if (kdef && raw !== '-' && !isNaN(Number(raw)) && String(raw).trim() !== '') {
+      return formatNumber(Number(raw)) + (kdef.unit ? ' ' + kdef.unit : '');
+    }
     return raw;
   };
 
