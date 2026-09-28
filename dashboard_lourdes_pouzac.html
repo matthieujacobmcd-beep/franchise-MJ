@@ -866,6 +866,17 @@ function formatNumber(n) {
   return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
 }
 
+// Affiche une date ISO (AAAA-MM-JJ) au format JJ/MM/AAAA. Les autres types de
+// période (semaine "AAAA-Www", mois "AAAA-MM", année "AAAA") ne sont pas des
+// dates et restent inchangés.
+function formatDateFR_(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+function formatPeriodValue_(value, type) {
+  return type === 'date' ? formatDateFR_(value) : value;
+}
+
 function escapeAttr(str) {
   return String(str || '').replace(/"/g, '&quot;');
 }
@@ -1538,7 +1549,7 @@ function renderCategoryDetail(catId) {
     html += `<div class="section-title">${cat.label} <span class="freq-badge">${desc.label} · ${rows.length} période${rows.length > 1 ? 's' : ''}</span>
       <span class="period-nav">
         <button type="button" id="periodPrevBtn" class="period-nav-btn" ${canPrev ? '' : 'disabled'} title="Période précédente">◀</button>
-        <span class="period-nav-label">${last ? last[desc.field] : ''}</span>
+        <span class="period-nav-label">${last ? formatPeriodValue_(last[desc.field], desc.type) : ''}</span>
         <button type="button" id="periodNextBtn" class="period-nav-btn" ${canNext ? '' : 'disabled'} title="Période suivante">▶</button>
       </span>
     </div>`;
@@ -1554,7 +1565,7 @@ function renderCategoryDetail(catId) {
       cfg.eventTypes.forEach(t => {
         const evRows = rows.filter(r => r.type === t);
         const lastEv = evRows[evRows.length - 1];
-        html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? lastEv[cfg.period.field] : null, null, cat.color);
+        html += kpiTile(t, lastEv ? lastEv.score : null, 'pts', lastEv ? formatPeriodValue_(lastEv[cfg.period.field], cfg.period.type) : null, null, cat.color);
       });
     } else {
       kpis.forEach(k => {
@@ -1572,7 +1583,7 @@ function renderCategoryDetail(catId) {
           const pctOfCA = Number(val) / Number(last.ca_net_alim) * 100;
           if (!isNaN(pctOfCA)) subNote = formatNumber(pctOfCA) + '% du CA Net Alimentaire';
         }
-        html += kpiTile(k.label, val, k.unit, last ? last[desc.field] : null, n1Val, cat.color, subNote);
+        html += kpiTile(k.label, val, k.unit, last ? formatPeriodValue_(last[desc.field], desc.type) : null, n1Val, cat.color, subNote);
       });
     }
     html += '</div>';
@@ -1610,7 +1621,7 @@ function renderCategoryDetail(catId) {
     });
   }
 
-  if (chartKpi) renderTrendChart('chart_cat_' + catId, chartRows, chartField, chartKpi.id, chartKpi.label);
+  if (chartKpi) renderTrendChart('chart_cat_' + catId, chartRows, chartField, chartKpi.id, chartKpi.label, chartFixed ? cfg.period.type : desc.type);
 }
 
 function kpiTile(label, value, unit, period, n1Value, color, subNote) {
@@ -1707,6 +1718,7 @@ function renderTable(freq, rows, kpiIds, periodDescriptor) {
     if (kdef && raw !== '-' && !isNaN(Number(raw)) && String(raw).trim() !== '') {
       return formatNumber(Number(raw)) + (kdef.unit ? ' ' + kdef.unit : '');
     }
+    if (c === pd.field && pd.type === 'date') return formatDateFR_(raw);
     return raw;
   };
 
@@ -1722,7 +1734,7 @@ function renderTable(freq, rows, kpiIds, periodDescriptor) {
   return html;
 }
 
-function renderTrendChart(canvasId, rows, periodField, kpiId, label) {
+function renderTrendChart(canvasId, rows, periodField, kpiId, label, periodType) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   rows = rows.slice(-30);
@@ -1742,7 +1754,7 @@ function renderTrendChart(canvasId, rows, periodField, kpiId, label) {
   charts[canvasId] = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: rows.map(r => r[periodField]),
+      labels: rows.map(r => formatPeriodValue_(r[periodField], periodType)),
       datasets: [{
         label,
         data: rows.map(r => r[kpiId] === '' ? null : r[kpiId]),
