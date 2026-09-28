@@ -1530,9 +1530,6 @@ function renderCategoryDetail(catId) {
   detailWrap.style.display = 'block';
 
   const chartKpi = !cfg.isEvent ? (kpis.find(k => !k.computed) || kpis[0]) : null;
-  const chartFixed = !!TILE_MIN_LEVEL[catId];
-  const chartRows = chartFixed ? rowsFor(cat.freq) : rows;
-  const chartField = chartFixed ? cfg.period.field : desc.field;
 
   let html = '<div class="card">';
 
@@ -1621,7 +1618,7 @@ function renderCategoryDetail(catId) {
     });
   }
 
-  if (chartKpi) renderTrendChart('chart_cat_' + catId, chartRows, chartField, chartKpi.id, chartKpi.label, chartFixed ? cfg.period.type : desc.type);
+  if (chartKpi) renderTrendChart('chart_cat_' + catId, rows, desc.field, chartKpi.id, chartKpi.label, desc.type);
 }
 
 function kpiTile(label, value, unit, period, n1Value, color, subNote) {
