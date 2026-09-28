@@ -1146,7 +1146,6 @@ function renderRestoTabs() {
   wrap.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       currentResto = btn.dataset.resto;
-      currentCategory = null;
       renderRestoTabs();
       if (dashboardData) {
         renderBanners();
