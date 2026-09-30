@@ -479,7 +479,6 @@ const KPI_CONFIG = {
       { id: 'hello_mcdo',        label: 'Hello McDo',                    unit: '%',   aggregate: 'avg' },
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
-      { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
       { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
@@ -496,7 +495,6 @@ const KPI_CONFIG = {
       { id: 'hello_mcdo',        label: 'Hello McDo',                    unit: '%',   aggregate: 'avg' },
       { id: 'reseaux_sociaux',   label: 'Réseaux Sociaux',               unit: '',    aggregate: 'avg' },
       { id: 'analyse_silliker',  label: 'Analyse Silliker / Mérieux',    unit: '',    aggregate: 'avg' },
-      { id: 'audit_merieux',     label: 'Audit Mérieux',                 unit: '',    aggregate: 'avg' },
       { id: 'vphe',              label: 'VPHE (Vente / h équipier)',     unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'vphg',              label: 'VPHG (Vente / h globale)',      unit: '€/h', aggregate: 'avg', formHidden: true },
       { id: 'uvhe',              label: 'UVHE (Unités vendues / h équipier)', unit: '', aggregate: 'avg' },
@@ -520,7 +518,6 @@ const KPI_CONFIG = {
       { id: 'cout_mo',         label: "Coût Main d'Œuvre",            unit: '€',     aggregate: 'sum' },
       { id: 'cash_flow',       label: 'Cash Flow',                    unit: '€',     aggregate: 'sum' },
       { id: 'resultat_net',    label: 'Résultat Net',                 unit: '€',     aggregate: 'sum' },
-      { id: 'remboursement',   label: 'Remboursement',                unit: '€',     aggregate: 'sum' },
       { id: 'ecart_rendement', label: 'Écart de Rendement',           unit: '%',     aggregate: 'avg' },
       { id: 'fid_actifs',      label: 'Comptes FID Actifs',           unit: 'comptes', aggregate: 'avg' },
       { id: 'ca_click_collect', label: 'CA Click&Collect',            unit: '€',     aggregate: 'sum' },
@@ -532,7 +529,7 @@ const KPI_CONFIG = {
     label: 'Ponctuel',
     period: { field: 'date', type: 'date', label: 'Date de la visite' },
     isEvent: true,
-    eventTypes: ['RGRV', 'CFV', 'PPFV'],
+    eventTypes: ['RGRV', 'CFV', 'PPFV', 'Audit Mérieux'],
     kpis: [
       { id: 'score', label: 'Score', unit: 'pts', aggregate: 'avg' }
     ],
@@ -603,14 +600,14 @@ const KPI_CATEGORY = {
   ca_net_total: 'ca', ca_net_alim: 'ca', transactions: 'ca', panier_moyen: 'ca', pertes: 'ca',
   remboursement_jour: 'ca', promotion: 'ca', ecart_caisse: 'ca',
   heures_totales: 'heures', heures_equipier: 'heures', vphe_jour: 'heures', vphg_jour: 'heures',
-  oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp', audit_merieux: 'qsp',
+  oepe: 'qsp', r2p: 'qsp', oph: 'qsp', analyse_silliker: 'qsp',
   hello_mcdo: 'qsp', reseaux_sociaux: 'qsp',
   fid_actifs: 'digital', ca_click_collect: 'digital', ca_uber_eats: 'digital', ca_lad_mplus: 'digital',
   vphe: 'heures_equipier', vphg: 'heures_equipier', uvhe: 'heures_equipier', tche: 'heures_equipier',
   effectif: 'rh', etp: 'rh', heures_comp: 'rh', heures_sup: 'rh',
   turnover_12m: 'rh', turnover_90j: 'rh', absent_imprevu: 'rh', absent_injust: 'rh',
   marge: 'financier', pac: 'financier', cout_mo: 'financier', cash_flow: 'financier',
-  resultat_net: 'financier', remboursement: 'financier', ecart_rendement: 'financier',
+  resultat_net: 'financier', ecart_rendement: 'financier',
   score: 'excellence_ope'
 };
 
