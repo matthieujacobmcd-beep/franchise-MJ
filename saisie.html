@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Franchise MJ — Saisie KPI</title>
+<style>
+  :root{ --bg:#f0f2f5; --card:#fff; --card2:#f5f6f8; --border:#dde1ea; --gold:#b8860b; --gold2:#d4a017;
+    --text:#1a1d2e; --muted:#6b7280; --green:#1e8449; --red:#c0392b; --font:'Segoe UI',system-ui,sans-serif; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); font-family:var(--font); color:var(--text); }
+  /* Login */
+  #login{ position:fixed; inset:0; background:linear-gradient(135deg,#1a1d2e,#2b2f45); display:flex; align-items:center; justify-content:center; z-index:100; }
+  .login-box{ background:#fff; border-radius:18px; padding:30px 30px 26px; width:min(360px,92vw); box-shadow:0 24px 70px rgba(0,0,0,.4); text-align:center; }
+  .login-logo{ width:60px; height:60px; border-radius:16px; background:var(--gold); display:flex; align-items:center; justify-content:center; margin:0 auto 14px; font-size:32px; font-weight:800; color:#fff; }
+  .login-box h1{ font-size:1.15rem; margin:0 0 4px; }
+  .login-box p{ font-size:.82rem; color:var(--muted); margin:0 0 18px; }
+  .login-box input{ width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:11px; font-size:1rem; font-family:inherit; margin-bottom:12px; }
+  .login-box button{ width:100%; padding:11px; border:none; border-radius:11px; background:var(--gold); color:#fff; font-size:1rem; font-weight:800; cursor:pointer; font-family:inherit; }
+  .login-err{ color:var(--red); font-size:.8rem; height:18px; margin-top:4px; }
+  /* App */
+  #app{ display:none; }
+  .topbar{ background:#fff; border-bottom:1px solid var(--border); padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; position:sticky; top:0; z-index:20; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-logo{ width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,var(--gold),var(--gold2)); display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fff; }
+  .brand-name{ font-size:1.05rem; font-weight:800; line-height:1.1; }
+  .brand-sub{ font-size:.72rem; color:var(--muted); }
+  .topbar-right{ margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .dash-link{ text-decoration:none; font-size:.8rem; font-weight:700; color:var(--gold); border:1.5px solid var(--gold); border-radius:10px; padding:8px 14px; white-space:nowrap; }
+  .dash-link:hover{ background:rgba(184,134,11,.1); }
+  /* Choix du restaurant */
+  #restoPick{ position:fixed; inset:0; background:linear-gradient(135deg,#1a1d2e,#2b2f45); display:none; align-items:center; justify-content:center; z-index:90; padding:16px; }
+  .pick-box{ background:#fff; border-radius:18px; padding:26px; width:min(560px,100%); box-shadow:0 24px 70px rgba(0,0,0,.4); text-align:center; }
+  .pick-box h2{ font-size:1.15rem; margin:0 0 4px; } .pick-box p{ font-size:.82rem; color:var(--muted); margin:0 0 18px; }
+  .pick-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .pick-btn{ border:1.5px solid var(--border); background:var(--card); font-family:inherit; font-size:.95rem; font-weight:700; color:var(--text); padding:14px 10px; border-radius:12px; cursor:pointer; transition:all .15s; }
+  .pick-btn:hover{ border-color:var(--gold); background:#fff8e1; }
+  .pick-cancel{ margin-top:14px; background:none; border:none; color:var(--muted); font-family:inherit; font-size:.82rem; cursor:pointer; text-decoration:underline; }
+  .resto-badge{ display:flex; align-items:center; gap:8px; background:#fff8e1; border:1.5px solid var(--gold); color:#7a4a00; border-radius:10px; padding:6px 8px 6px 12px; font-size:.88rem; font-weight:800; white-space:nowrap; }
+  .resto-badge button{ border:none; background:var(--gold); color:#fff; font-family:inherit; font-size:.72rem; font-weight:700; border-radius:7px; padding:5px 9px; cursor:pointer; }
+  .resto-bar{ background:#fff; border-bottom:1px solid var(--border); padding:10px 22px; display:flex; gap:8px; overflow-x:auto; }
+  .resto-pill{ flex-shrink:0; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.8rem; font-weight:700; padding:7px 15px; border-radius:999px; cursor:pointer; white-space:nowrap; transition:all .15s; }
+  .resto-pill:hover{ border-color:var(--gold); }
+  .resto-pill.on{ background:var(--gold); border-color:var(--gold); color:#fff; box-shadow:0 2px 9px rgba(184,134,11,.3); }
+  .tab-bar{ display:flex; gap:8px; overflow-x:auto; padding:14px 22px 0; max-width:1100px; margin:0 auto; }
+  .tab{ flex-shrink:0; border:1.5px solid var(--border); border-bottom:none; background:var(--card2); color:var(--muted); font-family:inherit; font-size:.82rem; font-weight:700; padding:10px 18px; border-radius:12px 12px 0 0; cursor:pointer; }
+  .tab.on{ background:#fff; color:var(--gold); border-color:var(--border); position:relative; top:1px; }
+  .wrap{ max-width:1100px; margin:0 auto; padding:0 22px 60px; }
+  .panel{ background:#fff; border:1.5px solid var(--border); border-radius:0 16px 16px 16px; padding:22px; box-shadow:0 2px 14px rgba(0,0,0,.05); }
+  .panel-head{ display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .panel-title{ font-size:1.05rem; font-weight:800; }
+  .period{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-left:auto; }
+  .period label{ font-size:.75rem; font-weight:700; color:var(--muted); }
+  .period input, .period select{ font-family:inherit; font-size:.9rem; padding:8px 11px; border:1.5px solid var(--border); border-radius:10px; background:#fff; color:var(--text); }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px 18px; }
+  .field label{ display:block; font-size:.75rem; font-weight:700; color:var(--text); margin-bottom:5px; }
+  .field .new-tag{ font-size:.6rem; font-weight:800; color:#7a4a00; background:#fde9c8; border-radius:5px; padding:1px 6px; margin-left:5px; text-transform:uppercase; letter-spacing:.3px; }
+  .field input, .field textarea, .field select{ width:100%; font-family:inherit; font-size:.95rem; padding:9px 11px; border:1.5px solid var(--border); border-radius:10px; background:#fff; color:var(--text); }
+  .field input:focus, .field textarea:focus{ outline:none; border-color:var(--gold); box-shadow:0 0 0 2px rgba(184,134,11,.15); }
+  .field input.auto{ background:var(--card2); color:var(--muted); font-weight:700; }
+  .field textarea{ min-height:74px; resize:vertical; grid-column:1/-1; }
+  .field-full{ grid-column:1/-1; }
+  .foot{ display:flex; align-items:center; gap:14px; margin-top:22px; }
+  .btn-save{ border:none; background:var(--gold); color:#fff; font-family:inherit; font-size:.95rem; font-weight:800; padding:12px 26px; border-radius:12px; cursor:pointer; box-shadow:0 2px 10px rgba(184,134,11,.3); }
+  .btn-save:hover{ filter:brightness(1.06); } .btn-save:disabled{ opacity:.6; cursor:default; }
+  .save-msg{ font-size:.85rem; font-weight:700; }
+  .save-msg.ok{ color:var(--green); } .save-msg.err{ color:var(--red); }
+  .hint{ font-size:.72rem; color:var(--muted); margin-top:4px; }
+  .entry-banner{ display:none; align-items:flex-start; gap:8px; border-radius:12px; padding:11px 14px; font-size:.83rem; line-height:1.45; margin:-4px 0 16px; }
+  .entry-banner.loading,.entry-banner.new,.entry-banner.exists,.entry-banner.suggest,.entry-banner.err{ display:block; }
+  .entry-banner.loading{ background:var(--card2); color:var(--muted); }
+  .entry-banner.new{ background:#eef6ff; color:#1e4e8c; border:1.5px solid #cfe3fb; }
+  .entry-banner.exists{ background:#fff8e1; color:#7a4a00; border:1.5px solid #f0d58a; }
+  .entry-banner.suggest{ background:#ecfdf3; color:#166534; border:1.5px solid #b7ebc9; }
+  .entry-banner.err{ background:#fdecea; color:var(--red); border:1.5px solid #f5c2bd; }
+  .field input.suggest{ border-color:#34a853; background:#f3fbf5; }
+  .inwrap{ position:relative; }
+  .inwrap.has-unit input{ padding-right:52px; }
+  .inwrap .unit{ position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:.78rem; font-weight:800; color:var(--gold); background:#fff8e1; border-radius:6px; padding:2px 7px; pointer-events:none; }
+  .inwrap input.auto + .unit{ background:transparent; color:var(--muted); }
+  .last-saisie{ font-size:.74rem; color:var(--muted); margin-top:3px; }
+  .last-saisie b{ color:var(--gold); }
+  .doc-list{ margin-top:20px; border-top:1.5px solid var(--border); padding-top:6px; }
+  .doc-sec{ font-size:.7rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin:14px 0 6px; }
+  .doc-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--card2); border-radius:10px; padding:8px 12px; margin-bottom:6px; font-size:.84rem; }
+  .doc-row i{ color:var(--muted); font-size:.74rem; margin-left:6px; font-style:normal; }
+  .doc-row button{ border:none; background:transparent; color:var(--red); font-size:1rem; cursor:pointer; }
+  .field input[type=file]{ padding:7px 9px; }
+  .period .step{ border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.8rem; font-weight:700; border-radius:10px; padding:8px 12px; cursor:pointer; white-space:nowrap; }
+  .period .step.next{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .period .step:hover{ filter:brightness(1.06); }
+  .pv-recap{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:6px 0 14px; }
+  .pv-kpi{ background:var(--card2); border-radius:12px; padding:10px 12px; font-size:.72rem; color:var(--muted); } .pv-kpi b{ display:block; font-size:1.05rem; color:var(--text); margin:2px 0; } .pv-kpi i{ font-style:normal; font-size:.66rem; }
+  .pv-obj{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; padding:14px; background:#fffaf0; border:1.5px solid #f0d58a; border-radius:12px; }
+  .pv-cal{ display:grid; grid-template-columns:repeat(7,minmax(128px,1fr)); gap:6px; overflow-x:auto; }
+  .pv-h{ font-size:.7rem; font-weight:800; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.5px; }
+  .pv-day{ border:1.5px solid var(--border); border-radius:10px; padding:6px 7px; font-size:.68rem; color:var(--muted); background:#fff; } .pv-day.past{ background:var(--card2); }
+  .pv-dn{ font-weight:800; font-size:.85rem; color:var(--text); } .pv-ref b,.pv-real b{ color:var(--text); } .pv-real{ color:#166534; }
+  .pv-in{ display:flex; gap:3px; margin:4px 0 2px; } .pv-in input{ width:100%; min-width:0; font-family:inherit; font-size:.8rem; padding:5px 6px; border:1.5px solid var(--border); border-radius:8px; } .pv-in select{ font-family:inherit; font-size:.72rem; border:1.5px solid var(--border); border-radius:8px; padding:0 2px; }
+  .pv-delta{ min-height:14px; font-size:.64rem; }
+  .pv-h.we{ color:#2563eb; } .pv-day.we{ background:#eff6ff; border-color:#bfdbfe; } .pv-day.we .pv-dn{ color:#1d4ed8; } .pv-dn span{ font-size:.62rem; font-weight:700; margin-left:5px; text-transform:uppercase; }
+  .pv-day.fer{ background:#fef2f2; border-color:#fca5a5; border-width:2px; } .pv-day.fer .pv-dn{ color:#b91c1c; } .pv-fer{ font-size:.62rem; font-weight:800; color:#b91c1c; margin:1px 0 2px; }
+  .pv-ref small{ display:block; font-size:.58rem; color:#94a3b8; line-height:1.1; margin-bottom:2px; }
+  .pv-tot{ font-size:.64rem; color:var(--text); font-weight:700; } .pv-ref em{ font-style:normal; font-size:.58rem; background:#fde9c8; color:#7a4a00; border-radius:4px; padding:0 4px; margin-left:3px; }
+  .pv-wd{ display:none; }
+  @media (max-width:1000px){                       /* calendrier en liste (un jour par ligne) tant que 7 colonnes ne tiennent pas */
+    .pv-cal{ grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); overflow:visible; gap:8px; } .pv-h, .pv-empty{ display:none; }
+    .pv-day{ padding:10px 12px; font-size:.78rem; } .pv-dn{ font-size:1rem; } .pv-wd{ display:inline; }
+    .pv-in input{ font-size:1rem; padding:9px 10px; } .pv-in select{ font-size:.9rem; padding:0 6px; }
+  }
+  @media (max-width:700px){ .pv-obj{ grid-template-columns:1fr; } .pv-recap{ grid-template-columns:1fr 1fr; } .pv-cal{ grid-template-columns:1fr; } }
+  .foot{ flex-wrap:wrap; }
+  @media (max-width:700px){
+    .topbar{ position:static; padding:10px 16px; gap:10px; }
+    .topbar-right{ flex-wrap:wrap; margin-left:0; width:100%; }
+    .foot select, .foot .step, .foot .btn-save{ flex:1 1 100%; width:100%; }
+    .panel-head .period{ flex-wrap:wrap; } .panel-head .period select{ flex:1; }
+  }
+  .date-banner{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 18px; border-radius:14px; padding:14px 18px; margin:0 0 16px; border:2.5px solid; }
+  .date-banner .db-lbl{ font-size:.68rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; opacity:.75; width:100%; }
+  .date-banner .db-date{ font-size:1.55rem; font-weight:900; line-height:1.1; }
+  .date-banner .db-rel{ font-size:1rem; font-weight:800; border-radius:999px; padding:3px 12px; background:rgba(255,255,255,.65); }
+  .date-banner .db-msg{ font-size:.85rem; font-weight:600; width:100%; line-height:1.45; }
+  .date-banner .db-btn{ border:0; border-radius:10px; padding:8px 14px; font:800 .82rem inherit; cursor:pointer; background:#1e4e8c; color:#fff; }
+  .db-ok{ background:#ecfdf3; border-color:#34a853; color:#166534; } .db-warn{ background:#fff7e6; border-color:#f0a500; color:#7a4a00; }
+  .db-bad{ background:#fdecea; border-color:#d93025; color:#b3261e; } .db-edit{ background:#eef6ff; border-color:#4a90d9; color:#1e4e8c; } .db-wait{ background:var(--card2); border-color:var(--border); color:var(--muted); }
+  .gate{ text-align:center; padding:46px 18px; color:var(--muted); font-weight:700; } .gate small{ display:block; margin-top:8px; font-weight:500; }
+  #cfmOv{ position:fixed; inset:0; z-index:100002; background:rgba(15,17,23,.6); display:none; align-items:center; justify-content:center; padding:16px; }
+  #cfmOv.open{ display:flex; } #cfmBox{ background:#fff; border-radius:18px; width:min(480px,100%); max-height:92vh; overflow-y:auto; padding:22px; box-shadow:0 24px 70px rgba(0,0,0,.4); }
+  #cfmBox h3{ margin:0 0 4px; font-size:.78rem; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); } #cfmBox .cf-date{ font-size:1.7rem; font-weight:900; line-height:1.1; } #cfmBox .cf-sub{ font-size:1rem; font-weight:800; margin:4px 0 12px; }
+  #cfmBox .cf-warn{ background:#fff7e6; border:1.5px solid #f0a500; color:#7a4a00; border-radius:10px; padding:9px 12px; font-size:.84rem; margin-bottom:8px; line-height:1.4; }
+  #cfmBox .cf-rows{ border-top:1.5px solid var(--border); margin-top:10px; padding-top:8px; font-size:.84rem; } #cfmBox .cf-rows div{ display:flex; justify-content:space-between; gap:10px; padding:3px 0; } #cfmBox .cf-rows b{ white-space:nowrap; }
+  #cfmBox .cf-btns{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; } #cfmBox .cf-btns button{ flex:1 1 150px; border-radius:12px; padding:13px 14px; font:800 .92rem inherit; cursor:pointer; border:2px solid var(--border); background:#fff; }
+  #cfmBox .cf-btns .cf-ok{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .cfg-warn{ background:#fff4e5; border:1.5px solid #f0b429; color:#7a4a00; border-radius:12px; padding:12px 16px; font-size:.82rem; margin:14px auto 0; max-width:1100px; }
+  @media (max-width:640px){ .grid{ grid-template-columns:1fr 1fr; } .period{ margin-left:0; width:100%; } .panel{ padding:16px; } }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">M</div>
+    <h1>Franchise MJ — Saisie</h1>
+    <p>Saisie des indicateurs par restaurant</p>
+    <input type="password" id="pwd" placeholder="Mot de passe" autocomplete="current-password">
+    <button onclick="checkPwd()">Accéder</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-logo">M</div>
+      <div><div class="brand-name">Franchise MJ</div><div class="brand-sub">Saisie KPI</div></div>
+    </div>
+    <div class="topbar-right">
+      <div class="resto-badge" id="restoBadge" style="display:none">📍 <span id="restoBadgeName"></span><button onclick="showPicker()">Changer</button></div>
+      <a class="dash-link" href="index.html" target="_blank" rel="noopener">Voir le dashboard →</a>
+    </div>
+  </div>
+  <div id="restoPick">
+    <div class="pick-box">
+      <h2>Quel est votre restaurant ?</h2>
+      <p>Toutes les saisies de cette session seront enregistrées pour ce restaurant.</p>
+      <div class="pick-grid" id="pickGrid"></div>
+      <button class="pick-cancel" id="pickCancel" onclick="hidePicker()" style="display:none">Annuler</button>
+    </div>
+  </div>
+  <div class="tab-bar" id="tabBar"></div>
+  <div class="wrap"><div class="panel" id="panel"></div></div>
+  <div class="cfg-warn" id="cfgWarn" style="display:none">⚙️ La page n'est pas encore reliée au Google Sheet — remplace <b>APPS_SCRIPT_URL</b> en haut du script par l'URL de ton Apps Script (étape 3). En attendant, l'enregistrement est désactivé.</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════════════════
+/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}};/*CFG_END*/
+const APPS_SCRIPT_URL = CFG.apps_script_url;   // …/exec
+const PWD_HASH = CFG.pwd_hash;
+const OPEN_DATES = CFG.open || {};            // dates d'ouverture : aucun CA avant
+
+// ── Mot de passe ──
+async function sha256(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+async function checkPwd(){
+  const v=document.getElementById('pwd').value;
+  const hv=await sha256(v);
+  if(hv===PWD_HASH){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',hv); showApp(); }
+  else { const e=document.getElementById('loginErr'); e.textContent='Mot de passe incorrect'; setTimeout(()=>e.textContent='',2500); }
+}
+function showApp(){ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; init(); }
+
+// ── Modèle ──
+const RESTOS=CFG.restos.map(r=>[r.key,r.label]);
+const MONTHS=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
+const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['documents','Documents']];
+// Indicateurs saisis chaque semaine : le mois correspondant (onglet Mensuel)
+// se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
+const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
+// u = unité affichée dans le champ ; pct = saisi en % (94,4) mais stocké en fraction (0,944)
+const METEO=[['','—'],['soleil','☀️ Soleil'],['nuageux','⛅ Nuageux'],['pluie','🌧️ Pluie'],['orage','⛈️ Orage'],['neige','❄️ Neige'],['brouillard','🌫️ Brouillard'],['canicule','🥵 Canicule'],['vent','💨 Vent fort'],['froid','🥶 Froid'],['chaud','🌡️ Chaud']];
+const FIELDS={
+  quotidien:[
+    {k:'ca_net_total',l:'CA Net Total',u:'€'},{k:'ca_net_alim',l:'CA Net Alimentaire',u:'€'},{k:'transactions',l:"Transactions (TAC'S)",u:'nb'},
+    {k:'panier_moyen',l:'Panier Moyen',u:'€',auto:'pm'},
+    {k:'pertes',l:'Pertes',u:'€'},{k:'remboursement',l:'Remboursement',u:'€'},{k:'promotion',l:'Promotion',u:'€'},{k:'ecart_caisse',l:'Écart de Caisse',u:'€'},
+    {k:'heures_equipier',l:'Heures Équipier',u:'h'},{k:'heures_totales',l:'Heures Totales',u:'h'},
+    {k:'vphe',l:'VPHE (vente / h équipier)',u:'€/h',auto:'vphe'},{k:'vphg',l:'VPHG (vente / h globale)',u:'€/h',auto:'vphg'},
+    {k:'meteo',l:'Météo',type:'select',opts:METEO},
+    {k:'commentaire',l:'Commentaire de la journée',type:'textarea',ph:'Événement, travaux, panne, affluence…'},
+  ],
+  hebdomadaire:[
+    {k:'oepe',l:'OEPE',u:'s'},{k:'r2p',l:'R2P',u:'s'},{k:'avis',l:"Nombre d'avis négatifs",u:'avis'},{k:'oph',l:'OPH (calculé)',u:'',auto:'oph'},{k:'hello_mcdo',l:'Hello McDo',u:'%',pct:1},{k:'reseaux',l:'Réseaux Sociaux',u:'/5'},
+    {k:'tche',l:'TCHE',u:''},{k:'uvhe',l:'UVHE',u:''},
+  ],
+  mensuel:[
+    {k:'oepe',l:'OEPE',u:'s'},{k:'r2p',l:'R2P',u:'s'},{k:'avis',l:"Nombre d'avis négatifs",u:'avis'},{k:'oph',l:'OPH (calculé)',u:'',auto:'oph'},{k:'hello_mcdo',l:'Hello McDo',u:'%',pct:1},{k:'reseaux',l:'Réseaux Sociaux',u:'/5'},
+    {k:'tche',l:'TCHE',u:''},{k:'uvhe',l:'UVHE',u:''},
+    {k:'effectif',l:'Effectif',u:'pers.'},{k:'etp',l:'ETP',u:'ETP'},{k:'heures_comp',l:'Heures Complémentaires',u:'h'},{k:'heures_sup',l:'Heures Supplémentaires',u:'h'},
+    {k:'to_12m',l:'Turn Over 12 mois',u:'%',pct:1},{k:'to_90j',l:'Turn Over 90 jours',u:'%',pct:1},{k:'abs_imprevu',l:'Absentéisme imprévu',u:'%',pct:1},{k:'abs_injust',l:'Absentéisme injustifié',u:'%',pct:1},
+    {k:'marge',l:'Marge',u:'%',pct:1},{k:'pac',l:'PAC',u:'%',pct:1},{k:'cout_mo',l:"Coût Main d'Œuvre",u:'%',pct:1},{k:'cash_flow',l:'Cash Flow',u:'€'},{k:'resultat_net',l:'Résultat Net',u:'€'},
+    {k:'ecart_rendement',l:'Écart de Rendement',u:'%',pct:1},
+    {k:'fid_nb',l:'Comptes FID actifs',u:'comptes'},{k:'fid_actifs',l:'Taux de comptes FID actifs (calculé)',u:'%',pct:1,auto:'fid'},{k:'cc_eur',l:'CA Click & Collect',u:'€'},{k:'uber_eur',l:'CA Uber Eats',u:'€'},{k:'lad_eur',l:'CA LAD M+',u:'€'},
+  ],
+  previsionnel:[
+    {k:'ca_prev',l:'CA Net Total prév.',u:'€'},{k:'ca_alim_prev',l:'CA Alimentaire prév.',u:'€'},{k:'marge_prev',l:'Marge prév.',u:'%',pct:1},{k:'pac_prev',l:'PAC prév.',u:'%',pct:1},
+    {k:'cout_mo_prev',l:"Coût MO prév.",u:'%',pct:1},{k:'cash_flow_prev',l:'Cash Flow prév.',u:'€'},{k:'resultat_net_prev',l:'Résultat Net prév.',u:'€'},
+  ],
+};
+// Ponctuel : les champs dépendent du type de visite
+const PONCT_TYPES=[['RGRV','RGRV'],['CFV','CFV'],['PPFV','PPFV'],['AUDIT_MERIEUX','Audit Mérieux'],['ANALYSE_SILLIKER','Analyse Silliker / Mérieux']];
+const RGRV_SUBS=['qualite','service','proprete','gestion_quart','securite_prevention','securite_alimentaire'];
+const PONCT_FIELDS={
+  RGRV:[
+    {k:'qualite',l:'Qualité',u:'%',pct:1},{k:'service',l:'Service',u:'%',pct:1},{k:'proprete',l:'Propreté',u:'%',pct:1},{k:'gestion_quart',l:'Gestion de Quart',u:'%',pct:1},
+    {k:'securite_prevention',l:'Sécurité / Prévention',u:'%',pct:1},{k:'securite_alimentaire',l:'Sécurité Alimentaire',u:'%',pct:1},
+    {k:'score',l:'Score global',u:'%',pct:1,auto:'rgrv'},
+  ],
+  ANALYSE_SILLIKER:[
+    {k:'analyses_ok',l:'Analyses conformes (OK)',u:'analyses'},{k:'analyses_nok',l:'Analyses non conformes (NOK)',u:'analyses'},
+    {k:'score',l:'Taux de conformité (calculé)',u:'%',pct:1,auto:'analyses'},
+  ],
+  _default:[ {k:'score',l:'Score',u:'%',pct:1} ],
+};
+const COMMENT_FIELD={k:'commentaire',l:'Commentaire',type:'textarea',ph:'Points forts, axes de progrès…'};
+function fieldsFor(tab){
+  if(tab!=='ponctuel') return FIELDS[tab];
+  const t=currentType(); return [...(PONCT_FIELDS[t]||PONCT_FIELDS._default), COMMENT_FIELD];
+}
+let curResto=null, curTab='quotidien';   // restaurant : choisi explicitement à l'ouverture
+const isPct=f=>!!f.pct&&!f.auto;
+const configured=()=>APPS_SCRIPT_URL.indexOf('REMPLACER')!==0;
+
+// ── Dates & semaines ──
+const pad2=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+function isoWeekOf(d){ // d : Date locale → {year, week}
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day);
+  const y0=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return {year:t.getUTCFullYear(), week:Math.ceil(((t-y0)/86400000+1)/7)};
+}
+function weekMonday(year,week){
+  const jan4=new Date(Date.UTC(year,0,4)), d=jan4.getUTCDay()||7;
+  const mon=new Date(jan4); mon.setUTCDate(jan4.getUTCDate()-(d-1)+(week-1)*7); return mon;
+}
+const weeksInYear=y=>isoWeekOf(new Date(y,11,28)).week;
+const fmtDM=d=>pad2(d.getUTCDate())+'/'+pad2(d.getUTCMonth()+1);
+function weekMonthKey(p){
+  const m=String(p||'').match(/^(\d{4})-W(\d{2})$/); if(!m) return null;
+  const thu=weekMonday(+m[1],+m[2]); thu.setUTCDate(thu.getUTCDate()+3);
+  return MONTHS[thu.getUTCMonth()]+' '+thu.getUTCFullYear();
+}
+
+// ── Dernière période saisie (pour se placer sur la suivante) ──
+let RECENT=null, RECENT_P=null;                  // CA des ~10 dernières semaines : {restaurant:{date:CA}}
+function loadRecent(){
+  if(RECENT||RECENT_P||!configured()) return RECENT_P;
+  RECENT_P=(async()=>{ try{ const r=await fetch(APPS_SCRIPT_URL+'?action=recent&days=70&_='+Date.now()); const j=await r.json(); if(j&&j.ca) RECENT=j.ca; }catch(e){} RECENT_P=null; })();
+  return RECENT_P;
+}
+let LAST=null, LAST_STATE='loading';          // loading → (cache) → live | fail : tant que la dernière saisie n'est pas connue, la saisie reste fermée
+const LAST_KEY='mj_last_v1';
+try{ const c=JSON.parse(localStorage.getItem(LAST_KEY)||'null'); if(c&&c.last){ LAST=c.last; LAST_STATE='cache'; } }catch(e){}
+const saveLastCache=()=>{ try{ localStorage.setItem(LAST_KEY,JSON.stringify({last:LAST,t:Date.now()})); }catch(e){} };
+async function loadLast(){
+  if(!configured()){ LAST_STATE=LAST?'cache':'fail'; return; }
+  try{
+    const c=new AbortController(), to=setTimeout(()=>c.abort(),25000);
+    const r=await fetch(APPS_SCRIPT_URL+'?action=last&_='+Date.now(),{signal:c.signal}); clearTimeout(to);
+    const j=await r.json(); if(j&&j.last){ LAST=j.last; LAST_STATE='live'; saveLastCache(); } else LAST_STATE=LAST?'cache':'fail';
+  }catch(e){ LAST_STATE=LAST?'cache':'fail'; }
+}
+const lastOf=(tab)=>LAST&&LAST[tab]&&curResto?LAST[tab][curResto]:null;
+function nextPeriod(tab){
+  // Période d'ouverture : celle de la DERNIÈRE saisie du restaurant (jamais « aujourd'hui » par défaut),
+  // pour éviter une saisie par mégarde. Sans saisie existante : période en cours.
+  const p=lastOf(tab), now=new Date();
+  if(tab==='quotidien') return {date:p||isoDate(now)};
+  if(tab==='hebdomadaire'){
+    const m=p&&p.match(/^(\d{4})-W(\d{2})$/);
+    if(m) return {year:+m[1],week:+m[2]};
+    const w=isoWeekOf(now); return {year:w.year,week:w.week};
+  }
+  if(tab==='mensuel'||tab==='previsionnel'){
+    const m=p&&p.match(/^([A-ZÉÛ]+) (\d{4})$/);
+    if(m) return {month:MONTHS.indexOf(m[1]), year:+m[2]};
+    return {month:now.getMonth(), year:now.getFullYear()};
+  }
+  return {date:isoDate(now)};
+}
+function lastLabel(tab){
+  const p=lastOf(tab); if(!p) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(p)){ const [y,m,d]=p.split('-'); return `${d}/${m}/${y}`; }
+  if(/^\d{4}-W\d{2}$/.test(p)) return 'S'+p.slice(6)+' '+p.slice(0,4);
+  return p.charAt(0)+p.slice(1).toLowerCase();
+}
+
+function init(){
+  if(!configured()) document.getElementById('cfgWarn').style.display='block';
+  document.getElementById('pickGrid').innerHTML=RESTOS.map(([k,n])=>`<button class="pick-btn" onclick="setResto('${k}')">${n}</button>`).join('');
+  const tb=document.getElementById('tabBar');
+  tb.innerHTML=TABS.map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${n}</button>`).join('');
+  let saved=null; try{ saved=sessionStorage.getItem('mj_resto'); }catch(e){}
+  // la page s'affiche tout de suite ; la dernière saisie (pour proposer la période suivante) arrive ensuite
+  if(saved && RESTOS.some(r=>r[0]===saved)) setResto(saved); else showPicker();
+  const before=curResto?JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]):null;
+  loadLast().then(()=>{
+    loadRecent();                                   // CA des dernières semaines (léger) : contrôle de cohérence avant enregistrement
+    if(!curResto||curTab==='documents'||curTab==='ponctuel'||curTab==='prevca') return;
+    const typed=[...document.querySelectorAll('#fieldsGrid input, #fieldsGrid textarea')].some(e=>!e.readOnly&&e.value!=='');
+    const changed=before!==JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]);
+    if(GATE_ON || (!typed && changed)) renderPanel();   // porte ouverte, ou dernière saisie différente du cache et rien de saisi : on se cale sur la bonne date
+    else updateDateBanner();
+  });
+}
+function showPicker(){ document.getElementById('pickCancel').style.display=curResto?'inline':'none'; document.getElementById('restoPick').style.display='flex'; }
+function hidePicker(){ document.getElementById('restoPick').style.display='none'; }
+function setResto(r){
+  curResto=r; try{ sessionStorage.setItem('mj_resto',r); }catch(e){}
+  document.getElementById('restoBadgeName').textContent=RESTOS.find(x=>x[0]===r)[1];
+  document.getElementById('restoBadge').style.display='flex';
+  hidePicker(); renderPanel();
+}
+function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto) renderPanel(); }
+
+function weekOptions(year,sel){
+  let o=''; for(let w=1;w<=weeksInYear(year);w++){ const mon=weekMonday(year,w), sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
+    o+=`<option value="${w}" ${w===sel?'selected':''}>S${pad2(w)} · du ${fmtDM(mon)} au ${fmtDM(sun)}</option>`; }
+  return o;
+}
+function onWeekYear(){ const y=+document.getElementById('pYear').value; const s=document.getElementById('pWeek'); const cur=Math.min(+s.value,weeksInYear(y)); s.innerHTML=weekOptions(y,cur); loadExisting(); }
+function yearOpts(sel){ const y=new Date().getFullYear(); return [y+1,y,y-1,y-2].map(v=>`<option value="${v}" ${v===sel?'selected':''}>${v}</option>`).join(''); }
+const STEP_LBL={quotidien:'Jour suivant',hebdomadaire:'Semaine suivante',mensuel:'Mois suivant',previsionnel:'Mois suivant'};
+const stepBtns=tab=>STEP_LBL[tab]?`<button type="button" class="step" onclick="stepPeriod(-1)" title="Période précédente">◀</button><button type="button" class="step next" onclick="stepPeriod(1)">${STEP_LBL[tab]} ▶</button>`:'';
+function stepPeriod(dir){
+  const ensureYear=(sel,y)=>{ if(![...sel.options].some(o=>+o.value===y)) sel.insertAdjacentHTML('beforeend',`<option value="${y}">${y}</option>`); sel.value=y; };
+  if(curTab==='quotidien'){
+    const el=document.getElementById('pDate'); if(!el.value) return;
+    const d=new Date(el.value+'T12:00:00'); d.setDate(d.getDate()+dir); el.value=isoDate(d);
+  } else if(curTab==='hebdomadaire'){
+    const ys=document.getElementById('pYear'), ws=document.getElementById('pWeek'); let y=+ys.value, w=+ws.value+dir;
+    if(w>weeksInYear(y)){ y++; w=1; } else if(w<1){ y--; w=weeksInYear(y); }
+    ensureYear(ys,y); ws.innerHTML=weekOptions(y,w); ws.value=w;
+  } else {
+    const ms=document.getElementById('pMonth'), ys=document.getElementById('pYear'); let mi=ms.selectedIndex+dir, y=+ys.value;
+    if(mi>11){ mi=0; y++; } else if(mi<0){ mi=11; y--; }
+    ensureYear(ys,y); ms.selectedIndex=mi;
+  }
+  loadExisting();
+}
+function periodControls(tab){
+  const np=nextPeriod(tab);
+  if(tab==='quotidien') return `<label>Date</label><input type="date" id="pDate" value="${np.date}" onchange="loadExisting()">${stepBtns(tab)}`;
+  if(tab==='ponctuel'){
+    const types=PONCT_TYPES.map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
+    return `<label>Type</label><select id="pType" onchange="renderPanel(true)">${types}</select><label>Date de la visite</label><input type="date" id="pDate" value="${np.date}" onchange="loadExisting()">`;
+  }
+  if(tab==='hebdomadaire')
+    return `<label>Semaine</label><select id="pWeek" onchange="loadExisting()">${weekOptions(np.year,np.week)}</select><label>Année</label><select id="pYear" onchange="onWeekYear()">${yearOpts(np.year)}</select>${stepBtns(tab)}`;
+  const months=MONTHS.map((m,i)=>`<option value="${m}" ${i===np.month?'selected':''}>${m.charAt(0)+m.slice(1).toLowerCase()}</option>`).join('');
+  return `<label>Mois</label><select id="pMonth" onchange="loadExisting()">${months}</select><label>Année</label><select id="pYear" onchange="loadExisting()">${yearOpts(np.year)}</select>${stepBtns(tab)}`;
+}
+const currentType=()=>{ const el=document.getElementById('pType'); return el?el.value:'RGRV'; };
+function fieldHtml(f){
+  if(f.type==='textarea') return `<div class="field field-full"><label>${f.l}</label><textarea id="f_${f.k}" placeholder="${f.ph||''}"></textarea></div>`;
+  if(f.type==='select') return `<div class="field"><label>${f.l}</label><select id="f_${f.k}">${f.opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`;
+  const auto=f.auto?'auto':'', ro=f.auto?'readonly':'', oninput=f.auto?'':'oninput="recompute()"';
+  const unit=f.u?`<span class="unit">${f.u}</span>`:'';
+  const note=f.k==='oph'?'<div class="hint" id="ophNote"></div>':(['cc_eur','uber_eur','lad_eur','fid_nb'].includes(f.k)?`<div class="hint" id="note_${f.k}"></div>`:'');
+  return `<div class="field"><label>${f.l}</label><div class="inwrap ${f.u?'has-unit':''}"><input type="${f.auto?'text':'number'}" step="any" inputmode="decimal" id="f_${f.k}" class="${auto}" ${ro} ${oninput} ${f.auto?'placeholder="calculé"':''}>${unit}</div>${note}</div>`;
+}
+let GATE_ON=false;
+function renderPanel(keepPeriod){
+  if(curTab==='documents') return renderDocuments();
+  if(curTab==='prevca') return renderPrevCa();
+  const p=document.getElementById('panel');
+  if(['quotidien','hebdomadaire','mensuel'].includes(curTab) && LAST_STATE==='loading'){   // jamais de date « du jour » par défaut : on attend la dernière saisie
+    GATE_ON=true;
+    p.innerHTML=`<div class="gate">⏳ Recherche de la dernière saisie de ${RESTOS.find(r=>r[0]===curResto)[1]}…<small>La saisie s'ouvre dès que la dernière date saisie est connue, pour t'éviter une erreur de date.</small></div>`;
+    return;
+  }
+  GATE_ON=false;
+  const label=TABS.find(t=>t[0]===curTab)[1];
+  const restoName=RESTOS.find(r=>r[0]===curResto)[1];
+  // en ponctuel, changer de type redessine les champs sans perdre type ni date
+  const keep=keepPeriod&&curTab==='ponctuel'?{t:currentType(),d:document.getElementById('pDate').value}:null;
+  const ll=lastLabel(curTab);
+  const hint = curTab==='hebdomadaire'
+    ? 'Les moyennes des semaines pré-remplissent le mois correspondant (onglet Mensuel) : il suffit d\'y vérifier puis d\'enregistrer pour valider le mois.'
+    : curTab==='ponctuel'
+    ? 'Une ligne par visite. Le dashboard retient la dernière visite de l\'année (RGRV, CFV, PPFV) ou la moyenne de l\'année (audits et analyses).'
+    : 'Les champs grisés se calculent tout seuls. Les pourcentages se saisissent en % (ex. 94,4). Choisis une période déjà saisie pour la modifier.';
+  p.innerHTML=`
+    <div class="panel-head">
+      <div><div class="panel-title">${label} — ${restoName}</div>${ll&&curTab!=='ponctuel'?`<div class="last-saisie">Dernière saisie : <b>${ll}</b> — la page s'ouvre sur cette date ; « ${STEP_LBL[curTab]||'suivant'} ▶ » pour saisir la suite</div>`:''}</div>
+      <div class="period">${periodControls(curTab)}</div>
+    </div>
+    <div class="date-banner db-wait" id="dateBanner" style="display:none"></div>
+    <div class="entry-banner" id="entryBanner"></div>
+    <div class="grid" id="fieldsGrid"></div>
+    <div class="foot">
+      <button class="btn-save" id="btnSave" onclick="save()">Enregistrer pour ${restoName}</button>
+      <span class="save-msg" id="saveMsg"></span>
+    </div>
+    <div class="hint">${hint}</div>`;
+  if(keep){ document.getElementById('pType').value=keep.t; document.getElementById('pDate').value=keep.d; }
+  document.getElementById('fieldsGrid').innerHTML=fieldsFor(curTab).map(fieldHtml).join('');
+  const dEl=document.getElementById('pDate'); if(dEl&&curTab==='quotidien') dEl.max=isoDate(new Date());   // pas de date future dans le sélecteur
+  loadExisting();
+}
+function num(id){ const v=document.getElementById(id); if(!v) return null; const t=String(v.value).replace(',','.').trim(); if(t==='') return null; const n=parseFloat(t); return isNaN(n)?null:n; }
+// ── OPH = nombre d'avis négatifs × 100 000 ÷ transactions de la période (comme l'Excel) ──
+let TX=null, CAM=null, TXLoading=null;
+function loadTx(){
+  if(TX||TXLoading||!configured()) return;
+  TXLoading=(async()=>{
+    try{
+      const c=new AbortController(), to=setTimeout(()=>c.abort(),90000);
+      const r=await fetch(APPS_SCRIPT_URL+'?action=all&from='+(new Date().getFullYear()-2)+'-01-01&_='+Date.now(),{signal:c.signal}); clearTimeout(to);
+      const j=await r.json(), m={}, caMap={}, alMap={};
+      (j.quotidien||[]).forEach(x=>{
+        if(typeof x.transactions==='number'){ (m[x.restaurant]=m[x.restaurant]||{})[x.periode]=x.transactions; }
+        if(typeof x.ca_net_total==='number'){ (caMap[x.restaurant]=caMap[x.restaurant]||{})[x.periode]=x.ca_net_total; }
+        if(typeof x.ca_net_alim==='number'){ (alMap[x.restaurant]=alMap[x.restaurant]||{})[x.periode]=x.ca_net_alim; }
+      });
+      const pv={}, pt={}; (j.prevjour||[]).forEach(x=>{ const v=Number(x.ca_alim_prev), t=Number(x.ca_total_prev); if(x.ca_alim_prev!==''&&x.ca_alim_prev!=null&&isFinite(v)){ (pv[x.restaurant]=pv[x.restaurant]||{})[x.periode]=v; if(x.ca_total_prev!==''&&x.ca_total_prev!=null&&isFinite(t)) (pt[x.restaurant]=pt[x.restaurant]||{})[x.periode]=t; } });
+      TX=m; CAM=caMap; ALIMM=alMap; PREVJ=pv; PREVT=pt;
+    }catch(e){ TX=null; }
+    TXLoading=null; if(curTab==='prevca') renderPrevCa(); else recompute();
+  })();
+}
+function periodDates(){
+  const out=[];
+  if(curTab==='hebdomadaire'){
+    const y=+document.getElementById('pYear').value, w=+document.getElementById('pWeek').value, mon=weekMonday(y,w);
+    for(let i=0;i<7;i++){ const d=new Date(mon); d.setUTCDate(mon.getUTCDate()+i); out.push(d.toISOString().slice(0,10)); }
+  } else {
+    const mi=MONTHS.indexOf(document.getElementById('pMonth').value), y=+document.getElementById('pYear').value, n=new Date(Date.UTC(y,mi+1,0)).getUTCDate();
+    for(let i=1;i<=n;i++) out.push(`${y}-${pad2(mi+1)}-${pad2(i)}`);
+  }
+  return out;
+}
+function recomputeOph(){
+  const el=document.getElementById('f_oph'); if(!el) return;
+  const note=document.getElementById('ophNote'), avis=num('f_avis'), legacy=el.dataset.legacy;
+  el.value=''; if(note) note.textContent='';
+  if(avis==null){
+    if(legacy){ el.value=String(Math.round(+legacy*10)/10).replace('.',','); if(note) note.textContent="OPH d'origine (importé d'Excel) — saisis le nombre d'avis pour le recalculer."; }
+    else if(note) note.textContent="Saisis le nombre d'avis négatifs : l'OPH se calcule seul.";
+    return;
+  }
+  if(!TX){ if(note) note.textContent='⏳ Chargement des transactions…'; loadTx(); return; }
+  const tx=periodDates().reduce((s,d)=>s+(((TX[curResto]||{})[d])||0),0);
+  if(!tx){ if(note) note.textContent='Transactions non saisies sur cette période : OPH non calculable.'; return; }
+  setAuto('f_oph', avis*100000/tx, 1);
+  if(note) note.textContent=`${avis} avis × 100 000 ÷ ${tx.toLocaleString('fr-FR')} transactions`;
+}
+// ── Digital : C&C / CA net · Uber Eats / CA net · LAD M+ / (Uber Eats + LAD M+), comme l'Excel ──
+function recomputeDigital(){
+  if(curTab!=='mensuel') return;
+  const set=(k,t)=>{ const n=document.getElementById('note_'+k); if(n) n.textContent=t||''; };
+  const cc=num('f_cc_eur'), ue=num('f_uber_eur'), lad=num('f_lad_eur');
+  if(cc==null&&ue==null&&lad==null){ ['cc_eur','uber_eur','lad_eur'].forEach(k=>set(k,'')); return; }
+  if(!CAM){ ['cc_eur','uber_eur','lad_eur'].forEach(k=>set(k,'⏳ Chargement du CA…')); loadTx(); return; }
+  const ca=periodDates().reduce((s,d)=>s+(((CAM[curResto]||{})[d])||0),0), pct=x=>(x*100).toFixed(1).replace('.',',')+' %';
+  const caTxt=ca?ca.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €':null;
+  set('cc_eur', cc==null?'':(ca?`${pct(cc/ca)} du CA net (${caTxt})`:'CA du mois non saisi : % non calculable'));
+  set('uber_eur', ue==null?'':(ca?`${pct(ue/ca)} du CA net (${caTxt})`:'CA du mois non saisi : % non calculable'));
+  set('lad_eur', lad==null?'':((ue!=null&&(ue+lad)>0)?`${pct(lad/(ue+lad))} du CA livraison (Uber Eats + LAD M+)`:"Saisis aussi Uber Eats pour calculer la part de LAD M+"));
+}
+// ── Comptes FID : saisis en NOMBRE ; le taux (comptes ÷ transactions du mois) est calculé, comme pour le reste du digital ──
+function recomputeFid(){
+  if(curTab!=='mensuel') return;
+  const el=document.getElementById('f_fid_actifs'), n=document.getElementById('note_fid_nb'); if(!el) return;
+  const nb=num('f_fid_nb'), legacy=el.dataset.legacy;
+  el.value=''; if(n) n.textContent='';
+  if(nb==null){
+    if(legacy){ el.value=String(Math.round(+legacy*1000)/10).replace('.',','); if(n) n.textContent="Taux d'origine (importé d'Excel) — saisis le nombre de comptes pour le recalculer."; }
+    return;
+  }
+  if(!TX){ if(n) n.textContent='⏳ Chargement des transactions…'; loadTx(); return; }
+  const tx=periodDates().reduce((s,d)=>s+(((TX[curResto]||{})[d])||0),0);
+  if(!tx){ if(n) n.textContent='Transactions non saisies sur ce mois : taux non calculable.'; return; }
+  setAuto('f_fid_actifs', nb*100/tx, 1);
+  if(n) n.textContent=`${nb.toLocaleString('fr-FR')} comptes ÷ ${tx.toLocaleString('fr-FR')} transactions du mois`;
+}
+function recompute(){
+  if(curTab==='mensuel') recomputeDigital();
+  if(curTab==='mensuel') recomputeFid();
+  if(curTab==='hebdomadaire'||curTab==='mensuel') recomputeOph();
+  if(curTab==='quotidien'){
+    const tot=num('f_ca_net_total'), alim=num('f_ca_net_alim'), tacs=num('f_transactions'), he=num('f_heures_equipier'), ht=num('f_heures_totales');
+    setAuto('f_panier_moyen', (tot!=null&&tacs)?tot/tacs:null, 2);      // PM = CA net TOTAL ÷ transactions
+    setAuto('f_vphe', (alim!=null&&he)?alim/he:null, 2);
+    setAuto('f_vphg', (alim!=null&&ht)?alim/ht:null, 2);
+  }
+  if(curTab==='ponctuel' && currentType()==='ANALYSE_SILLIKER'){
+    const ok=num('f_analyses_ok'), nok=num('f_analyses_nok'), el=document.getElementById('f_score');
+    if(ok!=null||nok!=null){ const tot=(ok||0)+(nok||0); setAuto('f_score', tot?(ok||0)*100/tot:null, 1); }   // taux = OK ÷ (OK + NOK)
+    else if(el&&!el.dataset.legacy) el.value='';                                                          // ancien score saisi en % : conservé tant qu'aucun nombre n'est saisi
+  }
+  if(curTab==='ponctuel' && currentType()==='RGRV'){
+    const subs=RGRV_SUBS.map(k=>num('f_'+k)).filter(v=>v!=null);
+    setAuto('f_score', subs.length?subs.reduce((a,b)=>a+b,0)/subs.length:null, 1);   // sous-notes déjà en %
+  }
+}
+function setAuto(id,val,dec){ const el=document.getElementById(id); if(!el) return; el.value = val==null?'' : val.toFixed(dec).replace('.',','); }
+
+// ── Période courante (clé) ──
+function currentPeriode(){
+  if(curTab==='quotidien'||curTab==='ponctuel') return document.getElementById('pDate').value;
+  if(curTab==='hebdomadaire') return document.getElementById('pYear').value+'-W'+pad2(document.getElementById('pWeek').value);
+  return document.getElementById('pMonth').value+' '+document.getElementById('pYear').value;
+}
+function periodeLabel(){
+  if(curTab==='hebdomadaire'){ const s=document.getElementById('pWeek'); return s.options[s.selectedIndex].text+' '+document.getElementById('pYear').value; }
+  const p=currentPeriode();
+  const typ=curTab==='ponctuel'?PONCT_TYPES.find(t=>t[0]===currentType())[1]+' · ':'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(p)){ const [y,m,d]=p.split('-'); return `${typ}${d}/${m}/${y}`; }
+  return p.charAt(0)+p.slice(1).toLowerCase();
+}
+function setBanner(kind,html){ const b=document.getElementById('entryBanner'); if(!b) return; b.className='entry-banner'+(kind?' '+kind:''); b.innerHTML=html||''; }
+const showVal=(f,v)=>(f&&isPct(f)&&typeof v==='number')?Math.round(v*1e6)/1e4:v;
+
+// Saisies hebdomadaires du restaurant (pour le bilan mensuel) — chargées une fois par restaurant
+const hebdoCache={};
+async function hebdoRows(resto){
+  if(hebdoCache[resto]) return hebdoCache[resto];
+  const r=await fetch(APPS_SCRIPT_URL+'?action=hebdo&restaurant='+encodeURIComponent(resto)+'&_='+Date.now());
+  const j=await r.json(); hebdoCache[resto]=(j&&j.rows)||[]; return hebdoCache[resto];
+}
+
+// ── Charger une saisie existante (pré-remplissage + bandeau) ──
+let loadSeq=0;
+async function loadExisting(){
+  const seq=++loadSeq, tab=curTab, resto=curResto, flds=fieldsFor(tab); window.hasExisting=false; updateDateBanner();
+  flds.forEach(f=>{ const el=document.getElementById('f_'+f.k); if(el){ delete el.dataset.legacy; if(!f.auto) el.value=''; } });
+  recompute();
+  const msg=document.getElementById('saveMsg'); if(msg){ msg.className='save-msg'; msg.textContent=''; }
+  if(!configured()){ setBanner('',''); return; }
+  setBanner('loading','⏳ Recherche d\'une saisie existante…');
+  let data=null;
+  try{
+    let u=APPS_SCRIPT_URL+'?frequence='+encodeURIComponent(tab)+'&restaurant='+encodeURIComponent(resto)+'&periode='+encodeURIComponent(currentPeriode());
+    if(tab==='ponctuel') u+='&type='+encodeURIComponent(currentType());
+    const res=await fetch(u+'&_='+Date.now()); if(res.ok){ const j=await res.json(); data=j&&j.data; if(data&&!Object.keys(data).length) data=null; }
+  }catch(e){ if(seq===loadSeq) setBanner('err','⚠️ Impossible de vérifier les saisies existantes (connexion ?). Tu peux quand même saisir.'); return; }
+  if(seq!==loadSeq) return;   // l'utilisateur a changé de période entre-temps
+  window.hasExisting=!!data; updateDateBanner();
+  if(data){
+    Object.entries(data).forEach(([k,v])=>{
+      const el=document.getElementById('f_'+k); if(!el||v==null||v==='') return;
+      if(k==='score' && curTab==='ponctuel' && currentType()==='ANALYSE_SILLIKER'){ el.dataset.legacy=v; el.value=(typeof v==='number')?String(Math.round(v*1e5)/1e3).replace('.',','):v; return; }     // score saisi à l'ancienne (en %)
+      if(k==='fid_actifs'){ el.dataset.legacy=v; return; }     // taux d'origine : affiché tant qu'aucun nombre de comptes n'est saisi
+      if(k==='oph'){ el.dataset.legacy=v; return; }     // OPH d'origine : affiché tant qu'aucun nombre d'avis n'est saisi
+      el.value=showVal(flds.find(x=>x.k===k),v);
+    });
+    recompute();
+    setBanner('exists','📝 <b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées. Modifie-les puis clique sur « Enregistrer » pour les mettre à jour.');
+  } else {
+    setBanner('new','🆕 Aucune saisie pour cette période — nouvelle saisie.');
+  }
+  // Mensuel : indicateurs hebdo non encore validés pour le mois → moyenne des semaines
+  if(tab==='mensuel' && !HEBDO_KEYS.every(k=>data&&data[k]!=null&&data[k]!=='')){
+    try{
+      const monthKey=currentPeriode(), rows=(await hebdoRows(resto)).filter(r=>weekMonthKey(r.periode)===monthKey);
+      if(seq!==loadSeq||!rows.length) return;
+      const filled=[];
+      HEBDO_KEYS.forEach(k=>{
+        if(data&&data[k]!=null&&data[k]!=='') return;
+        const vals=rows.map(r=>r[k]).filter(v=>typeof v==='number');
+        if(!vals.length) return;
+        const f=FIELDS.mensuel.find(x=>x.k===k), el=document.getElementById('f_'+k);
+        const tot=vals.reduce((a,b)=>a+b,0); el.value=showVal(f, k==='avis'?tot:Math.round(tot/vals.length*1e6)/1e6); el.classList.add('suggest'); filled.push(f.l); recompute();
+      });
+      if(filled.length){
+        const cur=new Date(), cm=MONTHS[cur.getMonth()]+' '+cur.getFullYear();
+        setBanner('suggest',`💡 <b>Suggestion calculée à partir de ${rows.length} semaine${rows.length>1?'s':''} saisie${rows.length>1?'s':''}</b> (${filled.join(', ')}) — vérifie puis clique sur « Enregistrer » pour valider le mois.`+(monthKey===cm?' ⚠️ Ce mois n\'est pas terminé : toutes les semaines ne sont peut-être pas saisies.':''));
+      }
+    }catch(e){}
+  }
+}
+
+// ── Garde-fous : date dans le futur, saut de période, saisie antérieure à la dernière ──
+function periodOrdinal(tab,p){
+  if(tab==='quotidien') return Math.round(Date.parse(p+'T00:00:00Z')/86400000);
+  if(tab==='hebdomadaire'){ const m=String(p).match(/^(\d{4})-W(\d{2})$/); return m?Math.round(weekMonday(+m[1],+m[2]).getTime()/(7*86400000)):null; }
+  const m=String(p).match(/^([A-ZÉÛ]+) (\d{4})$/); return m?(+m[2])*12+MONTHS.indexOf(m[1]):null;
+}
+function nowPeriod(tab){
+  const now=new Date();
+  return tab==='quotidien'?isoDate(now):tab==='hebdomadaire'?(()=>{const w=isoWeekOf(now);return w.year+'-W'+pad2(w.week);})():MONTHS[now.getMonth()]+' '+now.getFullYear();
+}
+function periodMsgs(){
+  if(!['quotidien','hebdomadaire','mensuel'].includes(curTab)) return [];
+  const cur=currentPeriode(), oc=periodOrdinal(curTab,cur); if(oc==null) return [];
+  const unit={quotidien:'jour',hebdomadaire:'semaine',mensuel:'mois'}[curTab], plural=n=>n>1?(unit==='mois'?'mois':unit+'s'):unit;
+  const msgs=[], on=periodOrdinal(curTab,nowPeriod(curTab));
+  if(oc>on) msgs.push(`${periodeLabel()} est dans le futur.`);
+  else if(oc===on) msgs.push(curTab==='quotidien'?`${periodeLabel()} est AUJOURD'HUI : la journée n'est pas terminée.`:`${periodeLabel()} est la période en cours (pas terminée).`);
+  const last=lastOf(curTab);
+  if(last && !window.hasExisting){
+    const d=oc-periodOrdinal(curTab,last);
+    if(d>1) msgs.push(`La dernière saisie de ${RESTOS.find(r=>r[0]===curResto)[1]} est ${lastLabel(curTab)} : il y aurait ${d-1} ${plural(d-1)} sans saisie entre les deux.`);
+    else if(d<0) msgs.push(`${periodeLabel()} est antérieure à la dernière saisie (${lastLabel(curTab)}) et n'a pas encore de saisie.`);
+  } else if(!last && LAST_STATE==='fail') msgs.push(`Impossible de vérifier la dernière saisie de ${RESTOS.find(r=>r[0]===curResto)[1]} : contrôle bien la date.`);
+  return msgs;
+}
+// ── Bandeau « Tu saisis … » : la date saisie est toujours écrite en grand, avec un code couleur ──
+const JOURS_LONG=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'], MOIS_LONG=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const dateLong=iso=>{ const d=new Date(iso+'T12:00:00'); return `${JOURS_LONG[d.getDay()]} ${d.getDate()} ${MOIS_LONG[d.getMonth()]} ${d.getFullYear()}`; };
+function relLabel(){
+  const on=periodOrdinal(curTab,nowPeriod(curTab)), oc=periodOrdinal(curTab,currentPeriode()); if(oc==null) return '';
+  const n=oc-on, u={quotidien:['jour','jours'],hebdomadaire:['semaine','semaines'],mensuel:['mois','mois']}[curTab];
+  if(curTab==='quotidien') return n===0?"aujourd'hui":n===-1?'hier':n===-2?'avant-hier':n>0?`dans ${n} ${n>1?u[1]:u[0]}`:`il y a ${-n} jours`;
+  return n===0?(curTab==='mensuel'?'ce mois':'cette semaine'):n===-1?(curTab==='mensuel'?'mois dernier':'semaine dernière'):n>0?`dans ${n} ${n>1?u[1]:u[0]}`:`il y a ${-n} ${u[1]}`;
+}
+function periodState(){
+  if(!['quotidien','hebdomadaire','mensuel'].includes(curTab)) return null;
+  const cur=currentPeriode(), oc=periodOrdinal(curTab,cur); if(!cur||oc==null) return null;
+  const on=periodOrdinal(curTab,nowPeriod(curTab)), last=lastOf(curTab), od=last?oc-periodOrdinal(curTab,last):null;
+  const big=curTab==='quotidien'?dateLong(cur):periodeLabel();
+  let kind='ok', msg='', blocking=false;
+  if(oc>on){ kind='bad'; msg='⛔ Cette période est dans le futur : elle ne peut pas être saisie.'; blocking=true; }
+  else if(window.hasExisting){ kind='edit'; msg='📝 Une saisie existe déjà : tu vas la MODIFIER (pas en créer une nouvelle).'; }
+  else if(oc===on){ kind='warn'; msg=curTab==='quotidien'?"⚠️ C'est AUJOURD'HUI : la journée n'est pas terminée. Voulais-tu saisir la veille ?":'⚠️ Période en cours, non terminée.'; }
+  else if(last && od===1){ kind='ok'; msg='✓ C\'est bien la suite de la dernière saisie ('+lastLabel(curTab)+').'; }
+  else if(last && od>1){ kind='warn'; msg=`⚠️ Dernière saisie : ${lastLabel(curTab)}. Il manquerait ${od-1} période(s) entre les deux.`; }
+  else if(last && od<0){ kind='warn'; msg=`⚠️ Antérieure à la dernière saisie (${lastLabel(curTab)}) : est-ce voulu ?`; }
+  else if(!last){ kind='warn'; msg=LAST_STATE==='fail'?'⚠️ Dernière saisie introuvable (connexion ?) : contrôle bien la date.':'⚠️ Aucune saisie précédente : contrôle bien la date.'; }
+  return {kind,big,rel:relLabel(),msg,blocking};
+}
+function updateDateBanner(){
+  const b=document.getElementById('dateBanner'); if(!b) return;
+  const s=periodState(); const btn=document.getElementById('btnSave'), rn=RESTOS.find(r=>r[0]===curResto)[1];
+  if(!s){ b.style.display='none'; return; }
+  b.style.display='flex'; b.className='date-banner db-'+s.kind;
+  const next=(s.kind==='edit'&&STEP_LBL[curTab])?`<button type="button" class="db-btn" onclick="stepPeriod(1)">${STEP_LBL[curTab]} ▶</button>`:'';
+  b.innerHTML=`<span class="db-lbl">Tu saisis pour ${escH(rn)}</span><span class="db-date">${escH(s.big)}</span><span class="db-rel">${escH(s.rel)}</span>${next}<span class="db-msg">${escH(s.msg)}${LAST_STATE==='cache'?' (dernière saisie en cours de vérification…)':''}</span>`;
+  if(btn){ btn.disabled=!!s.blocking; btn.textContent=(curTab==='quotidien'?'Enregistrer le '+currentPeriode().split('-').reverse().join('/'):'Enregistrer '+periodeLabel())+' · '+rn; }
+}
+function periodWarning(){ const m=periodMsgs(); return m.length?m.map(x=>'⚠️ '+x).join('\n\n')+'\n\nEnregistrer quand même ?':''; }
+// ── Contrôle de cohérence du CA saisi avec les mêmes jours de la semaine des semaines précédentes ──
+function salesSanity(){
+  const SRC=RECENT||CAM; if(curTab!=='quotidien'||!SRC) return '';
+  const ca=num('f_ca_net_total'), iso=currentPeriode(); if(ca==null||!iso) return '';
+  const avgFor=(wd)=>{ const v=[]; const base=new Date(iso+'T12:00:00'); for(let k=1;k<=56;k++){ const d=new Date(base); d.setDate(d.getDate()-k); if(d.getDay()!==wd) continue; const x=(SRC[curResto]||{})[isoDate(d)]; if(typeof x==='number'&&x>0) v.push(x); } return v.length>=3?v.reduce((a,b)=>a+b,0)/v.length:null; };
+  const wd=new Date(iso+'T12:00:00').getDay(), avg=avgFor(wd); if(!avg) return '';
+  const eur=n=>Math.round(n).toLocaleString('fr-FR')+' €';
+  let best=wd, bestGap=Math.abs(ca-avg)/avg;
+  for(let w=0;w<7;w++){ const a=avgFor(w); if(a&&Math.abs(ca-a)/a<bestGap){ best=w; bestGap=Math.abs(ca-a)/a; } }
+  if(best!==wd && bestGap<0.15 && Math.abs(ca-avg)/avg>0.3) return `Le CA saisi (${eur(ca)}) ressemble plutôt à un ${JOURS_LONG[best]} qu'à un ${JOURS_LONG[wd]} (≈ ${eur(avg)} d'habitude) : la date est-elle la bonne ?`;
+  const r=ca/avg; if(r<0.6||r>1.6) return `Le CA saisi (${eur(ca)}) est très ${r<1?'inférieur':'supérieur'} à un ${JOURS_LONG[wd]} habituel (≈ ${eur(avg)}) : vérifie la date et le montant.`;
+  return '';
+}
+// ── Fenêtre de confirmation : date en grand + valeurs, à valider explicitement ──
+function askConfirm({big,rel,resto,warns,rows,okLabel}){
+  return new Promise(res=>{
+    let ov=document.getElementById('cfmOv'); if(!ov){ ov=document.createElement('div'); ov.id='cfmOv'; ov.innerHTML='<div id="cfmBox"></div>'; document.body.appendChild(ov); }
+    const fin=v=>{ ov.classList.remove('open'); res(v); };
+    ov.querySelector('#cfmBox').innerHTML=`<h3>Confirmer la saisie · ${escH(resto)}</h3><div class="cf-date">${escH(big)}</div><div class="cf-sub">${escH(rel)}</div>
+      ${warns.map(w=>`<div class="cf-warn">⚠️ ${escH(w)}</div>`).join('')}
+      <div class="cf-rows">${rows.map(([l,v])=>`<div><span>${escH(l)}</span><b>${escH(v)}</b></div>`).join('')}</div>
+      <div class="cf-btns"><button type="button" id="cfCancel">← Corriger</button><button type="button" class="cf-ok" id="cfOk">${escH(okLabel)}</button></div>`;
+    ov.classList.add('open');
+    ov.querySelector('#cfCancel').onclick=()=>fin(false); ov.querySelector('#cfOk').onclick=()=>fin(true);
+  });
+}
+// ── Enregistrer ──
+async function save(){
+  const btn=document.getElementById('btnSave'), msg=document.getElementById('saveMsg');
+  if(!configured()){ msg.className='save-msg err'; msg.textContent='Non relié au Sheet.'; return; }
+  if(!currentPeriode()){ msg.className='save-msg err'; msg.textContent='Choisis une date.'; return; }
+  const data={};
+  fieldsFor(curTab).forEach(f=>{
+    const el=document.getElementById('f_'+f.k); if(!el) return;
+    if(f.auto && !(curTab==='ponctuel'&&f.k==='score') && f.k!=='fid_actifs') return;          // champs calculés : jamais enregistrés (sauf score RGRV)          // le score RGRV calculé est enregistré
+    let v=(f.type==='textarea'||f.type==='select')?el.value.trim():num('f_'+f.k);
+    if(v===0 && ['oepe','r2p','hello_mcdo','reseaux','uvhe','tche'].includes(f.k) && (curTab==='hebdomadaire'||curTab==='mensuel')) v=null;   // 0 = non renseigné
+    if(v!=null&&v!==''&&isPct(f)) v=v/100;
+    if(f.auto&&v!=null&&v!=='') v=v/100;                                  // score RGRV affiché en %
+    if(v!=null&&v!=='') data[f.k]=v;
+  });
+  if(Object.keys(data).length===0){ msg.className='save-msg err'; msg.textContent='Rien à enregistrer.'; return; }
+  if(curTab==='quotidien' && !(data.ca_net_total>0)){            // une journée sans CA n'est pas une saisie (évite les lignes à 0 enregistrées par erreur)
+    msg.className='save-msg err'; msg.textContent='Le CA net total doit être renseigné (supérieur à 0). Si le restaurant était fermé ce jour-là, ne saisis rien.'; return;
+  }
+  if(['quotidien','hebdomadaire','mensuel'].includes(curTab)){
+    const st=periodState();
+    if(st&&st.blocking){ msg.className='save-msg err'; msg.textContent='Cette période est dans le futur : enregistrement impossible.'; return; }
+    if(curTab==='quotidien'&&!RECENT&&!CAM){ const pr=loadRecent()||TXLoading; if(pr) await Promise.race([pr,new Promise(r=>setTimeout(r,4000))]); }
+    const warns=periodMsgs(); const sane=salesSanity(); if(sane) warns.push(sane);
+    if(curTab==='quotidien'){ const miss=[['ca_net_alim','CA net alimentaire'],['transactions','transactions'],['heures_equipier','heures équipier']].filter(([k])=>!(data[k]>0)).map(x=>x[1]); if(miss.length) warns.push('Non renseigné ou à 0 : '+miss.join(', ')+'.'); }
+    const rows=fieldsFor(curTab).filter(f=>data[f.k]!=null&&f.type!=='textarea'&&f.type!=='select').slice(0,10).map(f=>{ const v=data[f.k]; return [f.l, (isPct(f)||f.auto)&&typeof v==='number'?(Math.round(v*1e6)/1e4).toString().replace('.',',')+' %':String(v).replace('.',',')+(f.u&&f.u!=='%'?' '+f.u:'')]; });
+    const ok=await askConfirm({big:st?st.big:periodeLabel(),rel:st?st.rel:'',resto:RESTOS.find(r=>r[0]===curResto)[1],warns,rows,okLabel:'Confirmer : '+(curTab==='quotidien'?currentPeriode().split('-').reverse().join('/'):periodeLabel())});
+    if(!ok){ msg.className='save-msg'; msg.textContent='Enregistrement annulé : corrige la date ou les valeurs.'; return; }
+  } else { const warn=periodWarning(); if(warn && !confirm(warn)){ msg.className='save-msg'; msg.textContent='Enregistrement annulé.'; return; } }
+  const payload={ action:'save', frequence:curTab, restaurant:curResto, periode:currentPeriode(), data };
+  if(curTab==='ponctuel') payload.type=currentType();
+  const where=RESTOS.find(r=>r[0]===curResto)[1]+' · '+periodeLabel();
+  btn.disabled=true; msg.className='save-msg'; msg.textContent='Enregistrement…';
+  try{
+    const res=await fetch(APPS_SCRIPT_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
+    const j=await res.json();
+    if(j&&j.ok){
+      msg.className='save-msg ok'; msg.textContent=(j.updated?'✓ Saisie mise à jour':'✓ Saisie enregistrée')+' ('+where+')';
+      setBanner('exists','📝 <b>Une saisie existe pour cette période</b> — tu peux encore modifier les valeurs puis ré-enregistrer.');
+      document.querySelectorAll('.field input.suggest').forEach(el=>el.classList.remove('suggest'));
+      if(curTab==='hebdomadaire') delete hebdoCache[curResto];
+      // mémorise la dernière saisie pour proposer la période suivante
+      if(curTab!=='ponctuel'){ LAST=LAST||{}; LAST[curTab]=LAST[curTab]||{}; const p=payload.periode, old=LAST[curTab][curResto];
+        const sk=x=>{ const m=String(x||'').match(/^([A-ZÉÛ]+) (\d{4})$/); return m?m[2]+'-'+pad2(MONTHS.indexOf(m[1])+1):String(x||''); };
+        if(!old||sk(p)>sk(old)) LAST[curTab][curResto]=p; saveLastCache(); }
+    } else {
+      msg.className='save-msg err'; msg.textContent='Erreur : '+((j&&j.error)||'réponse inattendue du Sheet');
+    }
+  }catch(e){
+    msg.className='save-msg err'; msg.textContent='Erreur de connexion — saisie non confirmée, réessaie.';
+  }
+  btn.disabled=false;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  DOCUMENTS : Marketing News, Actualité Restaurant (PDF) et Performance Restaurants (Excel)
+// ══════════════════════════════════════════════════════════════════
+const DOC_KINDS=[
+  ['marketing','Marketing News','PDF','.pdf','Marketing News - Octobre'],
+  ['actualite','Actualité Restaurant','PDF','.pdf','2026.10.05 L_Actu Restaurants'],
+  ['performance','Performance Restaurants','Excel (.xlsx)','.xlsx,.xlsm',''],
+];
+const pwdHash=()=>{ try{ return sessionStorage.getItem('mj_pwdhash')||''; }catch(e){ return ''; } };
+const fileToB64=file=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=()=>rej(new Error('lecture du fichier impossible')); r.readAsDataURL(file); });
+async function postJson(body){
+  let err='';
+  for(let t=0;t<2;t++){
+    try{
+      const c=new AbortController(), to=setTimeout(()=>c.abort(),150000);
+      const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),signal:c.signal});
+      clearTimeout(to); return await r.json();
+    }catch(e){ err=e.name==='AbortError'?'délai dépassé':e.message; }
+  }
+  return {ok:false,error:err||'connexion impossible'};
+}
+function docKind(){ const el=document.getElementById('docKind'); return DOC_KINDS.find(k=>k[0]===(el?el.value:'marketing'))||DOC_KINDS[0]; }
+const escH=s=>String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+function renderDocuments(){
+  const p=document.getElementById('panel');
+  if(!pwdHash()){
+    p.innerHTML=`<div class="panel-head"><div class="panel-title">Documents</div></div>
+      <div class="entry-banner err" style="display:block">🔒 Pour téléverser des documents, reconnecte-toi avec le mot de passe de la saisie.</div>
+      <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
+  }
+  p.innerHTML=`
+    <div class="panel-head"><div><div class="panel-title">Documents</div><div class="last-saisie">Téléverse un document : il apparaît tout de suite dans le dashboard.</div></div></div>
+    <div class="grid">
+      <div class="field"><label>Type de document</label><select id="docKind" onchange="docKindChanged()">${DOC_KINDS.map(k=>`<option value="${k[0]}">${k[1]} — ${k[2]}</option>`).join('')}</select></div>
+      <div class="field"><label>Fichier</label><input type="file" id="docFile" onchange="docFileChanged()"></div>
+      <div class="field field-full" id="docNameWrap"><label>Nom affiché dans le dashboard</label><input type="text" id="docName"><div class="hint" id="docNameHint"></div></div>
+    </div>
+    <div class="foot"><button class="btn-save" id="btnDoc" onclick="uploadDocument()">Téléverser</button><span class="save-msg" id="docMsg"></span></div>
+    <div class="hint" id="docHint"></div>
+    <div class="doc-list" id="docList"><div class="hint">Chargement des documents…</div></div>`;
+  docKindChanged(); loadDocList();
+}
+function docKindChanged(){
+  const k=docKind(), file=document.getElementById('docFile');
+  file.accept=k[3]; file.value=''; document.getElementById('docName').value='';
+  const perf=k[0]==='performance';
+  document.getElementById('docNameWrap').style.display=perf?'none':'';
+  document.getElementById('docNameHint').textContent='Exemple : « '+k[4]+' ». '+(k[0]==='actualite'?'La date en tête classe les plus récents en premier.':'Un document de même nom est remplacé.');
+  document.getElementById('docHint').textContent=perf
+    ? 'Choisis le fichier « PERFORMANCE RESTAURANTS … .xlsx » du mois : la page lit le mois, les restaurants, les rangs et leurs couleurs. Un mois déjà téléversé est remplacé.'
+    : 'Fichiers PDF uniquement (20 Mo maximum).';
+}
+function docFileChanged(){
+  const k=docKind(), f=document.getElementById('docFile').files[0]; if(!f||k[0]==='performance') return;
+  const n=document.getElementById('docName'); if(!n.value) n.value=f.name.replace(/\.[^.]+$/,'');
+}
+async function loadDocList(){
+  const box=document.getElementById('docList'); if(!box) return;
+  try{
+    const [d,pf]=await Promise.all([
+      fetch(APPS_SCRIPT_URL+'?action=docs&_='+Date.now()).then(r=>r.json()),
+      fetch(APPS_SCRIPT_URL+'?action=perf_list&_='+Date.now()).then(r=>r.json()).catch(()=>({months:[]})) ]);
+    if(!d||!d.ok) throw new Error('réponse inattendue');
+    const sec=(title,kind,items)=>`<div class="doc-sec">${title}${d.folders&&d.folders[kind]?` · <a href="${escH(d.folders[kind].url)}" target="_blank" rel="noopener" style="text-transform:none;letter-spacing:0">ouvrir le dossier Drive ↗</a>`:''}</div>`+(items.length?items.map(x=>`<div class="doc-row"><span>📄 ${escH(x.mois)} <i>${escH(x.sous_titre||'')}</i></span><button onclick="deleteDocument('${kind}','${x.id}','${escH(x.mois).replace(/'/g,'’')}')" title="Supprimer">✕</button></div>`).join(''):'<div class="hint">Aucun document.</div>');
+    box.innerHTML=sec('Marketing News','marketing',d.marketing||[])+sec('Actualité Restaurant','actualite',d.actualite||[])+
+      `<div class="doc-sec">Performance Restaurants</div>`+((pf.months&&pf.months.length)?`<div class="hint">Mois téléversés depuis cette page : ${pf.months.map(escH).join(', ')}. Les mois plus anciens viennent de la version d'origine du dashboard.</div>`:'<div class="hint">Aucun mois téléversé depuis cette page.</div>');
+  }catch(e){ box.innerHTML='<div class="hint">Impossible de lire la liste des documents (connexion ?).</div>'; }
+}
+function docMsg(cls,txt){ const m=document.getElementById('docMsg'); if(m){ m.className='save-msg '+cls; m.textContent=txt; } }
+async function deleteDocument(kind,id,name){
+  if(!confirm('Supprimer « '+name+' » du dashboard ?')) return;
+  docMsg('','Suppression…');
+  const j=await postJson({action:'doc_delete',kind,id,pwd:pwdHash()});
+  docMsg(j.ok?'ok':'err', j.ok?'✓ Document supprimé.':'Erreur : '+j.error); if(j.ok){ loadDocList(); setTimeout(loadDocList,3500); }
+}
+async function uploadDocument(){
+  const k=docKind(), file=document.getElementById('docFile').files[0], btn=document.getElementById('btnDoc');
+  if(!file){ docMsg('err','Choisis un fichier.'); return; }
+  btn.disabled=true; docMsg('','Lecture du fichier…');
+  try{
+    if(k[0]==='performance'){
+      docMsg('','Lecture du fichier Excel…');
+      const perf=await parsePerfFile(file);
+      docMsg('',`Enregistrement de « ${perf.label} » (${perf.order.length} onglets)…`);
+      const j=await postJson(Object.assign({action:'perf_save',pwd:pwdHash()},perf));
+      if(!j.ok) throw new Error(j.error||'enregistrement refusé');
+      docMsg('ok',`✓ Performance « ${perf.label} » enregistrée (${perf.order.length} onglets).`);
+    } else {
+      const name=document.getElementById('docName').value.trim();
+      if(!name){ docMsg('err','Donne un nom au document.'); btn.disabled=false; return; }
+      if(!/\.pdf$/i.test(file.name)){ docMsg('err','Fichier PDF uniquement.'); btn.disabled=false; return; }
+      if(file.size>20*1024*1024){ docMsg('err','Fichier trop lourd (20 Mo maximum).'); btn.disabled=false; return; }
+      docMsg('','Envoi en cours (peut prendre un moment)…');
+      const j=await postJson({action:'doc_upload',kind:k[0],name,pdf:await fileToB64(file),pwd:pwdHash()});
+      if(!j.ok) throw new Error(j.error||'envoi refusé');
+      docMsg('ok',j.replaced?`✓ « ${name} » remplacé.`:`✓ « ${name} » téléversé.`);
+    }
+    document.getElementById('docFile').value=''; loadDocList(); setTimeout(loadDocList,3500);   // Drive met 2-3 s à lister un nouveau fichier
+  }catch(e){ docMsg('err','Erreur : '+e.message); }
+  btn.disabled=false;
+}
+
+// ── Lecture d'un fichier Performance (xlsx) dans le navigateur — mêmes règles que l'ancien moteur ──
+const PERF_MONTHS=MONTHS;
+const RANK_QUINT={'00B050':1,'92D050':2,'FFC000':3,'FF6969':4,'FF0000':5};
+async function loadJSZip(){
+  if(window.JSZip) return;
+  await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; s.onload=res; s.onerror=()=>rej(new Error('lecteur Excel indisponible (connexion ?)')); document.head.appendChild(s); });
+}
+async function parsePerfFile(file){
+  await loadJSZip();
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const txt=async p=>{ const f=zip.file(p); return f?await f.async('string'):null; };
+  const dom=s=>new DOMParser().parseFromString(s,'application/xml');
+  const wb=dom(await txt('xl/workbook.xml')), rels=dom(await txt('xl/_rels/workbook.xml.rels'));
+  const target={}; [...rels.getElementsByTagName('Relationship')].forEach(r=>{ target[r.getAttribute('Id')]=r.getAttribute('Target'); });
+  const sheets=[...wb.getElementsByTagName('sheet')].map(s=>({name:s.getAttribute('name'),rid:s.getAttribute('r:id')||s.getAttribute('id')}));
+  const ssXml=await txt('xl/sharedStrings.xml'), ss=[];
+  if(ssXml) [...dom(ssXml).getElementsByTagName('si')].forEach(si=>ss.push([...si.getElementsByTagName('t')].map(t=>t.textContent).join('')));
+  // couleurs de remplissage : cellXfs[s].fillId → fgColor
+  const st=dom(await txt('xl/styles.xml')), fills=[...st.getElementsByTagName('fills')[0].getElementsByTagName('fill')].map(f=>{ const pf=f.getElementsByTagName('patternFill')[0], fg=pf&&pf.getElementsByTagName('fgColor')[0]; return { type:pf?pf.getAttribute('patternType'):null, rgb:fg?fg.getAttribute('rgb'):null }; });
+  const xfs=[...st.getElementsByTagName('cellXfs')[0].getElementsByTagName('xf')].map(x=>+x.getAttribute('fillId')||0);
+  const quint=s=>{ const f=fills[xfs[s]]; if(!f||!f.type||f.type==='none'||!f.rgb||f.rgb.length<6) return null; return RANK_QUINT[f.rgb.slice(-6).toUpperCase()]||null; };
+  const colIdx=ref=>{ const m=ref.match(/^([A-Z]+)(\d+)$/); let c=0; for(const ch of m[1]) c=c*26+ch.charCodeAt(0)-64; return [c,+m[2]]; };
+  const num=v=>{ const n=parseFloat(v); return isNaN(n)?String(v):String(n); };
+  async function readSheet(path){
+    const x=dom(await txt(path)), cells={}; let maxRow=0;
+    [...x.getElementsByTagName('c')].forEach(c=>{
+      const [col,row]=colIdx(c.getAttribute('r')); const t=c.getAttribute('t'), vEl=c.getElementsByTagName('v')[0];
+      let v=null;
+      if(t==='inlineStr') v=[...c.getElementsByTagName('t')].map(e=>e.textContent).join('');
+      else if(vEl){ const raw=vEl.textContent; v = t==='s'?ss[+raw] : (t==='str'||t==='e')?raw : t==='b'?(raw==='1'?'True':'False') : {n:raw}; }
+      if(v!==null&&v!==undefined&&v!=='') cells[col+','+row]={v,s:+c.getAttribute('s')||0};
+      if(row>maxRow) maxRow=row;
+    });
+    return {cells,maxRow};
+  }
+  const S=v=>v==null?'':(typeof v==='object'?num(v.n):String(v).trim());
+  let monthKey=null, year=null; const restos={}, order=[]; let lexique=[];
+  for(const sh of sheets){
+    let tg=target[sh.rid]; if(!tg) continue; tg=tg.replace(/^\/?(xl\/)?/,'xl/');
+    const {cells,maxRow}=await readSheet(tg), cell=(r,c)=>cells[c+','+r];
+    if(sh.name.trim().toLowerCase()==='lexique'){
+      for(let r=3;r<=maxRow;r++){ const k=cell(r,1); if(k) lexique.push({kpi:S(k.v),def:S((cell(r,2)||{}).v)}); }
+      continue;
+    }
+    const arr=[];
+    for(let r=3;r<=28;r++){
+      const k=cell(r,1); if(!k) continue;
+      const b=cell(r,2);
+      if(monthKey===null&&b){
+        let m=null,y=null;
+        if(typeof b.v==='object'&&parseFloat(b.v.n)>20000){ const d=new Date(Date.UTC(1899,11,30)+parseFloat(b.v.n)*86400000); m=d.getUTCMonth()+1; y=d.getUTCFullYear(); }
+        else { const mm=S(b.v).match(/^\s*(\d{4})[-\/](\d{1,2})/); if(mm){ y=+mm[1]; m=+mm[2]; } }
+        if(m){ monthKey=PERF_MONTHS[m-1]; year=y; }
+      }
+      const g=cell(r,7);
+      arr.push({kpi:S(k.v),cur:S((cell(r,3)||{}).v),vs25:S((cell(r,4)||{}).v),ytd:S((cell(r,5)||{}).v),vsytd:S((cell(r,6)||{}).v),rang:S((g||{}).v),q:g?quint(g.s):null});
+    }
+    if(arr.length){ restos[sh.name]=arr; order.push(sh.name); }
+  }
+  if(!monthKey) throw new Error('mois introuvable dans le fichier (colonne B des onglets) — est-ce bien un fichier Performance Restaurants ?');
+  if(!order.length) throw new Error('aucun onglet restaurant lu');
+  // 2026 : clés historiques (JUIN…) ; toute autre année : clé « JUIN 2027 » et rang décalé → l'historique n'est jamais écrasé
+  const m0=PERF_MONTHS.indexOf(monthKey), other=year&&year!==2026;
+  return { key:other?`${monthKey} ${year}`:monthKey, label:monthKey.charAt(0)+monthKey.slice(1).toLowerCase()+(year?' '+year:''), idx:other?12*(year-2026)+m0:m0, restos, order, lexique:lexique.length?lexique:null };
+}
+
+// ── Prévision CA (calendrier) : CA N-1 / N-2 visibles, saisie en € ou en %, ventilation d'un objectif mensuel, export Excel ──
+const PV_TAB = 'prevca';
+let PREVJ = null, PREVT = null, ALIMM = null;              // prévisions enregistrées (CA alim / CA total) et CA alim réel : { restaurant: { 'AAAA-MM-JJ': euros } }
+const PV = { ym: null, resto: null, vals: {}, objU: 'e', w: '7030', coef: 1.01 };
+const PV_MIN = '2026-11', PV_YMAX = new Date().getFullYear() + 6, PV_MAX = PV_YMAX + '-12';   // saisie à partir de novembre 2026 et jusqu'à 6 ans après l'année en cours (glisse avec le temps)
+const PV_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const _pvT = s => Date.parse(s + 'T00:00:00Z');
+const pvShift = (iso, days) => new Date(_pvT(iso) + days * 86400000).toISOString().slice(0, 10);
+const pvEur = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
+const pvPct = n => n == null ? '—' : (n >= 0 ? '+' : '−') + Math.abs(n * 100).toFixed(1).replace('.', ',') + ' %';
+function pvDays(ym) { const [y, m] = ym.split('-').map(Number), n = new Date(Date.UTC(y, m, 0)).getUTCDate(); return [...Array(n)].map((_, i) => `${y}-${pad2(m)}-${pad2(i + 1)}`); }
+function pvCa(r, iso) {                                     // CA alimentaire réel saisi ; restaurant ouvert plus tard : rien avant son ouverture
+  if (OPEN_DATES[r] && iso < OPEN_DATES[r]) return null;
+  const v = ((ALIMM || {})[r] || {})[iso]; return (typeof v === 'number' && v > 0) ? v : null;
+}
+const pvRef = (r, iso) => pvCa(r, iso) ?? (((PREVJ || {})[r] || {})[iso] ?? null);   // réel, sinon la prévision enregistrée (années lointaines)
+const pvN1 = (r, iso) => pvRef(r, pvShift(iso, -364));      // jour équivalent N-1 (même jour de la semaine)
+const pvN2 = (r, iso) => pvRef(r, pvShift(iso, -728));      // jour équivalent N-2
+// Jours fériés français (fixes + Pâques, Ascension, Pentecôte)
+const _feriesCache = {};
+function pvFeries(y) {
+  if (_feriesCache[y]) return _feriesCache[y];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1, easter = Date.UTC(y, mo - 1, da);
+  const at = (t, n) => [new Date(t).toISOString().slice(0, 10), n], fx = (mm, dd, n) => [`${y}-${pad2(mm)}-${pad2(dd)}`, n];
+  return _feriesCache[y] = Object.fromEntries([fx(1, 1, "Jour de l'an"), at(easter + 86400000, 'Lundi de Pâques'), fx(5, 1, 'Fête du travail'), fx(5, 8, 'Victoire 1945'), at(easter + 39 * 86400000, 'Ascension'),
+    at(easter + 50 * 86400000, 'Lundi de Pentecôte'), fx(7, 14, 'Fête nationale'), fx(8, 15, 'Assomption'), fx(11, 1, 'Toussaint'), fx(11, 11, 'Armistice'), fx(12, 25, 'Noël')]);
+}
+const pvFerie = iso => pvFeries(+iso.slice(0, 4))[iso] || null;
+// Arrondit à un pas (1, 10, 50, 100 €) en gardant le total visé : l'écart est reparti par pas sur les plus gros jours
+function pvRoundTo(vals, target, step) {
+  const r = vals.map(v => Math.round(v / step) * step);
+  let diff = Math.round((target - r.reduce((a, b) => a + b, 0)) / step) * step;
+  const order = vals.map((v, i) => i).sort((i, j) => vals[j] - vals[i]);
+  for (let n = 0; diff !== 0 && n < 5000; n++) { const i = order[n % order.length], d = diff > 0 ? step : -step; r[i] += d; diff -= d; }
+  return r;
+}
+function pvRefLine(lbl, r, iso, k, v) {                     // valeur du jour équivalent + sa date (même jour de la semaine) et son statut férié
+  const ri = pvShift(iso, k), dow = PV_JOURS[(new Date(_pvT(ri)).getUTCDay() + 6) % 7], f = pvFerie(ri), isPrev = pvCa(r, ri) == null && v != null;
+  return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · 🎉 ${f}` : ''}</small></div>`;
+}
+function pvInit() {
+  const now = new Date();
+  if (!PV.ym) PV.ym = [`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`, PV_MIN].sort().pop();
+  if (PV.ym < PV_MIN) PV.ym = PV_MIN; if (PV.ym > PV_MAX) PV.ym = PV_MAX;
+  if (PV.resto !== curResto || PV.loadedYm !== PV.ym) {     // nouveau restaurant / nouveau mois : on repart des valeurs enregistrées
+    PV.resto = curResto; PV.loadedYm = PV.ym; PV.vals = {};
+    for (const iso of pvDays(PV.ym)) { const v = ((PREVJ || {})[curResto] || {})[iso], t = ((PREVT || {})[curResto] || {})[iso]; if (v != null) { PV.vals[iso] = v; if (t && v) PV.coef = Math.round(t / v * 10000) / 10000; } }
+  }
+}
+function renderPrevCa() {
+  const p = document.getElementById('panel');
+  if (!pwdHash()) {
+    p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div>
+      <div class="entry-banner err" style="display:block">🔒 Pour saisir une prévision, reconnecte-toi avec le mot de passe de la saisie.</div>
+      <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
+  }
+  if (!ALIMM || !PREVJ) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div><div class="hint">⏳ Chargement du CA des années précédentes…</div>`; loadTx(); return; }
+  pvInit();
+  const [y, m] = PV.ym.split('-').map(Number), days = pvDays(PV.ym), name = RESTOS.find(r => r[0] === curResto)[1];
+  const mois = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase()), minM = y === 2026 ? 11 : 1, maxM = 12;
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, today = new Date().toISOString().slice(0, 10);
+  let cells = PV_JOURS.map((j, i) => `<div class="pv-h ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pv-empty"></div>'.repeat(lead);
+  for (const iso of days) {
+    const n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), real = pvCa(curResto, iso), v = PV.vals[iso];
+    const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, fer = pvFerie(iso);
+    cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}"><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
+      ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}
+      ${real != null ? `<div class="pv-real">Réel <b>${pvEur(real)}</b></div>` : ''}
+      <div class="pv-in"><input type="number" step="any" id="pvi_${iso}" value="${v != null ? Math.round(v * 100) / 100 : ''}" oninput="pvDayInput('${iso}')" placeholder="prévision"><select id="pvu_${iso}" onchange="pvUnit('${iso}')"><option value="e">€</option><option value="p">%</option></select></div>
+      <div class="pv-delta" id="pvd_${iso}"></div><div class="pv-tot" id="pvt_${iso}"></div></div>`;
+  }
+  p.innerHTML = `
+    <div class="panel-head"><div><div class="panel-title">Prévision CA alimentaire · ${escH(name)}</div>
+      <div class="last-saisie">Saisis le CA NET ALIMENTAIRE prévu : le CA net total s'en déduit (alimentaire × coefficient, +1 % en général). Chaque jour affiche le CA alimentaire du jour équivalent N-1 et N-2 (même jour de la semaine).</div></div>
+      <div class="period"><button class="step" onclick="pvMonth(-1)">◀</button>
+        <select id="pvM" onchange="pvPick()">${mois.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''} ${i + 1 < minM || i + 1 > maxM ? 'disabled' : ''}>${n}</option>`).join('')}</select>
+        <select id="pvY" onchange="pvPick()">${Array.from({ length: PV_YMAX - 2025 }, (_, i) => 2026 + i).map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <button class="step next" onclick="pvMonth(1)">Mois suivant ▶</button></div></div>
+    <div class="pv-recap" id="pvRecap"></div>
+    <div class="pv-obj"><div class="field"><label>Objectif du mois (CA alimentaire)</label><div style="display:flex;gap:6px"><input type="number" step="any" id="pvObj" placeholder="ex. 450000 ou 3"><select id="pvObjU" style="max-width:90px"><option value="e">€</option><option value="p">% vs N-1</option></select></div></div>
+      <div class="field"><label>Ventilation sur les jours selon</label><select id="pvW"><option value="1000">N-1 seul</option><option value="7030" selected>N-1 (70 %) + N-2 (30 %)</option><option value="5050">N-1 et N-2 à parts égales</option></select></div>
+      <div class="field"><label>Arrondi</label><div style="display:flex;gap:6px"><select id="pvRnd"><option value="1">1 €</option><option value="10" selected>10 €</option><option value="50">50 €</option><option value="100">100 €</option></select><button class="step" style="white-space:nowrap" onclick="pvArrondir()">Arrondir les jours saisis</button></div><div class="hint">Appliqué à la ventilation ; le total reste calé</div></div>
+      <div class="field"><label>CA net total = CA alimentaire ×</label><input type="number" step="0.001" id="pvCoef" value="${PV.coef}" oninput="pvCoefChg()"><div class="hint">1,01 = +1 % (habituel)</div></div>
+      <div class="field" style="align-self:end"><button class="btn-save" style="padding:10px 18px" onclick="pvVentiler()">Ventiler sur les jours</button></div></div>
+    <div class="pv-cal">${cells}</div>
+    <div class="foot"><button class="btn-save" id="pvSave" onclick="pvSave()">Enregistrer la prévision</button>
+      <select id="pvBase" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="alim">Export : CA alimentaire</option><option value="total">Export : CA net total</option></select>
+      <select id="pvScope" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="year">ce restaurant · toute l'année</option><option value="month">ce restaurant · ce mois</option><option value="all">tous les restaurants · l'année</option></select>
+      <button class="step" onclick="pvExport()">⬇ Excel</button><span class="save-msg" id="pvMsg"></span></div>
+    <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne sont enregistrées qu'au clic sur « Enregistrer ».</div>`;
+  for (const iso of days) pvRefresh(iso);
+  pvRecap();
+}
+function pvClamp(ym) { return ym < PV_MIN ? PV_MIN : (ym > PV_MAX ? PV_MAX : ym); }
+function pvPick() { PV.ym = pvClamp(document.getElementById('pvY').value + '-' + pad2(document.getElementById('pvM').value)); renderPrevCa(); }
+function pvMonth(d) { const [y, m] = PV.ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + d, 1)); PV.ym = pvClamp(`${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}`); renderPrevCa(); }
+function pvCoefChg() { const c = +String(document.getElementById('pvCoef').value).replace(',', '.'); if (c >= 0.9 && c <= 1.2) { PV.coef = c; pvDays(PV.ym).forEach(pvRefresh); pvRecap(); } }
+function pvBase(iso) { return pvN1(curResto, iso) ?? pvN2(curResto, iso); }
+function pvDayInput(iso) {
+  const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso).value, t = String(el.value).replace(',', '.').trim();
+  if (t === '' || isNaN(+t)) { delete PV.vals[iso]; }
+  else if (u === 'e') PV.vals[iso] = +t;
+  else { const b = pvBase(iso); if (b == null) delete PV.vals[iso]; else PV.vals[iso] = Math.round(b * (1 + (+t) / 100) * 100) / 100; }
+  pvRefresh(iso); pvRecap();
+}
+function pvUnit(iso) {                                      // changer d'unité convertit la valeur affichée
+  const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso).value, v = PV.vals[iso], b = pvBase(iso);
+  if (v != null) el.value = u === 'e' ? Math.round(v * 100) / 100 : (b ? Math.round((v / b - 1) * 1000) / 10 : '');
+  pvRefresh(iso);
+}
+function pvRefresh(iso) {
+  const d = document.getElementById('pvd_' + iso); if (!d) return;
+  const v = PV.vals[iso], n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), u = document.getElementById('pvu_' + iso).value, el = document.getElementById('pvi_' + iso);
+  const tt = document.getElementById('pvt_' + iso); if (tt) tt.textContent = v != null ? 'Total ' + pvEur(v * PV.coef) : '';
+  if (u === 'p' && el.value !== '' && pvBase(iso) == null) { d.textContent = 'pas de N-1 / N-2'; return; }
+  d.innerHTML = v == null ? '' : (n1 ? `<b>${pvPct(v / n1 - 1)}</b> vs N-1` : '') + (n1 && n2 ? ' · ' : '') + (n2 ? `${pvPct(v / n2 - 1)} vs N-2` : '');
+  if (v != null && u === 'e' && !n1 && !n2) d.textContent = '';
+}
+function pvSums() {
+  const days = pvDays(PV.ym); let prev = 0, prevOnN1 = 0, n1 = 0, n2 = 0, prevOnN2 = 0, real = 0, nPrev = 0;
+  for (const iso of days) {
+    const v = PV.vals[iso], a = pvN1(curResto, iso), b = pvN2(curResto, iso), r = pvCa(curResto, iso);
+    if (v != null) { prev += v; nPrev++; if (a != null) { prevOnN1 += v; n1 += a; } if (b != null) { prevOnN2 += v; n2 += b; } }
+    if (r != null && v != null) real += r;
+  }
+  return { prev, nPrev, n1, prevOnN1, n2, prevOnN2, real, nDays: days.length,
+           n1All: days.reduce((s, i) => s + (pvN1(curResto, i) || 0), 0), n2All: days.reduce((s, i) => s + (pvN2(curResto, i) || 0), 0) };
+}
+function pvRecap() {
+  const s = pvSums(), box = document.getElementById('pvRecap'); if (!box) return;
+  const k = (l, v, sub) => `<div class="pv-kpi"><span>${l}</span><b>${v}</b><i>${sub || ''}</i></div>`;
+  box.innerHTML = k('N-1 (jours équivalents)', pvEur(s.n1All), 'mois complet') + k('N-2 (jours équivalents)', pvEur(s.n2All), 'mois complet')
+    + k('Prévision saisie', pvEur(s.prev), `${s.nPrev} jour${s.nPrev > 1 ? 's' : ''} sur ${s.nDays}`)
+    + k('Prévision CA net total', pvEur(s.prev * PV.coef), `× ${String(PV.coef).replace('.', ',')}`)
+    + k('vs N-1', s.n1 ? pvPct(s.prevOnN1 / s.n1 - 1) : '—', 'sur les jours saisis') + k('vs N-2', s.n2 ? pvPct(s.prevOnN2 / s.n2 - 1) : '—', 'sur les jours saisis');
+}
+function pvVentiler() {
+  const days = pvDays(PV.ym), t = String(document.getElementById('pvObj').value).replace(',', '.').trim(), u = document.getElementById('pvObjU').value, w = document.getElementById('pvW').value;
+  if (t === '' || isNaN(+t)) { pvMsg('err', 'Saisis un objectif (en € ou en %).'); return; }
+  const n1 = days.map(i => pvN1(curResto, i)), n2 = days.map(i => pvN2(curResto, i)), S1 = n1.reduce((s, v) => s + (v || 0), 0), S2 = n2.reduce((s, v) => s + (v || 0), 0);
+  if (!S1 && !S2) { pvMsg('err', 'Aucun CA N-1 / N-2 pour ce mois : ventilation impossible.'); return; }
+  let obj = +t;
+  if (u === 'p') { const base = S1 || S2; obj = base * (1 + (+t) / 100); }
+  const a1 = { '1000': 1, '7030': 0.7, '5050': 0.5 }[w], a2 = 1 - a1;
+  let wt = days.map((_, i) => {
+    const s1 = n1[i] != null && S1 ? n1[i] / S1 : null, s2 = n2[i] != null && S2 ? n2[i] / S2 : null;
+    if (s1 != null && s2 != null) return a1 * s1 + a2 * s2;
+    return s1 != null ? s1 : s2;                            // une seule année disponible ce jour-là
+  });
+  const known = wt.filter(x => x != null), avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1 / days.length;
+  wt = wt.map(x => x == null ? avg : x);
+  const tot = wt.reduce((a, b) => a + b, 0);
+  if (Object.keys(PV.vals).length && !confirm('Remplacer les prévisions déjà saisies sur ce mois par la ventilation ?')) return;
+  const step = +document.getElementById('pvRnd').value || 1, target = Math.round(obj / step) * step;
+  const out = pvRoundTo(wt.map(x => obj * x / tot), target, step);                                                       // arrondi au pas choisi, total calé
+  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const el = document.getElementById('pvi_' + iso), un = document.getElementById('pvu_' + iso); if (el) { un.value = 'e'; el.value = out[i]; } pvRefresh(iso); });
+  pvRecap(); pvMsg('ok', `✓ ${pvEur(target)} ventilés sur ${days.length} jours (arrondi à ${step} €${Math.abs(target - obj) > 0.5 ? ' ; objectif ' + pvEur(obj) + ' arrondi à ' + pvEur(target) : ''}) — pense à enregistrer.`);
+}
+function pvArrondir() {
+  const step = +document.getElementById('pvRnd').value || 1, days = pvDays(PV.ym).filter(i => PV.vals[i] != null);
+  if (!days.length) { pvMsg('err', 'Aucune prévision à arrondir.'); return; }
+  const raw = days.map(i => PV.vals[i]), target = Math.round(raw.reduce((a, b) => a + b, 0) / step) * step, out = pvRoundTo(raw, target, step);
+  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const el = document.getElementById('pvi_' + iso), un = document.getElementById('pvu_' + iso); if (el) { un.value = 'e'; el.value = out[i]; } pvRefresh(iso); });
+  pvRecap(); pvMsg('ok', `✓ Prévisions arrondies à ${step} € (total ${pvEur(target)}).`);
+}
+function pvMsg(c, t) { const m = document.getElementById('pvMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
+async function pvSave() {
+  const btn = document.getElementById('pvSave'), days = pvDays(PV.ym), rows = [];
+  for (const iso of days) {
+    const v = PV.vals[iso], old = ((PREVJ || {})[curResto] || {})[iso];
+    const oldT = ((PREVT || {})[curResto] || {})[iso], newT = v != null ? Math.round(v * PV.coef * 100) / 100 : null;
+    if (v != null) { if (old !== v || oldT !== newT) rows.push({ restaurant: curResto, periode: iso, data: { ca_alim_prev: Math.round(v * 100) / 100, ca_total_prev: newT } }); }
+    else if (old != null) rows.push({ restaurant: curResto, periode: iso, data: { ca_alim_prev: '', ca_total_prev: '' } });
+  }
+  if (!rows.length) { pvMsg('err', 'Rien à enregistrer (aucune modification).'); return; }
+  btn.disabled = true; pvMsg('', 'Enregistrement…');
+  const j = await postJson({ action: 'bulk_save', frequence: 'prevjour', pwd: pwdHash(), rows });
+  btn.disabled = false;
+  if (!j.ok) { pvMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé')); return; }
+  PREVJ[curResto] = PREVJ[curResto] || {}; PREVT[curResto] = PREVT[curResto] || {};
+  for (const iso of days) { if (PV.vals[iso] != null) { PREVJ[curResto][iso] = PV.vals[iso]; PREVT[curResto][iso] = Math.round(PV.vals[iso] * PV.coef * 100) / 100; } else { delete PREVJ[curResto][iso]; delete PREVT[curResto][iso]; } }
+  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour).`);
+}
+
+// ── Export Excel : modèle « PREV ET BUDGET » (mois côte à côte, jours alignés par jour de la semaine) ──
+const _col = n => { let s = ''; n++; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; };
+const _xe = s => String(s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const XS = {                                                // styles nommés ; un objet { b, color, fill, nf, al } est aussi accepté
+  head: { b: 1, color: 'FFFFFFFF', fill: 'FF1F2937' }, gris: { b: 1, fill: 'FFD9D9D9', al: 'center' }, jaune: { fill: 'FFFFF2CC' }, jauneb: { fill: 'FFFFF2CC', b: 1 },
+  eur: { nf: '"€ "#,##0' }, eurb: { nf: '"€ "#,##0', b: 1 }, pct: { nf: '0.00%' }, pctb: { nf: '0.00%', b: 1 },
+  pos: { nf: '0.00%', fill: 'FFC6EFCE', color: 'FF006100' }, neg: { nf: '0.00%', fill: 'FFFFC7CE', color: 'FF9C0006' }, total: { b: 1, fill: 'FFD9D9D9' }, we: { fill: 'FFEFF6FF' },
+};
+function xlsxBuild(sheets) {
+  const fonts = ['<font><sz val="10"/><name val="Avenir Next"/></font>'], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], nfs = [], xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'], seen = {};
+  const sid = st => {
+    if (!st) return 0; const o = typeof st === 'string' ? XS[st] : st, k = JSON.stringify(o); if (seen[k] != null) return seen[k];
+    let fi = 0, fl = 0, nf = 0;
+    if (o.b || o.color) { fonts.push(`<font>${o.b ? '<b/>' : ''}<sz val="10"/>${o.color ? `<color rgb="${o.color}"/>` : ''}<name val="Avenir Next"/></font>`); fi = fonts.length - 1; }
+    if (o.fill) { fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${o.fill}"/><bgColor indexed="64"/></patternFill></fill>`); fl = fills.length - 1; }
+    if (o.nf) { let i = nfs.indexOf(o.nf); if (i < 0) { nfs.push(o.nf); i = nfs.length - 1; } nf = 164 + i; }
+    xfs.push(`<xf numFmtId="${nf}" fontId="${fi}" fillId="${fl}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"${o.al ? ` applyAlignment="1"><alignment horizontal="${o.al}"/></xf>` : '/>'}`);
+    return seen[k] = xfs.length - 1;
+  };
+  const sheetXml = sh => {
+    let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" showGridLines="0">'
+      + (sh.freeze ? `<pane xSplit="${sh.freeze[0]}" ySplit="${sh.freeze[1]}" topLeftCell="${_col(sh.freeze[0])}${sh.freeze[1] + 1}" activePane="bottomRight" state="frozen"/>` : '') + '</sheetView></sheetViews>'
+      + '<cols>' + sh.widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols><sheetData>';
+    sh.rows.forEach((r, ri) => {
+      if (!r) return; x += `<row r="${ri + 1}">`;
+      r.forEach((c, ci) => {
+        if (c == null) return;
+        const o = (typeof c === 'object') ? c : { v: c }, ref = _col(ci) + (ri + 1), st = sid(o.s || (sh.header && ri === 0 ? 'head' : null));
+        if (o.v == null || o.v === '') x += `<c r="${ref}" s="${st}"/>`;
+        else x += typeof o.v === 'number' ? `<c r="${ref}" s="${st}"><v>${o.v}</v></c>` : `<c r="${ref}" s="${st}" t="inlineStr"><is><t>${_xe(o.v)}</t></is></c>`;
+      });
+      x += '</row>';
+    });
+    return x + '</sheetData></worksheet>';
+  };
+  const sx = sheets.map(sheetXml);                          // les styles se remplissent en construisant les feuilles
+  return (async () => {
+    await loadJSZip();
+    const z = new JSZip();
+    z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>');
+    z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+    z.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+      + sheets.map((s, i) => `<sheet name="${_xe(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>');
+    z.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
+      + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+    z.file('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + (nfs.length ? `<numFmts count="${nfs.length}">${nfs.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${_xe(f)}"/>`).join('')}</numFmts>` : '')
+      + `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
+      + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs></styleSheet>`);
+    sx.forEach((x, i) => z.file(`xl/worksheets/sheet${i + 1}.xml`, x));
+    return z.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  })();
+}
+const PV_MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const PV_JOURS_LONG = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+// Une feuille au modèle PREV ET BUDGET : une colonne « date / CA / % vs N-1 » par mois, jours alignés sur le jour de la semaine
+function pvModelSheet(r, Y, months, base, prevOf, prevT) {
+  const nm = RESTOS.find(x => x[0] === r)[1], ROW0 = 3, NR = 37, rows = [], put = (ri, ci, c) => { (rows[ri] = rows[ri] || [])[ci] = c; };
+  const ref = (iso) => base === 'alim' ? pvN1(r, iso) : pvTotRef(r, iso);
+  put(0, 0, { v: `PREV ET BUDGET ${Y} - ${nm.toUpperCase()} - ${base === 'alim' ? 'CA NET ALIMENTAIRE' : 'CA NET TOTAL'} (jours équivalents : même jour de la semaine ${Y - 1})`, s: { b: 1 } });
+  for (let i = 0; i < NR; i++) put(ROW0 - 1 + i, 0, { v: PV_JOURS_LONG[i % 7], s: 'jauneb' });
+  const tot = { n1: 0, pv: 0 };
+  months.forEach((m, k) => {
+    const c0 = 1 + 3 * k, days = pvDays(`${Y}-${pad2(m)}`), first = (new Date(Date.UTC(Y, m - 1, 1)).getUTCDay() + 6) % 7;
+    put(1, c0, { v: PV_MOIS_FR[m - 1].toUpperCase(), s: 'gris' }); put(1, c0 + 1, { v: 'CA', s: 'gris' }); put(1, c0 + 2, { v: '% vs N-1', s: 'gris' });
+    for (let i = 0; i < NR; i++) put(ROW0 - 1 + i, c0, { v: '', s: 'jaune' });
+    let sN1 = 0, sPv = 0;
+    days.forEach((iso, i) => {
+      const ri = ROW0 - 1 + first + i, v = prevOf(r, iso), dow = (first + i) % 7;
+      put(ri, c0, { v: `${i + 1} ${PV_MOIS_FR[m - 1]}`, s: pvFerie(iso) ? { fill: 'FFFFF2CC', b: 1, color: 'FFB91C1C' } : 'jaune' });
+      if (v == null) return;
+      const val = base === 'alim' ? v : prevT(r, iso, v), a = ref(iso);
+      put(ri, c0 + 1, { v: Math.round(val), s: 'eur' });
+      if (a) { const p = val / a - 1; put(ri, c0 + 2, { v: p, s: p >= 0 ? 'pos' : 'neg' }); sN1 += a; sPv += val; }
+    });
+    const g1 = ROW0 - 1 + NR + 2;                           // lignes GLOBAL
+    put(g1, c0, { v: String(Y - 1), s: 'total' }); put(g1, c0 + 1, { v: sN1 ? Math.round(sN1) : '', s: { b: 1, fill: 'FFD9D9D9', nf: '"€ "#,##0' } }); put(g1, c0 + 2, { v: '', s: 'total' });
+    put(g1 + 1, c0, { v: String(Y), s: 'total' }); put(g1 + 1, c0 + 1, { v: sPv ? Math.round(sPv) : '', s: { b: 1, fill: 'FFD9D9D9', nf: '"€ "#,##0' } });
+    put(g1 + 1, c0 + 2, sN1 ? { v: sPv / sN1 - 1, s: { b: 1, nf: '0.00%', fill: sPv >= sN1 ? 'FFC6EFCE' : 'FFFFC7CE', color: sPv >= sN1 ? 'FF006100' : 'FF9C0006' } } : { v: '', s: 'total' });
+    tot.n1 += sN1; tot.pv += sPv;
+  });
+  const g1 = ROW0 - 1 + NR + 2; put(g1, 0, { v: 'GLOBAL', s: 'total' }); put(g1 + 1, 0, { v: '', s: 'total' });
+  if (months.length > 1) {                                  // total de l'année
+    const c0 = 1 + 3 * months.length;
+    put(1, c0, { v: 'ANNÉE', s: 'gris' }); put(1, c0 + 1, { v: 'CA', s: 'gris' }); put(1, c0 + 2, { v: '% vs N-1', s: 'gris' });
+    put(g1, c0, { v: String(Y - 1), s: 'total' }); put(g1, c0 + 1, { v: tot.n1 ? Math.round(tot.n1) : '', s: { b: 1, fill: 'FFD9D9D9', nf: '"€ "#,##0' } }); put(g1, c0 + 2, { v: '', s: 'total' });
+    put(g1 + 1, c0, { v: String(Y), s: 'total' }); put(g1 + 1, c0 + 1, { v: tot.pv ? Math.round(tot.pv) : '', s: { b: 1, fill: 'FFD9D9D9', nf: '"€ "#,##0' } });
+    put(g1 + 1, c0 + 2, tot.n1 ? { v: tot.pv / tot.n1 - 1, s: { b: 1, nf: '0.00%', fill: tot.pv >= tot.n1 ? 'FFC6EFCE' : 'FFFFC7CE', color: tot.pv >= tot.n1 ? 'FF006100' : 'FF9C0006' } } : { v: '', s: 'total' });
+  }
+  const nb = months.length + (months.length > 1 ? 1 : 0);
+  return { name: `PREV ${Y} ${base === 'alim' ? 'ALIM' : 'TOTAL'} - ${nm}`.slice(0, 31), rows, widths: [11, ...Array.from({ length: nb }, () => [15, 11, 10]).flat()], freeze: [1, 2], hasData: tot.pv > 0 };
+}
+const pvTotRef = (r, iso) => { const ri = pvShift(iso, -364), v = ((CAM || {})[r] || {})[ri]; if (OPEN_DATES[r] && ri < OPEN_DATES[r]) return null; return (typeof v === 'number' && v > 0) ? v : (((PREVT || {})[r] || {})[ri] ?? null); };
+async function pvExport() {
+  const scope = document.getElementById('pvScope').value, base = document.getElementById('pvBase').value, [Y, M] = PV.ym.split('-').map(Number);
+  const restos = scope === 'all' ? RESTOS.map(r => r[0]) : [curResto], months = scope === 'month' ? [M] : [...Array(12)].map((_, i) => i + 1);
+  const prevOf = (r, iso) => (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym) ? PV.vals[iso] : ((PREVJ || {})[r] || {})[iso]);   // inclut la saisie en cours à l'écran
+  const prevT = (r, iso, v) => (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) ? v * PV.coef : (((PREVT || {})[r] || {})[iso] ?? v * 1.01);
+  const sheets = restos.map(r => pvModelSheet(r, Y, months, base, prevOf, prevT)).filter(sh => sh.hasData || restos.length === 1);
+  if (!sheets.length || !sheets.some(sh => sh.hasData)) { pvMsg('err', 'Aucune prévision à exporter.'); return; }
+  // feuille de détail jour (données brutes)
+  const det = [['Restaurant', 'Date', 'Jour', 'Jour équivalent N-1', 'CA alim N-1', 'Jour équivalent N-2', 'CA alim N-2', 'Prévision CA alim', 'Prévision CA net total', 'Écart vs N-1', 'Écart vs N-2', 'CA alim réel', 'Réel vs prévision', 'Week-end / férié']];
+  for (const r of restos) for (const mm of months) for (const iso of pvDays(`${Y}-${pad2(mm)}`)) {
+    const v = prevOf(r, iso); if (v == null) continue;
+    const a = pvN1(r, iso), b = pvN2(r, iso), real = pvCa(r, iso), dow = PV_JOURS[(new Date(_pvT(iso)).getUTCDay() + 6) % 7];
+    det.push([RESTOS.find(x => x[0] === r)[1], iso.slice(8) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4), dow, pvShift(iso, -364), { v: a, s: 'eur' }, pvShift(iso, -728), { v: b, s: 'eur' }, { v, s: 'eur' }, { v: Math.round(prevT(r, iso, v) * 100) / 100, s: 'eur' },
+      a ? { v: v / a - 1, s: 'pct' } : '', b ? { v: v / b - 1, s: 'pct' } : '', { v: real, s: 'eur' }, real ? { v: real / v - 1, s: 'pct' } : '', pvFerie(iso) || (dow === 'Sam' || dow === 'Dim' ? 'Week-end' : '')]);
+  }
+  pvMsg('', 'Génération du fichier Excel…');
+  try {
+    const blob = await xlsxBuild([...sheets, { name: 'Détail jour', rows: det, widths: [20, 12, 7, 20, 14, 20, 14, 18, 20, 13, 13, 14, 16, 18], header: true, freeze: [0, 1] }]);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `PREV_${Y}_${base === 'alim' ? 'CA_alim' : 'CA_total'}_${scope === 'all' ? 'tous_restaurants' : curResto.replace(/\s+/g, '_')}${scope === 'month' ? '_' + PV.ym : ''}.xlsx`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    pvMsg('ok', '✓ Fichier Excel généré (modèle PREV ET BUDGET).');
+  } catch (e) { pvMsg('err', 'Export impossible : ' + e.message); }
+}
+
+// ── Démarrage ──
+document.getElementById('pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') checkPwd(); });
+if(sessionStorage.getItem('mj_saisie')==='1') showApp();
+</script>
+</body>
+</html>
