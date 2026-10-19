@@ -3551,7 +3551,7 @@ function renderMain() {
       const hasPrevForKpi = !!DASHBOARD_DATA[YEAR_CUR]?.[(kpi.prevKey || kpi.id+'_prev')];
       const canClick = prevMode
         ? hasPrevForKpi
-        : (kpi.monthly || kpi.id === 'turnover_annual' || kpi.id === 'turnover_3m' || kpi.hasMonthly || kpi.id === 'rgrv_total');
+        : (kpi.monthly || kpi.id === 'turnover_annual' || kpi.id === 'turnover_3m' || kpi.hasMonthly || kpi.id === 'rgrv_total' || kpi.id === 'analyses_merieux_annual' || kpi.id === 'audit_merieux_annual');
       const onclick = canClick ? `onclick="setKPI('${kpi.id}')"` : '';
       const cursor  = canClick ? '' : 'style="cursor:default"';
 
@@ -4235,6 +4235,13 @@ function populateDetail() {
   // Réinitialiser la visibilité du graphique
   const chartWrapEl = document.getElementById('chartWrap');
   if (chartWrapEl) chartWrapEl.style.display = '';
+
+  // ── Analyses / audits : historique des visites ──
+  if (currentKPI === 'analyses_merieux_annual' || currentKPI === 'audit_merieux_annual') {
+    body.innerHTML = qhHistoryHtml(currentKPI);
+    if (chartWrapEl) chartWrapEl.style.display = 'none';
+    return;
+  }
 
   // ── CAS SPÉCIAL : RGRV → tableau des 5 sous-indicateurs ────────────
   if (currentKPI === 'rgrv_total') {
@@ -7398,6 +7405,140 @@ function exportPeriods() {
 }
 </script>
 
+<!-- ════════ HISTORIQUE ANALYSES & AUDITS (détail des indicateurs Qualité) ════════ -->
+<style>
+.qh-sec { margin:2px 0 14px; }
+.qh-lbl { font-size:.66rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.qh-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.qh-chips button { padding:5px 12px; border-radius:9px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.74rem; font-weight:700; cursor:pointer; }
+.qh-chips button.on { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.qh-kpis { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.qh-kpi { flex:1 1 110px; background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:9px 12px; }
+.qh-kpi .l { font-size:.62rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
+.qh-kpi .v { font-size:1.25rem; font-weight:800; color:var(--text); margin-top:2px; }
+.qh-kpi .s { font-size:.68rem; color:var(--muted); }
+.qh-chart { background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:8px 6px 4px; margin-bottom:14px; }
+.qh-chart svg { width:100%; height:auto; display:block; }
+.qh-chart text { fill:var(--muted); font-size:9.5px; font-family:inherit; }
+.qh-scroll { max-height:440px; overflow:auto; border:1.5px solid var(--border); border-radius:12px; }
+.qh-tbl { width:100%; border-collapse:collapse; font-size:.78rem; }
+.qh-tbl th { position:sticky; top:0; background:var(--card2, var(--card)); color:var(--muted); font-size:.64rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; text-align:left; padding:8px 10px; border-bottom:1.5px solid var(--border); white-space:nowrap; }
+.qh-tbl td { padding:7px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
+.qh-tbl td.c, .qh-tbl th.c { text-align:center; }
+.qh-tbl td.com { white-space:normal; color:var(--muted); font-size:.72rem; min-width:140px; }
+.qh-tbl tr:last-child td { border-bottom:0; }
+.qh-dot { display:inline-block; width:10px; height:10px; border-radius:50%; vertical-align:middle; }
+.qh-g { background:#22a447; } .qh-o { background:#f59e0b; } .qh-r { background:#dc2626; }
+.qh-pos { color:#16a34a; font-weight:700; } .qh-neg { color:#dc2626; font-weight:700; }
+.qh-note { font-size:.68rem; color:var(--muted); margin-top:8px; line-height:1.5; }
+.qh-empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:.85rem; }
+</style>
+<script>
+// ═════════════════════════════════════════════════════════════════
+//  HISTORIQUE des analyses (Silliker / Mérieux) et des audits Mérieux
+//  Une ligne par analyse ou par audit (onglet Ponctuel du Sheet), toutes années confondues,
+//  avec l'évolution par rapport à la visite précédente du même restaurant.
+// ═════════════════════════════════════════════════════════════════
+let qhYear = 'all';
+const QH_OBJ = 0.97;
+const QH_MS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+const qhE = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const qhNum = x => { if (x == null || x === '') return null; const n = +x; return isFinite(n) ? n : null; };
+const qhPct = (v, d = 1) => v == null ? '—' : (Math.min(v, 1) * 100).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '%';
+const qhFr = s => s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
+const qhSt = v => v >= QH_OBJ - 1e-9 ? 'g' : (v >= 0.9 ? 'o' : 'r');
+const qhCol = { g: '#22a447', o: '#f59e0b', r: '#dc2626' };
+function qhSetYear(y) { qhYear = y; if (typeof populateDetail === 'function') populateDetail(); }
+
+function qhRows(kpiId) {
+  const isAna = kpiId === 'analyses_merieux_annual', type = isAna ? 'ANALYSE_SILLIKER' : 'AUDIT_MERIEUX';
+  const restos = currentResto === 'FRANCHISE' ? RESTOS : [currentResto];
+  const out = [];
+  for (const x of DASHBOARD_DATA.ponctuel || []) {
+    if (x.type !== type || !restos.includes(x.restaurant) || !/^\d{4}-\d{2}-\d{2}/.test(String(x.periode))) continue;
+    const ok = qhNum(x.analyses_ok), nok = qhNum(x.analyses_nok), sc = qhNum(x.score);
+    let v = sc;
+    if (isAna && ((ok || 0) + (nok || 0)) > 0) v = (ok || 0) / ((ok || 0) + (nok || 0));
+    if (v == null) continue;
+    out.push({ d: String(x.periode).slice(0, 10), r: x.restaurant, v, ok, nok, com: String(x.commentaire || '').trim() });
+  }
+  out.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const last = {};                                              // évolution calculée sur tout l'historique (avant le filtre par année)
+  for (const x of out) { x.evo = last[x.r] != null ? x.v - last[x.r] : null; last[x.r] = x.v; }
+  return out;
+}
+
+// Courbe : un point par visite (restaurant) ou par mois (vue Franchise : Σ OK ÷ Σ analyses, moyenne des scores pour les audits)
+function qhChart(rows, isAna, franchise) {
+  let pts;
+  if (franchise) {
+    const g = {};
+    for (const x of rows) { const k = x.d.slice(0, 7); (g[k] = g[k] || []).push(x); }
+    pts = Object.keys(g).sort().map(k => {
+      const a = g[k], cnt = a.filter(x => (x.ok || 0) + (x.nok || 0) > 0);
+      const v = isAna && cnt.length === a.length ? cnt.reduce((s, x) => s + (x.ok || 0), 0) / cnt.reduce((s, x) => s + (x.ok || 0) + (x.nok || 0), 0) : a.reduce((s, x) => s + x.v, 0) / a.length;
+      return { t: Date.parse(k + '-15T00:00:00Z'), v, n: a.length };
+    });
+  } else pts = rows.map(x => ({ t: Date.parse(x.d + 'T00:00:00Z'), v: x.v, n: 1 }));
+  if (!pts.length) return '';
+  const W = 640, H = 190, pl = 38, pr = 12, pt = 12, pb = 24;
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t, mn = Math.min(...pts.map(p => Math.min(p.v, 1)));
+  const lo = Math.min(0.9, Math.floor((mn - 0.02) * 20) / 20);
+  const X = t => pts.length === 1 || t1 === t0 ? (pl + W - pr) / 2 : pl + (t - t0) / (t1 - t0) * (W - pl - pr);
+  const Y = v => pt + (1 - (Math.min(v, 1) - lo) / (1 - lo)) * (H - pt - pb);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution">`;
+  for (let v = Math.ceil(lo * 20) / 20; v <= 1.0001; v += 0.05) s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="currentColor" stroke-opacity=".1"/><text x="${pl - 5}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${Math.round(v * 100)}%</text>`;
+  s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(QH_OBJ).toFixed(1)}" y2="${Y(QH_OBJ).toFixed(1)}" stroke="#22a447" stroke-width="1.2" stroke-dasharray="5 4"/><text x="${W - pr}" y="${(Y(QH_OBJ) - 3).toFixed(1)}" text-anchor="end" style="fill:#22a447">objectif 97%</text>`;
+  const d0 = new Date(t0), d1 = new Date(t1);
+  let ty = d0.getUTCFullYear(), tm = d0.getUTCMonth(); const ticks = [];
+  while (ty < d1.getUTCFullYear() || (ty === d1.getUTCFullYear() && tm <= d1.getUTCMonth())) { ticks.push([ty, tm]); if (++tm > 11) { tm = 0; ty++; } }
+  const step = Math.max(1, Math.ceil(ticks.length / 9));
+  ticks.forEach(([yy, mm], i) => { if (i % step) return; const x = X(Date.UTC(yy, mm, 1)); if (x < pl - 1 || x > W - pr + 1) return; s += `<text x="${x.toFixed(1)}" y="${H - 7}" text-anchor="middle">${QH_MS[mm]} ${String(yy).slice(2)}</text>`; });
+  if (pts.length > 1) s += `<polyline fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-opacity=".75" points="${pts.map(p => X(p.t).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}"/>`;
+  for (const p of pts) s += `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="3.6" fill="${qhCol[qhSt(p.v)]}" stroke="#fff" stroke-width="1"><title>${qhPct(p.v)}${franchise ? ' · ' + p.n + ' visite' + (p.n > 1 ? 's' : '') : ''}</title></circle>`;
+  return s + '</svg>';
+}
+
+function qhHistoryHtml(kpiId) {
+  const isAna = kpiId === 'analyses_merieux_annual', fr = currentResto === 'FRANCHISE';
+  const restos = fr ? RESTOS : [currentResto], all = qhRows(kpiId);
+  const years = [...new Set(all.map(x => x.d.slice(0, 4)))].sort().reverse();
+  if (qhYear !== 'all' && !years.includes(qhYear)) qhYear = 'all';
+  const rows = all.filter(x => qhYear === 'all' || x.d.startsWith(qhYear));
+  const chips = `<div class="qh-lbl">Période</div><div class="qh-chips" style="margin-bottom:12px"><button class="${qhYear === 'all' ? 'on' : ''}" onclick="qhSetYear('all')">Toutes</button>${years.map(y => `<button class="${qhYear === y ? 'on' : ''}" onclick="qhSetYear('${y}')">${y}</button>`).join('')}</div>`;
+
+  // Moyennes annuelles (Sheet : annuel / calcul des visites)
+  const lines = fr ? [...RESTOS, 'FRANCHISE'] : [currentResto];
+  const ys = [YEAR_P2, YEAR_PREV, YEAR_CUR].filter(y => lines.some(r => DASHBOARD_DATA[String(y)]?.[kpiId]?.[r] != null));   // années sans aucune valeur : masquées
+  const annual = `<div class="qh-lbl">Moyenne annuelle</div><div class="qh-scroll" style="max-height:none;margin-bottom:14px"><table class="qh-tbl"><thead><tr><th>${fr ? 'Restaurant' : ' '}</th>${ys.map(y => `<th class="c">${y}</th>`).join('')}</tr></thead><tbody>`
+    + lines.map(r => `<tr${r === 'FRANCHISE' ? ' style="font-weight:800"' : ''}><td>${r === 'FRANCHISE' ? 'Franchise' : qhE(restoShort(r))}</td>${ys.map(y => { const v = DASHBOARD_DATA[String(y)]?.[kpiId]?.[r]; return `<td class="c">${v == null ? '—' : `<span class="qh-dot qh-${qhSt(v)}" style="margin-right:6px"></span>${qhPct(v)}`}</td>`; }).join('')}</tr>`).join('')
+    + '</tbody></table></div>';
+
+  if (!all.length) return `<div class="qh-sec">${annual}<div class="qh-empty">Aucun${isAna ? 'e analyse' : ' audit'} détaillé${isAna ? 'e' : ''} enregistré${isAna ? 'e' : ''} pour le moment.<br>Les ${isAna ? 'analyses' : 'audits'} saisis dans l'onglet « Ponctuel » de la page de saisie apparaîtront ici.</div></div>`;
+
+  // Synthèse de la période affichée
+  const cnt = rows.filter(x => (x.ok || 0) + (x.nok || 0) > 0);
+  const avg = !rows.length ? null : (isAna && cnt.length === rows.length ? cnt.reduce((s, x) => s + (x.ok || 0), 0) / cnt.reduce((s, x) => s + (x.ok || 0) + (x.nok || 0), 0) : rows.reduce((s, x) => s + x.v, 0) / rows.length);
+  const nNok = rows.filter(x => x.v < QH_OBJ - 1e-9).length, best = rows.length ? Math.max(...rows.map(x => x.v)) : null, worst = rows.length ? Math.min(...rows.map(x => x.v)) : null;
+  const tot = isAna ? { ok: rows.reduce((s, x) => s + (x.ok || 0), 0), nok: rows.reduce((s, x) => s + (x.nok || 0), 0) } : null;
+  const kp = `<div class="qh-kpis">
+    <div class="qh-kpi"><div class="l">${isAna ? 'Analyses' : 'Audits'}</div><div class="v">${rows.length}</div><div class="s">${isAna ? `${tot.ok} OK · ${tot.nok} NOK` : 'sur la période'}</div></div>
+    <div class="qh-kpi"><div class="l">Moyenne</div><div class="v">${qhPct(avg)}</div><div class="s">objectif ${qhPct(QH_OBJ, 0)}</div></div>
+    <div class="qh-kpi"><div class="l">Sous l'objectif</div><div class="v">${nNok}</div><div class="s">sur ${rows.length}</div></div>
+    <div class="qh-kpi"><div class="l">Meilleur · moins bon</div><div class="v" style="font-size:1rem">${qhPct(best)} · ${qhPct(worst)}</div><div class="s">résultats unitaires</div></div></div>`;
+
+  const head = `<th>Date</th>${fr ? '<th>Restaurant</th>' : ''}${isAna ? '<th class="c">OK</th><th class="c">NOK</th><th class="c">Taux</th>' : '<th class="c">Score</th>'}<th class="c">Évolution</th><th class="c">Statut</th>${isAna ? '' : '<th>Commentaire</th>'}`;
+  const body = [...rows].reverse().map(x => {
+    const evo = x.evo == null ? '<span style="color:var(--muted)">—</span>' : `<span class="${Math.abs(x.evo) < 0.0005 ? '' : (x.evo > 0 ? 'qh-pos' : 'qh-neg')}">${Math.abs(x.evo) < 0.0005 ? '=' : (x.evo > 0 ? '+' : '-') + (Math.abs(x.evo) * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' pt'}</span>`;
+    return `<tr><td>${qhFr(x.d)}</td>${fr ? `<td><b>${qhE(restoShort(x.r))}</b></td>` : ''}${isAna ? `<td class="c">${x.ok == null ? '—' : x.ok}</td><td class="c">${x.nok == null ? (x.ok == null ? '—' : 0) : x.nok}</td><td class="c"><b>${qhPct(x.v)}</b></td>` : `<td class="c"><b>${qhPct(x.v)}</b></td>`}<td class="c">${evo}</td><td class="c"><span class="qh-dot qh-${qhSt(x.v)}"></span></td>${isAna ? '' : `<td class="com">${qhE(x.com)}</td>`}</tr>`;
+  }).join('');
+  const ch = qhChart(rows, isAna, fr);
+  return `<div class="qh-sec">${chips}${kp}${ch ? `<div class="qh-lbl">Évolution${fr ? ' (moyenne mensuelle de la franchise)' : ''}</div><div class="qh-chart">${ch}</div>` : ''}${annual}<div class="qh-lbl">Historique ${isAna ? 'des analyses' : 'des audits'} · ${rows.length}</div>
+    <div class="qh-scroll"><table class="qh-tbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="8" class="qh-empty">Aucun résultat sur cette période.</td></tr>`}</tbody></table></div>
+    <div class="qh-note">Une ligne par ${isAna ? 'analyse' : 'audit'} saisi${isAna ? 'e' : ''} (onglet « Ponctuel »). « Évolution » = écart avec le résultat précédent du même restaurant. Vert ≥ 97 %, orange ≥ 90 %, rouge en dessous. Avant la saisie détaillée, seules les moyennes annuelles ci-dessus sont connues.</div></div>`;
+}
+</script>
+
 <!-- ════════ INDICES DE GESTION : extraction imprimable (A4, 2 pages) ════════ -->
 <style>
 #igModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:8vh 14px; overflow-y:auto; }
@@ -7414,6 +7555,15 @@ function exportPeriods() {
 .ig-actions { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; flex-wrap:wrap; }
 .ig-btn { padding:10px 18px; border-radius:10px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.82rem; font-weight:800; cursor:pointer; }
 .ig-btn.pri { background:#a61b1b; border-color:#a61b1b; color:#fff; }
+.ig-check { margin-top:14px; border-radius:12px; padding:10px 12px; font-size:.76rem; line-height:1.5; border:1.5px solid; }
+.ig-check.ok { background:rgba(34,164,71,.1); border-color:rgba(34,164,71,.45); color:var(--text); }
+.ig-check.warn { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.55); color:var(--text); }
+.ig-check .t { font-weight:800; margin-bottom:6px; }
+.ig-ck-list { max-height:230px; overflow:auto; display:flex; flex-direction:column; gap:5px; }
+.ig-ck-r { padding:5px 8px; border-radius:8px; background:var(--card); border:1px solid var(--border); }
+.ig-ck-r b { margin-right:6px; }
+.ig-ck-r span { color:var(--muted); }
+.ig-ck-r i { font-style:normal; font-weight:700; color:var(--text); }
 .ig-note { font-size:.7rem; color:var(--muted); margin-top:12px; line-height:1.5; }
 
 #igOverlay { display:none; position:fixed; inset:0; z-index:10001; background:#4b4f57; overflow:auto; }
@@ -7483,6 +7633,7 @@ table.ig tr.tot td { font-weight:800; }
     <input type="text" id="igEv" maxlength="90" placeholder="ex. Rentrée scolaire">
     <div class="ig-lbl">Campagnes</div>
     <input type="text" id="igCamp" maxlength="90" placeholder="ex. Chicago">
+    <div id="igCheck" class="ig-check ok" style="display:none"></div>
     <div class="ig-actions">
       <button class="ig-btn" onclick="igClose()">Annuler</button>
       <button class="ig-btn pri" onclick="igGo()">Aperçu et impression</button>
@@ -7492,7 +7643,7 @@ table.ig tr.tot td { font-weight:800; }
 </div>
 
 <div id="igOverlay">
-  <div class="ig-bar"><b id="igBarTitle">Indices de gestion</b>
+  <div class="ig-bar"><b id="igBarTitle">Indices de gestion</b><span id="igBarWarn" style="font-size:.74rem;font-weight:700;color:#fbbf24"></span>
     <button onclick="igClose()">Fermer</button><button class="pri" onclick="window.print()">Imprimer / PDF</button></div>
   <div class="ig-pages" id="igPages"></div>
 </div>
@@ -7802,6 +7953,41 @@ function igBuild(wkKey, ev, camp) {
   return [`<div class="ig-page p1">${head}<div class="ig-grid">${p1.join('')}</div>${foot(1)}</div>`, `<div class="ig-page"><div class="ig-grid" style="margin-top:0">${p2.join('')}</div>${foot(2)}</div>`];
 }
 
+// ── contrôle des saisies manquantes (affiché avant l'impression) ──
+function igMissing(wk) {
+  const last = igLast(), open = (DASHBOARD_DATA.meta || {}).open || {};
+  const days = [...Array(7)].map((_, i) => igAdd(wk.mon, i)).filter(d => d <= last);
+  const lab = a => a.length > 3 ? a.length + ' jours' : a.map(d => igJours[igWd(d)].slice(0, 3) + ' ' + d.slice(8)).join(', ');
+  const heb = (DASHBOARD_DATA.hebdo || []).filter(x => x.periode === wk.key);
+  const F = [['oepe', 'OEPE'], ['r2p', 'R2P'], ['oph', 'OPH'], ['hello_mcdo', 'Hello McDo'], ['reseaux', 'Réseaux'], ['uvhe', 'UVHE'], ['tche', 'TCHE']];
+  const out = [];
+  for (const r of RESTOS) {
+    const it = [], ds = days.filter(d => !(open[r] && d < open[r]));
+    const miss = f => ds.filter(d => igDv(r, f, d) == null);
+    const ca = miss('alim'); if (ca.length) it.push(['CA', lab(ca)]);
+    const have = ds.filter(d => igDv(r, 'alim', d) != null);
+    const h = have.filter(d => igDv(r, 'heures', d) == null); if (h.length) it.push(['Heures équipier', lab(h)]);
+    const ht = have.filter(d => igDv(r, 'heures_total', d) == null); if (ht.length) it.push(['Heures totales', lab(ht)]);
+    const pe = have.filter(d => igDv(r, 'perte', d) == null); if (pe.length) it.push(['Pertes', lab(pe)]);
+    const pv = have.filter(d => igBudget(r, d) == null); if (pv.length) it.push(['Prévision CA', lab(pv)]);
+    if (wk.sun <= last) {                                          // indicateurs hebdomadaires : attendus une fois la semaine terminée
+      const row = heb.find(x => x.restaurant === r), m = F.filter(([k]) => { const v = row ? igNum(row[k]) : null; return v == null || (v === 0 && k !== 'oph'); }).map(f => f[1]);
+      if (m.length) it.push(['Hebdomadaire', m.length === F.length ? 'non saisi' : m.join(', ')]);
+    }
+    if (it.length) out.push({ r, it });
+  }
+  return out;
+}
+function igRenderCheck(key) {
+  const box = document.getElementById('igCheck'), wk = igWeeks().find(w => w.key === key); if (!box || !wk) return;
+  const m = igMissing(wk); box.style.display = '';
+  if (!m.length) { box.className = 'ig-check ok'; box.innerHTML = '<div class="t" style="margin:0">✓ Toutes les saisies de la semaine sont complètes pour les ' + RESTOS.length + ' restaurants.</div>'; return; }
+  box.className = 'ig-check warn';
+  box.innerHTML = `<div class="t">⚠ ${m.length} restaurant${m.length > 1 ? 's' : ''} avec des informations manquantes sur la S${wk.week}</div><div class="ig-ck-list">` +
+    m.map(x => `<div class="ig-ck-r"><b>${igEsc(restoShort(x.r))}</b>${x.it.map(([k, v]) => `<span>${k} : <i>${igEsc(v)}</i></span>`).join(' &nbsp;·&nbsp; ')}</div>`).join('') +
+    '</div><div class="ig-note" style="margin-top:8px">Tu peux imprimer quand même : les valeurs manquantes sont affichées « — » ou ne sont pas comptées dans les totaux. Complète la saisie puis relance pour un rapport complet.</div>';
+}
+
 // ── interface ──
 function igLoad() { try { return JSON.parse(localStorage.getItem(IG_KEY) || '{}'); } catch (e) { return {}; } }
 function igSave(o) { try { localStorage.setItem(IG_KEY, JSON.stringify(o)); } catch (e) {} }
@@ -7812,7 +7998,7 @@ function igOpenModal() {
   sel.innerHTML = ws.map(w => `<option value="${w.key}">S${w.week} ${w.year} · du ${igFr(w.mon).slice(0, 5)} au ${igFr(w.sun).slice(0, 5)}${w.complete ? '' : ' · en cours'}</option>`).join('');
   sel.value = def;
   const mv = document.getElementById('igModal'); document.body.appendChild(mv);
-  const upd = () => { const e = (s.byWeek || {})[sel.value] || {}; document.getElementById('igEv').value = e.ev || ''; document.getElementById('igCamp').value = e.camp || ''; };
+  const upd = () => { const e = (s.byWeek || {})[sel.value] || {}; document.getElementById('igEv').value = e.ev || ''; document.getElementById('igCamp').value = e.camp || ''; try { igRenderCheck(sel.value); } catch (err) { console.error(err); } };
   sel.onchange = upd; upd(); mv.classList.add('open');
 }
 function igClose() { document.getElementById('igModal').classList.remove('open'); document.getElementById('igOverlay').classList.remove('open'); document.body.style.overflow = ''; }
@@ -7824,6 +8010,7 @@ function igGo() {
   const ov = document.getElementById('igOverlay'); document.body.appendChild(ov);
   document.getElementById('igPages').innerHTML = pages.join('');
   document.getElementById('igBarTitle').textContent = 'Indices de gestion · ' + document.getElementById('igWeek').selectedOptions[0].textContent;
+  try { const mm = igMissing(igWeeks().find(w => w.key === key)); document.getElementById('igBarWarn').textContent = mm.length ? '⚠ Données manquantes : ' + mm.map(x => restoShort(x.r)).join(', ') : ''; } catch (e) {}
   const z = Math.min(1, (window.innerWidth - 16) / 794); document.getElementById('igPages').style.zoom = z < 1 ? z : 1;
   document.getElementById('igModal').classList.remove('open'); ov.classList.add('open'); ov.scrollTop = 0; document.body.style.overflow = 'hidden';
 }
@@ -8314,7 +8501,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261019-114304';
+const BUILD_VERSION = '20261019-121106';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
