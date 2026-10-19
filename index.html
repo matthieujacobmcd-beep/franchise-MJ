@@ -161,7 +161,7 @@
 </style>
 
 <script>
-const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "soon"}, "superviseurs": {}, "formation_links": [], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}};
+const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "soon"}, "superviseurs": {}, "formation_links": [], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "indices": {"oepe": 300, "r2p": 300, "analyses": 0.97, "hello": 0.9, "reseaux": 3.3, "oph": 50, "turnover": 1.0}};
 // Hash SHA-256 du mot de passe (mot de passe jamais stocké en clair)
 const PWD_HASH = '69297568920297b5aef347d6db5e549c79e50e7bf880c4a8203eeff3a53c5c58';
 const SESSION_KEY = 'fmj_auth';
@@ -1146,6 +1146,10 @@ window.addEventListener('DOMContentLoaded', () => {
     <a id="btnExporter" onclick="openExport()" class="topbar-intervention" title="Exporter en Excel ou en image" style="cursor:pointer;border-color:#0ea5e9;color:#0284c7">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       <span>Exporter</span>
+    </a>
+    <a id="btnIndices" onclick="igOpenModal()" class="topbar-intervention" title="Indices de gestion : rapport hebdomadaire imprimable" style="cursor:pointer;border-color:#a61b1b;color:#a61b1b">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      <span>Indices</span>
     </a>
     <a onclick="openFaqModal()" class="topbar-intervention" title="Aide et définitions" style="cursor:pointer;border-color:#64748b;color:#475569">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -7394,6 +7398,437 @@ function exportPeriods() {
 }
 </script>
 
+<!-- ════════ INDICES DE GESTION : extraction imprimable (A4, 2 pages) ════════ -->
+<style>
+#igModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:8vh 14px; overflow-y:auto; }
+#igModal.open { display:flex; }
+.ig-box { background:var(--bg); border-radius:18px; width:min(560px,100%); padding:20px 22px 22px; box-shadow:0 24px 70px rgba(0,0,0,.4); border:1px solid var(--border); }
+.ig-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.ig-title { font-size:1.02rem; font-weight:800; color:var(--text); display:flex; align-items:center; gap:9px; }
+.ig-title-ico { width:30px; height:30px; border-radius:9px; background:rgba(166,27,27,.12); color:#a61b1b; display:inline-flex; align-items:center; justify-content:center; }
+.ig-x { cursor:pointer; font-size:1.1rem; color:var(--muted); width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; }
+.ig-x:hover { background:var(--card2); color:var(--text); }
+.ig-sub { font-size:.74rem; color:var(--muted); line-height:1.5; margin-bottom:6px; }
+.ig-lbl { font-size:.66rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin:14px 2px 6px; }
+.ig-box select, .ig-box input[type=text] { width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.84rem; box-sizing:border-box; }
+.ig-actions { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; flex-wrap:wrap; }
+.ig-btn { padding:10px 18px; border-radius:10px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.82rem; font-weight:800; cursor:pointer; }
+.ig-btn.pri { background:#a61b1b; border-color:#a61b1b; color:#fff; }
+.ig-note { font-size:.7rem; color:var(--muted); margin-top:12px; line-height:1.5; }
+
+#igOverlay { display:none; position:fixed; inset:0; z-index:10001; background:#4b4f57; overflow:auto; }
+#igOverlay.open { display:block; }
+.ig-bar { position:sticky; top:0; z-index:3; background:#1f2330; color:#fff; display:flex; gap:10px; align-items:center; padding:10px 16px; flex-wrap:wrap; }
+.ig-bar b { font-size:.9rem; margin-right:auto; }
+.ig-bar button { padding:8px 16px; border-radius:9px; border:0; font-family:inherit; font-weight:800; font-size:.8rem; cursor:pointer; background:#374151; color:#fff; }
+.ig-bar button.pri { background:#e11d1d; }
+.ig-pages { display:flex; flex-direction:column; align-items:center; gap:16px; padding:16px 8px 40px; }
+.ig-page { width:210mm; height:297mm; background:#fff; color:#111; box-sizing:border-box; padding:9mm 8mm 7mm; font-family:Calibri,Carlito,'Segoe UI',Arial,sans-serif; font-size:7pt; line-height:1.15; box-shadow:0 4px 24px rgba(0,0,0,.45); overflow:hidden; position:relative; }
+.ig-page * { box-sizing:border-box; }
+.ig-page.p1 { --rh:11.2pt; }
+.ig-foot { position:absolute; left:8mm; right:8mm; bottom:3.5mm; display:flex; justify-content:space-between; font-size:6pt; color:#8a8f98; }
+.ig-ttl { background:#262626; color:#fff; text-align:center; font-weight:800; font-size:9.5pt; padding:6px 0; letter-spacing:.1px; }
+.ig-sec { border:1.5px solid #a61b1b; margin-top:8px; }
+.ig-sec-h { background:#a61b1b; color:#fff; text-align:center; font-weight:800; font-size:8pt; padding:3px 0; }
+.ig-kpi { display:grid; grid-template-columns:repeat(9, 1fr); background:#fae5e5; }
+.ig-kpi > div { text-align:center; padding:2px 2px; }
+.ig-kpi .l { font-size:5.4pt; font-weight:700; color:#7a5555; background:#eed3d3; padding:2px 1px; }
+.ig-kpi .v { font-size:10pt; font-weight:800; color:#a61b1b; padding:4px 1px 3px; }
+.ig-ev { display:grid; grid-template-columns:1.1fr 2.2fr 1.1fr 2.2fr; border:1.5px solid #bf9000; margin-top:8px; }
+.ig-ev > div { padding:5px 6px; text-align:center; }
+.ig-ev .k { background:#fee598; color:#7f6000; font-weight:800; font-size:7.5pt; }
+.ig-ev .t { background:#fef8e6; color:#555; font-style:italic; }
+table.ig { width:100%; border-collapse:collapse; table-layout:fixed; }
+table.ig th, table.ig td { padding:0 2px; height:var(--rh, 9.8pt); line-height:1; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:clip; border:1px solid rgba(255,255,255,.55); }
+table.ig th { color:#fff; font-weight:800; font-size:5.6pt; height:9pt; }
+table.ig td.n { text-align:left; font-weight:800; padding-left:4px; }
+table.ig td.b { position:relative; }
+table.ig tr.fr td.n { color:#bf9000; }
+table.ig tr.tot td { font-weight:800; }
+.ig-pos { color:#188a18; font-weight:700; } .ig-neg { color:#c40000; font-weight:700; }
+.ig-led { display:inline-block; width:8px; height:8px; border-radius:50%; vertical-align:middle; box-shadow:inset -1px -1px 2px rgba(0,0,0,.35); }
+.ig-led.g { background:radial-gradient(circle at 35% 30%, #9cf29c, #1fa51f 70%); }
+.ig-led.r { background:radial-gradient(circle at 35% 30%, #ff9a9a, #cf1414 70%); }
+.ig-led.o { background:radial-gradient(circle at 35% 30%, #ffd699, #ee8f06 70%); }
+.ig-grid { display:grid; grid-template-columns:1fr 1fr; gap:11px 9px; margin-top:9px; }
+.ig-blk { border:1.5px solid var(--c1); background:var(--c3); break-inside:avoid; }
+.ig-blk .bh { background:var(--c0); color:#fff; text-align:center; font-weight:800; font-size:7pt; padding:3px 2px; letter-spacing:.1px; }
+.ig-blk th { background:var(--c1); }
+.ig-blk td.n { color:#222; }
+.ig-empty td { color:#9a9a9a; }
+@media (max-width:700px) { .ig-bar { padding:8px 10px; } }
+@media print {
+  @page { size:A4 portrait; margin:0; }
+  html, body { overflow:visible !important; height:auto !important; }
+  body > *:not(#igOverlay) { display:none !important; }
+  #igOverlay { position:static !important; display:block !important; background:#fff !important; overflow:visible !important; }
+  .ig-bar { display:none !important; }
+  .ig-pages { display:block !important; padding:0 !important; zoom:1 !important; }
+  .ig-page { box-shadow:none !important; margin:0 !important; page-break-after:always; break-after:page; }
+  .ig-page:last-child { page-break-after:auto; break-after:auto; }
+  * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+}
+</style>
+
+<div id="igModal" onclick="if(event.target===this)igClose()">
+  <div class="ig-box">
+    <div class="ig-head">
+      <div class="ig-title"><span class="ig-title-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>Indices de gestion</div>
+      <span class="ig-x" onclick="igClose()">✕</span>
+    </div>
+    <div class="ig-sub">Extraction imprimable (A4, 2 pages) du rapport hebdomadaire, calculée à partir des données du dashboard. Choisis la semaine, complète si besoin les événements et campagnes, puis imprime ou enregistre en PDF.</div>
+    <div class="ig-lbl">Semaine</div>
+    <select id="igWeek"></select>
+    <div class="ig-lbl">Événements</div>
+    <input type="text" id="igEv" maxlength="90" placeholder="ex. Rentrée scolaire">
+    <div class="ig-lbl">Campagnes</div>
+    <input type="text" id="igCamp" maxlength="90" placeholder="ex. Chicago">
+    <div class="ig-actions">
+      <button class="ig-btn" onclick="igClose()">Annuler</button>
+      <button class="ig-btn pri" onclick="igGo()">Aperçu et impression</button>
+    </div>
+    <div class="ig-note">Dans la fenêtre d'impression, choisis « Enregistrer au format PDF » pour obtenir un fichier à envoyer. Les blocs dont la donnée n'est pas saisie dans le Sheet (ex. objectifs non définis) s'affichent avec « — ».</div>
+  </div>
+</div>
+
+<div id="igOverlay">
+  <div class="ig-bar"><b id="igBarTitle">Indices de gestion</b>
+    <button onclick="igClose()">Fermer</button><button class="pri" onclick="window.print()">Imprimer / PDF</button></div>
+  <div class="ig-pages" id="igPages"></div>
+</div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════
+//  INDICES DE GESTION — rapport A4 reconstruit à partir de DASHBOARD_DATA
+//  (quotidien, hebdomadaire, tables mensuelles, visites ponctuelles, prévisionnel).
+//  Même moteur pour toutes les franchises : restaurants et objectifs viennent de FRANCHISE_CFG.
+// ═════════════════════════════════════════════════════════════════
+const IG_D = 86400000;
+const IG_KEY = 'fmj_indices';
+const igT = s => Date.parse(s + 'T00:00:00Z');
+const igIso = t => new Date(t).toISOString().slice(0, 10);
+const igAdd = (s, n) => igIso(igT(s) + n * IG_D);
+const igJours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+const igMoisL = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const igWd = s => (new Date(igT(s)).getUTCDay() + 6) % 7;
+const igFr = s => s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
+const igEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const igOk = v => v != null && typeof v === 'number' && isFinite(v);
+const igNum = x => { if (x == null || x === '') return null; const n = +x; return isFinite(n) ? n : null; };
+const igMean = a => { const b = a.filter(igOk); return b.length ? b.reduce((s, x) => s + x, 0) / b.length : null; };
+
+// ── mise en forme ──
+const igN = (v, d = 0) => igOk(v) ? v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
+const igEur = (v, d = 0) => igOk(v) ? igN(v, d) + ' €' : '—';
+const igSg = (v, d = 0, suf = '') => !igOk(v) ? '—' : (Math.round(Math.abs(v) * Math.pow(10, d)) === 0 ? igN(0, d) : (v < 0 ? '-' : '+') + igN(Math.abs(v), d)) + suf;
+const igPct = (v, d = 1) => igOk(v) ? igN(v * 100, d) + '%' : '—';
+const igSgPct = (v, d = 1) => igSg(igOk(v) ? v * 100 : null, d, '%');
+const igCls = (v, good) => !igOk(v) || v === 0 ? '' : ((good === 'max' ? v > 0 : v < 0) ? 'ig-pos' : 'ig-neg');
+const igLed = c => c ? `<span class="ig-led ${c}"></span>` : '';
+
+// ── lecture des données ──
+const igCfg = () => (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : {});
+const igLast = () => { const ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {}; let m = null; for (const d of Object.values(ld)) if (d && (!m || d > m)) m = d; return m; };
+function igDv(r, f, iso) {
+  const y = iso.slice(0, 4), a = DASHBOARD_DATA.daily?.[y]?.[r]?.[f]; if (!a) return null;
+  const v = a[Math.round((igT(iso) - Date.UTC(+y, 0, 1)) / IG_D)]; return igOk(v) ? v : null;
+}
+function igWeekOf(iso) {                                          // semaine ISO d'une date : clé, lundi, dimanche, jeudi
+  const mon = igAdd(iso, -igWd(iso)), thu = igAdd(mon, 3), y = +thu.slice(0, 4);
+  const jan4 = igIso(Date.UTC(y, 0, 4)), w = 1 + Math.round((igT(mon) - igT(igAdd(jan4, -igWd(jan4)))) / (7 * IG_D));
+  return { key: y + '-W' + String(w).padStart(2, '0'), year: y, week: w, mon, sun: igAdd(mon, 6), thu, mi: +thu.slice(5, 7) - 1 };
+}
+const igObj = (kind, r) => { const c = (igCfg().indices || {})[kind]; if (c == null) return null; if (typeof c === 'number') return c; const v = c[r] != null ? c[r] : c.default; return igOk(v) ? v : null; };
+const igBudget = (r, iso) => {                                   // prévisionnel CA alim du jour : saisie jour par jour, sinon budget mensuel ramené au jour
+  const pj = DASHBOARD_DATA.prevjour?.[r]?.[iso]; if (pj && igOk(pj.alim)) return pj.alim;
+  const y = +iso.slice(0, 4), mi = +iso.slice(5, 7) - 1, mv = DASHBOARD_DATA[String(y)]?.ca_alim_prev?.[MONTHS[mi]]?.[r];
+  return igOk(mv) ? mv / new Date(Date.UTC(y, mi + 1, 0)).getUTCDate() : null;
+};
+const igOpen = (r, n1) => { const o = (DASHBOARD_DATA.meta || {}).open || {}; return !(o[r] && n1 < o[r]); };
+
+// Semaines proposées : de la dernière semaine saisie jusqu'à celles de l'année précédente
+function igWeeks() {
+  const last = igLast(); if (!last) return [];
+  const out = []; let w = igWeekOf(last);
+  for (let i = 0; i < 110 && DASHBOARD_DATA[String(w.year)]; i++) { out.push(Object.assign({ complete: w.sun <= last }, w)); w = igWeekOf(igAdd(w.mon, -7)); }
+  return out;
+}
+
+// ── bloc « CA de la semaine » ──
+function igWeekCalc(wk, end) {
+  const days = [...Array(7)].map((_, i) => igAdd(wk.mon, i)), R = RESTOS;
+  const D = days.map(d => {
+    const o = { d, cur: null, n1: null, prev: null, t: null, t1: null };
+    for (const r of R) {
+      const n1d = igAdd(d, -364); if (d > end || !igOpen(r, n1d)) continue;
+      const a = igDv(r, 'alim', d); if (a == null) continue;
+      o.cur = (o.cur || 0) + a;
+      const a1 = igDv(r, 'alim', n1d); if (a1 != null) o.n1 = (o.n1 || 0) + a1;
+      const b = igBudget(r, d); if (b != null) o.prev = (o.prev || 0) + b;
+      const t = igDv(r, 'tacs', d); if (t != null) o.t = (o.t || 0) + t;
+      const t1 = igDv(r, 'tacs', n1d); if (t1 != null) o.t1 = (o.t1 || 0) + t1;
+    }
+    return o;
+  });
+  const sm = f => { let s = null; for (const x of D) if (x[f] != null) s = (s || 0) + x[f]; return s; };
+  const tot = { cur: sm('cur'), n1: sm('n1'), prev: sm('prev'), t: sm('t'), t1: sm('t1') };
+  // VPH / pertes / CA total : mêmes jours et restaurants, numérateur et dénominateur saisis
+  let al = 0, he = 0, al2 = 0, hg = 0, pe = 0, al3 = 0, cat = 0, cat1 = 0;
+  for (const d of days) for (const r of R) {
+    if (d > end) continue;
+    const a = igDv(r, 'alim', d), h = igDv(r, 'heures', d), hgl = igDv(r, 'heures_total', d), p = igDv(r, 'perte', d), c = igDv(r, 'ca', d);
+    if (a != null && h) { al += a; he += h; }
+    if (a != null && hgl) { al2 += a; hg += hgl; }
+    if (a != null && p != null) { al3 += a; pe += p; }
+    const n1d = igAdd(d, -364);
+    if (c != null && igOpen(r, n1d)) { cat += c; const c1 = igDv(r, 'ca', n1d); if (c1 != null) cat1 += c1; }
+  }
+  return { days: D, tot, vphe: he ? al / he : null, vphg: hg ? al2 / hg : null, pertes: al3 ? pe / al3 : null, caTot: cat || null, caTotVs: cat1 ? cat / cat1 - 1 : null };
+}
+
+// ── cumuls quotidiens « à date » : CA alimentaire (annuel / mois), comparé aux jours équivalents (−364 j) de l'an passé ──
+function igCum(r, from, to) {
+  let cur = 0, cc = 0, cn = 0, any = false;
+  for (let t = igT(from); t <= igT(to); t += IG_D) {
+    const d = igIso(t), v = igDv(r, 'alim', d); if (v == null) continue;
+    cur += v; any = true;
+    const n1d = igAdd(d, -364), n = igDv(r, 'alim', n1d);          // jour équivalent N-1 (même jour de semaine), comme le modèle
+    if (n != null && igOpen(r, n1d)) { cc += v; cn += n; }
+  }
+  return any ? { cur, cc, cn } : null;
+}
+function igCaRows(from, to) {
+  const rows = []; let T = { cur: 0, cc: 0, cn: 0 }, any = false;
+  for (const r of RESTOS) { const c = igCum(r, from, to); if (!c) continue; rows.push({ r, c }); T.cur += c.cur; T.cc += c.cc; T.cn += c.cn; any = true; }
+  if (any) rows.push({ r: 'FRANCHISE', c: T });
+  return rows.map(x => { const p = x.c.cn ? x.c.cc / x.c.cn - 1 : null; return { r: x.r, v: x.c.cur, pct: p, ecart: p != null ? x.c.cur - x.c.cur / (1 + p) : null }; })
+             .sort((a, b) => b.v - a.v);
+}
+// ratios « à date » du mois : Σ numérateur / Σ dénominateur sur les jours où les deux sont saisis
+function igRatio(r, fn, fd, from, to) {
+  let n = 0, d = 0;
+  for (let t = igT(from); t <= igT(to); t += IG_D) {
+    const iso = igIso(t), a = igDv(r, fn, iso), b = igDv(r, fd, iso);
+    if (a != null && b) { n += a; d += b; }
+  }
+  return d ? n / d : null;
+}
+
+// ── indicateurs hebdomadaires : moyenne des semaines du mois (rattachées par leur jeudi), tables mensuelles sinon ──
+const IG_HEB = { oepe: ['oepe', 'oepe', 'oepe_annual'], r2p: ['r2p', 'r2p', 'r2p_annual'], oph: ['oph', 'oph', 'oph_annual'], hello: ['hello_mcdo', 'hello_mcdo', null],
+                 reseaux: ['reseaux', 'reseau', null], uvhe: ['uvhe', 'uvhe_monthly', 'uvhe_annual'], tche: ['tche', 'tche_monthly', 'tche_annual'] };
+function igHebMonth(k, r, y, mi, maxKey) {
+  const f = IG_HEB[k][0], vals = [];
+  for (const x of DASHBOARD_DATA.hebdo || []) {
+    if (x.restaurant !== r || !/^\d{4}-W\d{2}$/.test(x.periode) || (maxKey && x.periode > maxKey)) continue;
+    const m = igWeekOfKey(x.periode); if (m.year !== y || m.mi !== mi) continue;
+    const v = igNum(x[f]); if (v != null && (v !== 0 || k === 'oph')) vals.push(v);
+  }
+  return igMean(vals);
+}
+const igWeekOfKey = k => { const [y, w] = k.split('-W').map(Number), jan4 = igIso(Date.UTC(y, 0, 4)), mon = igAdd(jan4, -igWd(jan4) + (w - 1) * 7); return igWeekOf(mon); };
+function igMonthVal(k, r, y, mi, wk, prevKey) {                 // valeur du mois, arrêtée à la semaine wk (ou prevKey pour « vs S-1 »)
+  const T = DASHBOARD_DATA[String(y)]?.[IG_HEB[k][1]]?.[MONTHS[mi]]?.[r];
+  if (mi < wk.mi) { const v = igOk(T) ? T : igHebMonth(k, r, y, mi, null); return v; }
+  const h = igHebMonth(k, r, y, mi, prevKey || wk.key);
+  return h != null ? h : (prevKey ? null : (igOk(T) ? T : null));
+}
+function igAnnual(k, r, y, wk) {
+  const vals = [], w = [];
+  for (let mi = 0; mi <= wk.mi; mi++) {
+    const v = igMonthVal(k, r, y, mi, wk, null); if (v == null) continue;
+    vals.push(v); w.push(k === 'oph' ? (DASHBOARD_DATA[String(y)]?.tacs?.[MONTHS[mi]]?.[r] || 0) : 1);
+  }
+  if (!vals.length) return null;
+  const sw = w.reduce((a, b) => a + b, 0);
+  return sw ? vals.reduce((s, v, i) => s + v * w[i], 0) / sw : igMean(vals);
+}
+// Analyses (ponctuel) : Σ OK ÷ Σ analyses sur la période
+function igAnalyses(r, from, to) {
+  let ok = 0, nok = 0;
+  for (const x of DASHBOARD_DATA.ponctuel || []) {
+    if (x.type !== 'ANALYSE_SILLIKER' || x.restaurant !== r || x.periode < from || x.periode > to) continue;
+    const a = igNum(x.analyses_ok), b = igNum(x.analyses_nok);
+    if (a != null || b != null) { ok += a || 0; nok += b || 0; } else if (igNum(x.score) != null) { ok += igNum(x.score); nok += 1 - igNum(x.score); }
+  }
+  return ok + nok > 0 ? ok / (ok + nok) : null;
+}
+
+// ── composition d'un bloc ──
+const IG_TH = {
+  gold: ['#7f6000', '#bf9000', '#fef1cb', '#fed865'], blue: ['#1f4e79', '#2e75b6', '#ddeaf6', '#9cc2e5'], teal: ['#12545c', '#1c8290', '#dcf0f3', '#92d0d9'],
+  green: ['#375623', '#548235', '#e2eed9', '#a9d08e'], orange: ['#7f4f13', '#bf7a1e', '#fbeedb', '#f0c184'], wine: ['#7b1f2b', '#b03a4a', '#f8e4e7', '#e4a5ad'],
+  purple: ['#4a2a6a', '#7a4ca8', '#ece7f4', '#c1a3dc'], indigo: ['#2a3a6a', '#4457a8', '#e6e9f5', '#a6b3de'], cyan: ['#14555f', '#218c9c', '#dff1f4', '#92d2dc'],
+  olive: ['#4f5c1f', '#86992e', '#eef2de', '#c7d494'], slate: ['#33404d', '#556a80', '#e9edf1', '#b0becb'], magenta: ['#7a1f5c', '#b03a8a', '#f7e4f1', '#e2a3cd'],
+  brown: ['#7a3b1f', '#b0623a', '#f7e6e3', '#e8b9a3'], grey: ['#404040', '#585858', '#ececec', '#a6a6a6'],
+};
+function igBlock(theme, title, cols, rows, nRows) {
+  if (!rows.length) return '';                                   // bloc sans aucune donnée : masqué
+  const t = IG_TH[theme], W = cols.map(c => c.w);
+  let h = `<div class="ig-blk" style="--c0:${t[0]};--c1:${t[1]};--c3:${t[2]}"><div class="bh">${title}</div><table class="ig"><colgroup>${W.map(w => `<col style="width:${w}%">`).join('')}</colgroup><tr>${cols.map(c => `<th>${c.l}</th>`).join('')}</tr>`;
+  const mx = Math.max(0, ...rows.map(r => r.bar).filter(igOk));
+  for (let i = 0; i < nRows; i++) {
+    const x = rows[i];
+    if (!x) { h += `<tr class="ig-empty"><td>${i + 1}</td>${cols.slice(1).map(() => '<td></td>').join('')}</tr>`; continue; }
+    h += `<tr class="${x.fr ? 'fr' : ''}"><td>${i + 1}</td><td class="n">${igEsc(x.name)}</td>` + cols.slice(2).map(c => {
+      const v = x[c.k]; if (c.k === 'feu') return `<td>${igLed(v)}</td>`;
+      if (c.bar && igOk(x.bar) && mx > 0) return `<td class="b" style="background:linear-gradient(to right,${t[3]} ${Math.max(2, x.bar / mx * 100).toFixed(1)}%,transparent ${Math.max(2, x.bar / mx * 100).toFixed(1)}%)">${v == null ? '—' : v}</td>`;
+      return `<td class="${x[c.k + 'C'] || ''}">${v == null ? '' : v}</td>`;
+    }).join('') + '</tr>';
+  }
+  return h + '</table></div>';
+}
+const igFeu = (v, o, dir) => (!igOk(v) || !igOk(o)) ? null : ((dir === 'min' ? v <= o : v >= o) ? 'g' : 'r');
+const igRk = (arr, dir) => arr.filter(x => igOk(x.v)).sort((a, b) => dir === 'min' ? a.v - b.v : b.v - a.v);
+
+// Bloc KPI classique : Rang · Restaurant · Valeur · Objectif · vs · Feu
+function igKpiBlock(theme, title, items, o) {
+  const rk = igRk(items, o.dir), withObj = rk.some(x => igOk(x.obj));
+  const rows = rk.map(x => ({ name: x.r, fr: x.r === 'FRANCHISE', bar: x.v, val: o.fmt(x.v), obj: o.noObj ? '' : (igOk(x.obj) ? o.fo(x.obj) : '—'), vs: igOk(x.vs) ? o.fv(x.vs) : '', vsC: igCls(x.vs, o.dir === 'min' ? 'min' : 'max'), feu: o.noObj ? (igOk(x.vs) ? (x.vs >= 0 ? 'g' : 'r') : null) : igFeu(x.v, x.obj, o.dir) }));
+  const cols = [{ l: 'Rang', w: 9 }, { l: 'Restaurant', w: 31 }, { l: 'Valeur', k: 'val', w: 19, bar: true }, { l: o.noObj ? '' : (o.l3 || 'Objectif'), k: 'obj', w: 14 }, { l: o.l4, k: 'vs', w: 17 }, { l: 'Feu', k: 'feu', w: 10 }];
+  return igBlock(theme, title, cols, rows, o.n);
+}
+
+// ── génération du rapport ──
+function igBuild(wkKey, ev, camp) {
+  const wk = igWeeks().find(w => w.key === wkKey); if (!wk) return null;
+  const last = igLast(), end = wk.sun < last ? wk.sun : last, Y = wk.year, P = String(Y - 1), mi = wk.mi, R = RESTOS, nR = R.length;
+  const prevWk = igWeekOf(igAdd(wk.mon, -7)), prevKey = prevWk.mi === wk.mi && prevWk.year === Y ? prevWk.key : null;
+  const mFrom = Y + '-' + String(mi + 1).padStart(2, '0') + '-01', mEndAll = igIso(Date.UTC(Y, mi + 1, 0)), mTo = end < mEndAll ? end : mEndAll;
+  const yTo = end < Y + '-12-31' ? end : Y + '-12-31', mName = MONTHS[mi];
+  const C = igWeekCalc(wk, end);
+
+  // En-tête de semaine
+  const jEnd = igJours[igWd(end)];
+  const t = C.tot, pm = (t.cur != null && t.t) ? t.cur / t.t : null, pm1 = (t.n1 != null && t.t1) ? t.n1 / t.t1 : null;
+  const vsO = (t.cur != null && t.prev) ? t.cur / t.prev - 1 : null, vs1 = (t.cur != null && t.n1) ? t.cur / t.n1 - 1 : null;
+  const feuTot = (t.cur != null && t.prev != null) ? (t.cur >= t.prev ? 'g' : 'r') : null;
+  const j1 = igJours[igWd(wk.mon)], dm = +wk.mon.slice(8, 10), dEnd = wk.sun;
+  const lab = `CA DE LA SEMAINE &nbsp;&nbsp;•&nbsp;&nbsp; S ${wk.week} &nbsp;&nbsp;•&nbsp;&nbsp; du ${j1} ${dm} au dimanche ${+dEnd.slice(8, 10)} ${igMoisL[+dEnd.slice(5, 7) - 1]} ${dEnd.slice(0, 4)}`;
+  const kpiRow = [
+    ['CA NET ALIMENTAIRE', igEur(t.cur)], ['vs OBJECTIF', igSgPct(vsO)], ['', igSg(t.cur != null && t.prev != null ? t.cur - t.prev : null, 0, ' €')], [`vs ${P}`, igSgPct(vs1)], ['', igSg(t.cur != null && t.n1 != null ? t.cur - t.n1 : null, 0, ' €')],
+    ["TAC'S", igN(t.t)], [`TAC'S vs ${P}`, igSgPct(t.t != null && t.t1 ? t.t / t.t1 - 1 : null)],
+    [`PANIER MOYEN${pm && pm1 ? ' (' + igSgPct(pm / pm1 - 1) + ')' : ''}`, igEur(pm, 2)], ['', igLed(feuTot)],
+  ];
+  const mx = Math.max(0, ...C.days.map(d => d.cur || 0));
+  const dayRows = C.days.map(x => {
+    const dv = x.cur != null && x.n1 != null ? x.cur - x.n1 : null, pv = x.cur != null && x.prev != null ? x.cur - x.prev : null;
+    const bar = x.cur != null && mx ? `background:linear-gradient(to right,#e8a0a0 ${(x.cur / mx * 100).toFixed(1)}%,transparent ${(x.cur / mx * 100).toFixed(1)}%)` : '';
+    return `<tr><td>${igJours[igWd(x.d)]}</td><td>${igFr(x.d)}</td><td style="${bar}">${igEur(x.cur)}</td><td>${igEur(x.n1)}</td><td class="${igCls(dv, 'max')}">${igSg(dv, 0, ' €')}</td><td class="${igCls(dv, 'max')}">${igSgPct(x.cur != null && x.n1 ? x.cur / x.n1 - 1 : null)}</td>`
+      + `<td>${igEur(x.prev)}</td><td class="${igCls(pv, 'max')}">${igSg(pv, 0, ' €')}</td><td class="${igCls(pv, 'max')}">${igSgPct(x.cur != null && x.prev ? x.cur / x.prev - 1 : null)}</td>`
+      + `<td>${igN(x.t)}</td><td>${igN(x.t1)}</td><td class="${igCls(x.t != null && x.t1 ? x.t - x.t1 : null, 'max')}">${igSgPct(x.t != null && x.t1 ? x.t / x.t1 - 1 : null)}</td><td>${igLed(x.cur != null && x.prev != null ? (x.cur >= x.prev ? 'g' : 'r') : null)}</td></tr>`;
+  }).join('');
+  const totRow = `<tr class="tot"><td colspan="2" style="text-align:left">TOTAL SEMAINE</td><td>${igEur(t.cur)}</td><td>${igEur(t.n1)}</td><td>${igSg(t.cur != null && t.n1 != null ? t.cur - t.n1 : null, 0, ' €')}</td><td>${igSgPct(vs1)}</td><td>${igEur(t.prev)}</td><td>${igSg(t.cur != null && t.prev != null ? t.cur - t.prev : null, 0, ' €')}</td><td>${igSgPct(vsO)}</td><td>${igN(t.t)}</td><td>${igN(t.t1)}</td><td>${igSgPct(t.t != null && t.t1 ? t.t / t.t1 - 1 : null)}</td><td>${igLed(feuTot)}</td></tr>`;
+  const head = `<div class="ig-ttl">INDICES DE GESTION &nbsp;&nbsp;•&nbsp;&nbsp; arrêté au ${jEnd} ${+end.slice(8, 10)} ${igMoisL[+end.slice(5, 7) - 1]} ${end.slice(0, 4)}</div>
+  <div class="ig-sec"><div class="ig-sec-h">${lab}</div><div class="ig-kpi">${kpiRow.map(([l, v]) => `<div><div class="l">${l || '&nbsp;'}</div><div class="v">${v}</div></div>`).join('')}</div></div>
+  <div class="ig-ev"><div class="k">ÉVÉNEMENTS</div><div class="t">${igEsc(ev) || '&nbsp;'}</div><div class="k">CAMPAGNES</div><div class="t">${igEsc(camp) || '&nbsp;'}</div></div>
+  <div class="ig-sec" style="border-color:#7f1d1d"><div class="ig-sec-h" style="background:#7f1d1d">DÉTAIL JOURNALIER DE LA SEMAINE</div>
+  <table class="ig" style="background:#fae5e5"><colgroup><col style="width:9%"><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:8%"><col style="width:7%"><col style="width:10%"><col style="width:8%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:5%"></colgroup>
+  <tr>${['Jour', 'Date ' + Y, 'Net alim. ' + Y, 'Net alim. ' + P, `vs ${P} (€)`, `vs ${P} (%)`, 'Objectif PREV', 'vs PREV (€)', 'vs PREV (%)', `Tac's ${Y}`, `Tac's ${P}`, `vs ${P} (%)`, 'Feu'].map(x => `<th style="background:#b04a4a">${x}</th>`).join('')}</tr>${dayRows}${totRow}</table>
+  <div class="ig-sec-h" style="background:#a61b1b;margin-top:0">VPH &amp; PERTES DE LA SEMAINE &nbsp;&nbsp;•&nbsp;&nbsp; S ${wk.week}</div>
+  <div class="ig-kpi" style="grid-template-columns:repeat(4,1fr)">${[['VPH ÉQUIPIER', igEur(C.vphe, 2)], ['VPH GLOBAL', igEur(C.vphg, 2)], ['PERTES', igPct(C.pertes, 2)], ['CA NET TOTAL', igEur(C.caTot) + (C.caTotVs != null ? ' <span style="font-size:7pt;font-weight:700;color:' + (C.caTotVs >= 0 ? '#188a18' : '#c40000') + '">' + igSgPct(C.caTotVs, 2) + '</span>' : '')]]
+    .map(([l, v]) => `<div><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')}</div></div>`;
+
+  // CA cumul annuel / mois
+  const nF = nR + 1, mkCa = rows => rows.map(x => ({ name: x.r, fr: x.r === 'FRANCHISE', bar: x.v, v: igEur(x.v), ec: igSg(x.ecart, 0, ' €'), ecC: igCls(x.ecart, 'max'), p: igSgPct(x.pct), pC: igCls(x.pct, 'max'), feu: x.pct == null ? null : (x.pct >= 0 ? 'g' : 'r') }));
+  const caCols = [{ l: 'Rang', w: 9 }, { l: 'Restaurant', w: 29 }, { l: 'CA net alim.', k: 'v', w: 22, bar: true }, { l: 'Écart (€)', k: 'ec', w: 16 }, { l: `vs ${P} à date`, k: 'p', w: 15 }, { l: 'Feu', k: 'feu', w: 9 }];
+  const caAn = igBlock('gold', 'CA NET ALIMENTAIRE &nbsp;—&nbsp; CUMUL ANNUEL', caCols, mkCa(igCaRows(Y + '-01-01', yTo)), nF);
+  const caMo = igBlock('gold', `CA NET ALIMENTAIRE &nbsp;—&nbsp; MOIS - ${mName}`, caCols, mkCa(igCaRows(mFrom, mTo)), nF);
+
+  // Indicateurs hebdomadaires (annuel / mois)
+  const FM = { oepe: v => igN(v, 0), r2p: v => igN(v, 0), oph: v => igN(v, 0), uvhe: v => igN(v, 1), tche: v => igN(v, 2), hello: v => igPct(v, 2), reseaux: v => igN(v, 1) };
+  const hebItems = (k, scope, withFr) => {
+    const out = R.map(r => {
+      const v = scope === 'an' ? igAnnual(k, r, Y, wk) : igMonthVal(k, r, Y, mi, wk, null);
+      let vs = null;
+      if (scope === 'an') { const a = IG_HEB[k][2] ? DASHBOARD_DATA[P]?.[IG_HEB[k][2]]?.[r] : null; vs = igOk(v) && igOk(a) ? v - a : null; }
+      else if (k === 'uvhe') { const a = DASHBOARD_DATA[P]?.[IG_HEB[k][1]]?.[mName]?.[r]; vs = igOk(v) && igOk(a) ? v - a : null; }
+      else { const b = prevKey ? igMonthVal(k, r, Y, mi, wk, prevKey) : null; vs = igOk(v) && igOk(b) ? v - b : null; }
+      return { r, v, vs, obj: igObj(k, r) };
+    });
+    if (withFr) { const fv = igMean(out.map(x => x.v)); const fp = igMean(out.map(x => x.vs)); out.push({ r: 'FRANCHISE', v: fv, vs: fp, obj: igObj(k, 'FRANCHISE') }); }
+    return out;
+  };
+  const heb = (theme, k, title, scope, dir, o) => igKpiBlock(theme, title, hebItems(k, scope, !!o.fr), Object.assign({ dir, fmt: FM[k], fo: FM[k], fv: v => igSg(v, o.vd != null ? o.vd : 0), l4: scope === 'an' ? `vs ${P}` : (k === 'uvhe' ? `vs ${P}` : 'vs S-1'), n: o.fr ? nF : nR }, o));
+  const mT = ` &nbsp;—&nbsp; MOIS - ${mName}`;
+  const oepeA = heb('blue', 'oepe', 'OEPE &nbsp;—&nbsp; ANNUEL', 'an', 'min', {}), oepeM = heb('blue', 'oepe', 'OEPE' + mT, 'mo', 'min', {});
+  const r2pA = heb('teal', 'r2p', 'R2P &nbsp;—&nbsp; ANNUEL', 'an', 'min', {}), r2pM = heb('teal', 'r2p', 'R2P' + mT, 'mo', 'min', {});
+  const uvheItems = scope => hebItems('uvhe', scope, false).map(x => Object.assign(x, { obj: null }));
+  const uvBlk = scope => igKpiBlock('green', `UVHE &nbsp;—&nbsp; ${scope === 'an' ? 'ANNUEL' : 'MOIS - ' + mName}`, uvheItems(scope), { dir: 'max', fmt: FM.uvhe, fo: FM.uvhe, fv: v => igSg(v, 1), l4: `vs ${P}`, n: nR, noObj: true, vsGood: 'max' });
+  const uvA = uvBlk('an'), uvM = uvBlk('mo');
+
+  // Pertes / VPHE du mois (quotidien)
+  const pertesItems = (to, withPrev) => R.map(r => { const v = igRatio(r, 'perte', 'alim', mFrom, to); return { r, v, obj: igObj('pertes', r) }; });
+  const prevTo = prevKey ? igAdd(wk.sun, -7) : null;
+  const pertes = pertesItems(mTo).map(x => { const b = prevTo ? igRatio(x.r, 'perte', 'alim', mFrom, prevTo) : null; return Object.assign(x, { vs: igOk(x.v) && igOk(b) ? x.v - b : null }); });
+  const vphe = R.map(r => { const v = igRatio(r, 'alim', 'heures', mFrom, mTo), b = prevTo ? igRatio(r, 'alim', 'heures', mFrom, prevTo) : null; return { r, v, obj: igObj('vphe', r), vs: igOk(v) && igOk(b) ? v - b : null }; });
+  const pertesB = igKpiBlock('orange', `PERTES &nbsp;—&nbsp; MOIS - ${mName}`, pertes, { dir: 'min', fmt: v => igPct(v, 2), fo: v => igPct(v, 2), fv: v => igSgPct(v, 2), l4: 'vs S-1', n: nR });
+  const vpheB = igKpiBlock('wine', `VPHE &nbsp;—&nbsp; MOIS - ${mName}`, vphe, { dir: 'max', fmt: v => igEur(v, 2), fo: v => igEur(v, 2), fv: v => igSg(v, 2, ' €'), l4: 'vs S-1', n: nR });
+
+  // Analyses
+  const anaItems = scope => R.map(r => { const v = igAnalyses(r, scope === 'an' ? Y + '-01-01' : mFrom, scope === 'an' ? yTo : mTo); const a = scope === 'an' ? DASHBOARD_DATA[P]?.analyses_merieux_annual?.[r] : null; return { r, v, obj: igObj('analyses', r), vs: igOk(v) && igOk(a) ? v - a : null }; });
+  const anaB = scope => igKpiBlock('purple', `ANALYSES &nbsp;—&nbsp; ${scope === 'an' ? 'ANNUEL' : 'MOIS - ' + mName}`, anaItems(scope), { dir: 'max', fmt: v => igPct(v, 0), fo: v => igPct(v, 0), fv: v => igSgPct(v, 2), l4: scope === 'an' ? `vs ${P}` : 'vs S-1', n: nR });
+
+  const helloM = heb('indigo', 'hello', 'HELLO MCDO' + mT, 'mo', 'max', { fr: true, fo: v => igPct(v, 2), fv: v => igSgPct(v, 2) });
+  const resM = heb('cyan', 'reseaux', 'RESEAUX SOC' + mT, 'mo', 'max', { fr: true, vd: 1, fv: v => igSg(v, 1) });
+  const ophA = heb('olive', 'oph', 'OPH &nbsp;—&nbsp; ANNUEL &nbsp;•&nbsp; le plus bas est le meilleur', 'an', 'min', {}), ophM = heb('olive', 'oph', 'OPH' + mT + ' &nbsp;•&nbsp; le plus bas est le meilleur', 'mo', 'min', {});
+
+  // TCHE : pas d'objectif dans le Sheet → valeur et évolution seulement (objectif renseignable dans la configuration)
+  const tcheB = scope => igKpiBlock('slate', `TCHE &nbsp;—&nbsp; ${scope === 'an' ? 'ANNUEL' : 'MOIS - ' + mName} &nbsp;•&nbsp; le plus haut est le meilleur`, hebItems('tche', scope, false).map(x => Object.assign(x, { obj: igObj('tche', x.r) })),
+    { dir: 'max', fmt: FM.tche, fo: FM.tche, fv: v => igSg(v, 2), l3: 'TCHE cible', l4: scope === 'an' ? `vs ${P}` : 'vs S-1', n: nR, vsGood: 'max' });
+
+  // FID (dernier mois ≤ mois du rapport), Turn Over 12 mois, PACE
+  const lastTbl = (tbl, r) => { for (let m = mi; m >= 0; m--) { const v = DASHBOARD_DATA[String(Y)]?.[tbl]?.[MONTHS[m]]?.[r]; if (igOk(v)) return v; } return null; };
+  const fidAn = r => {                                              // cumul annuel : moyenne des mois pondérée par le CA (règle du dashboard)
+    let n = 0, d = 0;
+    for (let m = 0; m <= mi; m++) { const v = DASHBOARD_DATA[String(Y)]?.dig_fid_actifs_m?.[MONTHS[m]]?.[r], w = DASHBOARD_DATA[String(Y)]?.ca_total?.[MONTHS[m]]?.[r]; if (igOk(v) && igOk(w) && w) { n += v * w; d += w; } }
+    return d ? n / d : null;
+  };
+  const fidRows = igRk([...R, 'FRANCHISE'].map(r => ({ r, v: fidAn(r) })), 'max').map(x => ({ name: x.r, fr: x.r === 'FRANCHISE', bar: x.v, val: igPct(x.v, 1) }));
+  const fid = igBlock('magenta', 'FID &nbsp;—&nbsp; CUMUL ANNUEL &nbsp;•&nbsp; le plus haut est le meilleur', [{ l: 'Rang', w: 9 }, { l: 'Restaurant', w: 31 }, { l: '% comptes actifs', k: 'val', w: 35, bar: true }, { l: '', k: 'x', w: 25 }], fidRows, nF);
+  const toObj = igObj('turnover', 'x');
+  const toRows = igRk(R.map(r => ({ r, v: lastTbl('to_12m_monthly', r) })), 'min').map(x => ({ name: x.r, bar: x.v, val: igPct(x.v, 0), feu: igFeu(x.v, toObj, 'min') }));
+  const to = igBlock('grey', 'TURN OVER &nbsp;—&nbsp; 12 MOIS GLISSANTS &nbsp;•&nbsp; le plus bas est le meilleur', [{ l: 'Rang', w: 9 }, { l: 'Restaurant', w: 31 }, { l: 'TO 12M', k: 'val', w: 35, bar: true }, { l: '', k: 'x', w: 15 }, { l: 'Feu', k: 'feu', w: 10 }], toRows, nR);
+  const pace = (igCfg().indices || {}).pace || null;
+  const PN = { 1: ['Stratégique', 'g'], 2: ['Ciblé', 'o'], 3: ['Fondamentaux', 'r'] };
+  const paceRows = pace ? R.filter(r => pace[r]).sort((a, b) => pace[a] - pace[b]).map(r => ({ name: r, bar: 4 - pace[r], val: pace[r], st: PN[pace[r]][0], feu: PN[pace[r]][1] })) : [];
+  const paceB = pace ? igBlock('brown', 'PACE &nbsp;—&nbsp; ANNUEL &nbsp;•&nbsp; 1 = Stratégique (meilleur), 2 = Ciblé, 3 = Fondamentaux', [{ l: 'Rang', w: 9 }, { l: 'Restaurant', w: 31 }, { l: 'Niveau', k: 'val', w: 20 }, { l: 'Statut', k: 'st', w: 26 }, { l: 'Feu', k: 'feu', w: 14 }], paceRows, nR) : '';
+
+  const p1 = [caAn, caMo, oepeA, oepeM, r2pA, r2pM, uvA, uvM];
+  const p2 = [pertesB, vpheB, anaB('an'), anaB('mo'), helloM, resM, ophA, ophM, tcheB('an'), tcheB('mo'), fid, paceB, to].filter(Boolean);
+  const foot = n => `<div class="ig-foot"><span>${igEsc(igCfg().title || '')} — Indices de gestion S${wk.week}</span><span>Édité le ${igFr(igIso(Date.now()))} · page ${n}</span></div>`;
+  const small = nR <= 3;
+  if (small) return [`<div class="ig-page">${head}<div class="ig-grid">${p1.concat(p2).join('')}</div>${foot(1)}</div>`];
+  return [`<div class="ig-page p1">${head}<div class="ig-grid">${p1.join('')}</div>${foot(1)}</div>`, `<div class="ig-page"><div class="ig-grid" style="margin-top:0">${p2.join('')}</div>${foot(2)}</div>`];
+}
+
+// ── interface ──
+function igLoad() { try { return JSON.parse(localStorage.getItem(IG_KEY) || '{}'); } catch (e) { return {}; } }
+function igSave(o) { try { localStorage.setItem(IG_KEY, JSON.stringify(o)); } catch (e) {} }
+function igOpenModal() {
+  const ws = igWeeks(); if (!ws.length) { alert('Aucune donnée quotidienne disponible.'); return; }
+  const s = igLoad(), sel = document.getElementById('igWeek');
+  const def = (ws.find(w => w.complete) || ws[0]).key;
+  sel.innerHTML = ws.map(w => `<option value="${w.key}">S${w.week} ${w.year} · du ${igFr(w.mon).slice(0, 5)} au ${igFr(w.sun).slice(0, 5)}${w.complete ? '' : ' · en cours'}</option>`).join('');
+  sel.value = def;
+  const mv = document.getElementById('igModal'); document.body.appendChild(mv);
+  const upd = () => { const e = (s.byWeek || {})[sel.value] || {}; document.getElementById('igEv').value = e.ev || ''; document.getElementById('igCamp').value = e.camp || ''; };
+  sel.onchange = upd; upd(); mv.classList.add('open');
+}
+function igClose() { document.getElementById('igModal').classList.remove('open'); document.getElementById('igOverlay').classList.remove('open'); document.body.style.overflow = ''; }
+function igGo() {
+  const key = document.getElementById('igWeek').value, ev = document.getElementById('igEv').value.trim(), camp = document.getElementById('igCamp').value.trim();
+  const s = igLoad(); s.byWeek = s.byWeek || {}; s.byWeek[key] = { ev, camp }; igSave(s);
+  let pages; try { pages = igBuild(key, ev, camp); } catch (e) { console.error(e); alert('Génération impossible : ' + e.message); return; }
+  if (!pages) { alert('Semaine introuvable.'); return; }
+  const ov = document.getElementById('igOverlay'); document.body.appendChild(ov);
+  document.getElementById('igPages').innerHTML = pages.join('');
+  document.getElementById('igBarTitle').textContent = 'Indices de gestion · ' + document.getElementById('igWeek').selectedOptions[0].textContent;
+  const z = Math.min(1, (window.innerWidth - 16) / 794); document.getElementById('igPages').style.zoom = z < 1 ? z : 1;
+  document.getElementById('igModal').classList.remove('open'); ov.classList.add('open'); ov.scrollTop = 0; document.body.style.overflow = 'hidden';
+}
+</script>
+
 <!-- ════════ FAQ / AIDE ════════ -->
 <style>
 #faqModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:5vh 14px; overflow-y:auto; }
@@ -7434,6 +7869,7 @@ function exportPeriods() {
       <div class="faq-item"><div class="faq-q">Bandeau semaine</div><div class="faq-a">Sous les bannières, les chiffres clés de la <b>semaine en cours</b> (CA, alim, transactions, VPHE, pertes) vs la semaine équivalente de l'an dernier, et le CA vs le <b>prévisionnel</b>. Les flèches ◀ ▶ changent de semaine ; la météo et les commentaires saisis s'affichent dessous. Cliquer une carte déroule le détail jour par jour.</div></div>
       <div class="faq-item"><div class="faq-q">Recherche par période 🔍</div><div class="faq-a">Choisir un restaurant et une période — un raccourci (cette semaine, ce mois, cette année) ou des dates au calendrier — pour obtenir CA, alim, transactions et VPHE sur cette période vs 2025.</div></div>
       <div class="faq-item"><div class="faq-q">Exporter</div><div class="faq-a"><b>Exporter</b> produit un fichier <b>Excel</b> mis en forme (restaurants et indicateurs au choix, mois par mois, cumul et comparaison N-1) ou une <b>image</b> de la vue affichée.</div></div>
+      <div class="faq-item"><div class="faq-q">Indices de gestion</div><div class="faq-a"><b>Indices</b> (bouton rouge) génère le <b>rapport hebdomadaire imprimable</b> (A4, 2 pages) : CA de la semaine et détail jour par jour, puis classements des restaurants (CA, OEPE, R2P, UVHE, pertes, VPHE, analyses, Hello McDo, réseaux, OPH, TCHE, FID, turn over). Choisis la semaine, ajoute les événements et campagnes, puis « Imprimer / PDF ». Les comparaisons de CA se font à jours équivalents (même jour de semaine l'an dernier). Un bloc sans donnée est masqué ; « vs S-1 » demande que la semaine et la précédente soient saisies dans l'onglet Hebdomadaire.</div></div>
 
       <div class="faq-sec-title" style="color:#0ea5e9;border-color:#0ea5e9">🗄️ Sources des données</div>
       <dl class="faq-def">
@@ -7844,6 +8280,7 @@ function switchEspace(name) {
   // Recherche → Pilotage seul ; Export → Pilotage + Performance
   const bR = document.getElementById('btnRecherche'); if (bR) bR.style.display = (name === 'pilotage') ? '' : 'none';
   const bE = document.getElementById('btnExporter'); if (bE) bE.style.display = (name === 'pilotage' || name === 'performance') ? '' : 'none';
+  const bI = document.getElementById('btnIndices'); if (bI) bI.style.display = (name === 'pilotage') ? '' : 'none';
   // Libellé de l'en-tête selon l'espace
   const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance' };
   const lblEl = document.getElementById('espaceLabel');
@@ -7877,7 +8314,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261017-213900';
+const BUILD_VERSION = '20261019-114304';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
