@@ -4239,7 +4239,6 @@ function populateDetail() {
   // ── Analyses / audits : historique des visites ──
   if (currentKPI === 'analyses_merieux_annual' || currentKPI === 'audit_merieux_annual') {
     body.innerHTML = qhHistoryHtml(currentKPI);
-    if (chartWrapEl) chartWrapEl.style.display = 'none';
     return;
   }
 
@@ -4740,6 +4739,7 @@ function initChart() {
   const canvas = document.getElementById('kpiChart');
   if (!canvas) return;
   const kpi = KPIs.find(k => k.id === currentKPI);
+  if (kpi && (kpi.id === 'analyses_merieux_annual' || kpi.id === 'audit_merieux_annual')) { qhInitChart(canvas); return; }   // historique analyses / audits : courbe mensuelle
   if (!kpi?.monthly && !kpi?.hasMonthly) { canvas.parentElement.style.display='none'; return; }
   canvas.parentElement.style.display='block';
   const monthlyId = kpi.hasMonthly || kpi.id;
@@ -7407,135 +7407,152 @@ function exportPeriods() {
 
 <!-- ════════ HISTORIQUE ANALYSES & AUDITS (détail des indicateurs Qualité) ════════ -->
 <style>
-.qh-sec { margin:2px 0 14px; }
-.qh-lbl { font-size:.66rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.qh-chips { display:flex; gap:6px; flex-wrap:wrap; }
-.qh-chips button { padding:5px 12px; border-radius:9px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.74rem; font-weight:700; cursor:pointer; }
-.qh-chips button.on { background:#7c3aed; border-color:#7c3aed; color:#fff; }
-.qh-kpis { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
-.qh-kpi { flex:1 1 110px; background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:9px 12px; }
+.qh-sec { margin:2px 0 6px; }
+.qh-lbl { font-size:.66rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin:14px 2px 8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.qh-nav { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.qh-nav button { width:34px; height:34px; border-radius:9px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-size:.95rem; font-weight:800; cursor:pointer; font-family:inherit; }
+.qh-nav button:disabled { opacity:.35; cursor:default; }
+.qh-nav select { padding:8px 12px; border-radius:9px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.84rem; font-weight:800; min-width:170px; }
+.qh-nav .h { font-size:.72rem; color:var(--muted); }
+.qh-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:12px; }
+.qh-kpi { background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:9px 12px; }
 .qh-kpi .l { font-size:.62rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
 .qh-kpi .v { font-size:1.25rem; font-weight:800; color:var(--text); margin-top:2px; }
 .qh-kpi .s { font-size:.68rem; color:var(--muted); }
-.qh-chart { background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:8px 6px 4px; margin-bottom:14px; }
-.qh-chart svg { width:100%; height:auto; display:block; }
-.qh-chart text { fill:var(--muted); font-size:9.5px; font-family:inherit; }
-.qh-scroll { max-height:440px; overflow:auto; border:1.5px solid var(--border); border-radius:12px; }
+.qh-scroll { max-height:340px; overflow:auto; border:1.5px solid var(--border); border-radius:12px; }
+.qh-scroll.fit { max-height:none; }
 .qh-tbl { width:100%; border-collapse:collapse; font-size:.78rem; }
 .qh-tbl th { position:sticky; top:0; background:var(--card2, var(--card)); color:var(--muted); font-size:.64rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; text-align:left; padding:8px 10px; border-bottom:1.5px solid var(--border); white-space:nowrap; }
 .qh-tbl td { padding:7px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
 .qh-tbl td.c, .qh-tbl th.c { text-align:center; }
 .qh-tbl td.com { white-space:normal; color:var(--muted); font-size:.72rem; min-width:140px; }
 .qh-tbl tr:last-child td { border-bottom:0; }
+.qh-tbl tr.tot td { font-weight:800; background:var(--card2, transparent); }
+.qh-tbl tr.none td { color:var(--muted); }
 .qh-dot { display:inline-block; width:10px; height:10px; border-radius:50%; vertical-align:middle; }
 .qh-g { background:#22a447; } .qh-o { background:#f59e0b; } .qh-r { background:#dc2626; }
 .qh-pos { color:#16a34a; font-weight:700; } .qh-neg { color:#dc2626; font-weight:700; }
 .qh-note { font-size:.68rem; color:var(--muted); margin-top:8px; line-height:1.5; }
 .qh-empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:.85rem; }
+details.qh-det { margin-top:12px; } details.qh-det summary { cursor:pointer; font-size:.72rem; font-weight:800; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; padding:4px 2px; }
 </style>
 <script>
 // ═════════════════════════════════════════════════════════════════
-//  HISTORIQUE des analyses (Silliker / Mérieux) et des audits Mérieux
-//  Une ligne par analyse ou par audit (onglet Ponctuel du Sheet), toutes années confondues,
-//  avec l'évolution par rapport à la visite précédente du même restaurant.
+//  HISTORIQUE des analyses (Silliker / Mérieux) et des audits Mérieux — consultable MOIS PAR MOIS
+//  Source : onglet Ponctuel du Sheet (une ligne par analyse / par audit).
+//  Vue Franchise : un tableau par restaurant pour le mois choisi + détail des visites du mois ;
+//  la courbe suit le même style que les autres indicateurs (un point par mois, un trait par restaurant).
 // ═════════════════════════════════════════════════════════════════
-let qhYear = 'all';
+let qhMonth = null, qhList = [];                                             // 'AAAA-MM' (mois choisi) ; null = dernier mois avec des données
 const QH_OBJ = 0.97;
-const QH_MS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
 const qhE = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const qhNum = x => { if (x == null || x === '') return null; const n = +x; return isFinite(n) ? n : null; };
 const qhPct = (v, d = 1) => v == null ? '—' : (Math.min(v, 1) * 100).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '%';
 const qhFr = s => s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
 const qhSt = v => v >= QH_OBJ - 1e-9 ? 'g' : (v >= 0.9 ? 'o' : 'r');
-const qhCol = { g: '#22a447', o: '#f59e0b', r: '#dc2626' };
-function qhSetYear(y) { qhYear = y; if (typeof populateDetail === 'function') populateDetail(); }
+const qhMLabel = k => _MOIS_FR[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4);
+const qhIsAna = id => id === 'analyses_merieux_annual';
+function qhSetMonth(m) { qhMonth = m; if (typeof populateDetail === 'function') { populateDetail(); if (typeof initChart === 'function') initChart(); } }
+function qhStep(d) { const n = qhList[qhList.indexOf(qhMonth) + d]; if (n) qhSetMonth(n); }
 
-function qhRows(kpiId) {
-  const isAna = kpiId === 'analyses_merieux_annual', type = isAna ? 'ANALYSE_SILLIKER' : 'AUDIT_MERIEUX';
-  const restos = currentResto === 'FRANCHISE' ? RESTOS : [currentResto];
-  const out = [];
+// Toutes les visites du type (tous restaurants) ; le filtre par restaurant est appliqué à l'affichage
+function qhAll(kpiId) {
+  const type = qhIsAna(kpiId) ? 'ANALYSE_SILLIKER' : 'AUDIT_MERIEUX', out = [];
   for (const x of DASHBOARD_DATA.ponctuel || []) {
-    if (x.type !== type || !restos.includes(x.restaurant) || !/^\d{4}-\d{2}-\d{2}/.test(String(x.periode))) continue;
+    if (x.type !== type || !RESTOS.includes(x.restaurant) || !/^\d{4}-\d{2}-\d{2}/.test(String(x.periode))) continue;
     const ok = qhNum(x.analyses_ok), nok = qhNum(x.analyses_nok), sc = qhNum(x.score);
     let v = sc;
-    if (isAna && ((ok || 0) + (nok || 0)) > 0) v = (ok || 0) / ((ok || 0) + (nok || 0));
+    if (qhIsAna(kpiId) && ((ok || 0) + (nok || 0)) > 0) v = (ok || 0) / ((ok || 0) + (nok || 0));
     if (v == null) continue;
-    out.push({ d: String(x.periode).slice(0, 10), r: x.restaurant, v, ok, nok, com: String(x.commentaire || '').trim() });
+    out.push({ d: String(x.periode).slice(0, 10), m: String(x.periode).slice(0, 7), r: x.restaurant, v, ok, nok, com: String(x.commentaire || '').trim() });
   }
-  out.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
-  const last = {};                                              // évolution calculée sur tout l'historique (avant le filtre par année)
-  for (const x of out) { x.evo = last[x.r] != null ? x.v - last[x.r] : null; last[x.r] = x.v; }
-  return out;
+  return out.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
 }
-
-// Courbe : un point par visite (restaurant) ou par mois (vue Franchise : Σ OK ÷ Σ analyses, moyenne des scores pour les audits)
-function qhChart(rows, isAna, franchise) {
-  let pts;
-  if (franchise) {
-    const g = {};
-    for (const x of rows) { const k = x.d.slice(0, 7); (g[k] = g[k] || []).push(x); }
-    pts = Object.keys(g).sort().map(k => {
-      const a = g[k], cnt = a.filter(x => (x.ok || 0) + (x.nok || 0) > 0);
-      const v = isAna && cnt.length === a.length ? cnt.reduce((s, x) => s + (x.ok || 0), 0) / cnt.reduce((s, x) => s + (x.ok || 0) + (x.nok || 0), 0) : a.reduce((s, x) => s + x.v, 0) / a.length;
-      return { t: Date.parse(k + '-15T00:00:00Z'), v, n: a.length };
-    });
-  } else pts = rows.map(x => ({ t: Date.parse(x.d + 'T00:00:00Z'), v: x.v, n: 1 }));
-  if (!pts.length) return '';
-  const W = 640, H = 190, pl = 38, pr = 12, pt = 12, pb = 24;
-  const t0 = pts[0].t, t1 = pts[pts.length - 1].t, mn = Math.min(...pts.map(p => Math.min(p.v, 1)));
-  const lo = Math.min(0.9, Math.floor((mn - 0.02) * 20) / 20);
-  const X = t => pts.length === 1 || t1 === t0 ? (pl + W - pr) / 2 : pl + (t - t0) / (t1 - t0) * (W - pl - pr);
-  const Y = v => pt + (1 - (Math.min(v, 1) - lo) / (1 - lo)) * (H - pt - pb);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution">`;
-  for (let v = Math.ceil(lo * 20) / 20; v <= 1.0001; v += 0.05) s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="currentColor" stroke-opacity=".1"/><text x="${pl - 5}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${Math.round(v * 100)}%</text>`;
-  s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(QH_OBJ).toFixed(1)}" y2="${Y(QH_OBJ).toFixed(1)}" stroke="#22a447" stroke-width="1.2" stroke-dasharray="5 4"/><text x="${W - pr}" y="${(Y(QH_OBJ) - 3).toFixed(1)}" text-anchor="end" style="fill:#22a447">objectif 97%</text>`;
-  const d0 = new Date(t0), d1 = new Date(t1);
-  let ty = d0.getUTCFullYear(), tm = d0.getUTCMonth(); const ticks = [];
-  while (ty < d1.getUTCFullYear() || (ty === d1.getUTCFullYear() && tm <= d1.getUTCMonth())) { ticks.push([ty, tm]); if (++tm > 11) { tm = 0; ty++; } }
-  const step = Math.max(1, Math.ceil(ticks.length / 9));
-  ticks.forEach(([yy, mm], i) => { if (i % step) return; const x = X(Date.UTC(yy, mm, 1)); if (x < pl - 1 || x > W - pr + 1) return; s += `<text x="${x.toFixed(1)}" y="${H - 7}" text-anchor="middle">${QH_MS[mm]} ${String(yy).slice(2)}</text>`; });
-  if (pts.length > 1) s += `<polyline fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-opacity=".75" points="${pts.map(p => X(p.t).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}"/>`;
-  for (const p of pts) s += `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="3.6" fill="${qhCol[qhSt(p.v)]}" stroke="#fff" stroke-width="1"><title>${qhPct(p.v)}${franchise ? ' · ' + p.n + ' visite' + (p.n > 1 ? 's' : '') : ''}</title></circle>`;
-  return s + '</svg>';
+// Résultat d'un ensemble de visites : Σ OK ÷ Σ analyses quand tout est compté, sinon moyenne des résultats
+function qhRate(rows, isAna) {
+  if (!rows.length) return null;
+  const c = rows.filter(x => (x.ok || 0) + (x.nok || 0) > 0);
+  if (isAna && c.length === rows.length) return c.reduce((s, x) => s + (x.ok || 0), 0) / c.reduce((s, x) => s + (x.ok || 0) + (x.nok || 0), 0);
+  return rows.reduce((s, x) => s + x.v, 0) / rows.length;
 }
+const qhEvo = e => e == null ? '<span style="color:var(--muted)">—</span>' : (Math.abs(e) < 0.0005 ? '=' : `<span class="${e > 0 ? 'qh-pos' : 'qh-neg'}">${e > 0 ? '+' : '-'}${(Math.abs(e) * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pt</span>`);
+const qhDot = v => v == null ? '' : `<span class="qh-dot qh-${qhSt(v)}"></span>`;
 
 function qhHistoryHtml(kpiId) {
-  const isAna = kpiId === 'analyses_merieux_annual', fr = currentResto === 'FRANCHISE';
-  const restos = fr ? RESTOS : [currentResto], all = qhRows(kpiId);
-  const years = [...new Set(all.map(x => x.d.slice(0, 4)))].sort().reverse();
-  if (qhYear !== 'all' && !years.includes(qhYear)) qhYear = 'all';
-  const rows = all.filter(x => qhYear === 'all' || x.d.startsWith(qhYear));
-  const chips = `<div class="qh-lbl">Période</div><div class="qh-chips" style="margin-bottom:12px"><button class="${qhYear === 'all' ? 'on' : ''}" onclick="qhSetYear('all')">Toutes</button>${years.map(y => `<button class="${qhYear === y ? 'on' : ''}" onclick="qhSetYear('${y}')">${y}</button>`).join('')}</div>`;
-
-  // Moyennes annuelles (Sheet : annuel / calcul des visites)
+  const isAna = qhIsAna(kpiId), fr = currentResto === 'FRANCHISE', restos = fr ? RESTOS : [currentResto];
+  const all = qhAll(kpiId), months = [...new Set(all.map(x => x.m))].sort();
   const lines = fr ? [...RESTOS, 'FRANCHISE'] : [currentResto];
-  const ys = [YEAR_P2, YEAR_PREV, YEAR_CUR].filter(y => lines.some(r => DASHBOARD_DATA[String(y)]?.[kpiId]?.[r] != null));   // années sans aucune valeur : masquées
-  const annual = `<div class="qh-lbl">Moyenne annuelle</div><div class="qh-scroll" style="max-height:none;margin-bottom:14px"><table class="qh-tbl"><thead><tr><th>${fr ? 'Restaurant' : ' '}</th>${ys.map(y => `<th class="c">${y}</th>`).join('')}</tr></thead><tbody>`
-    + lines.map(r => `<tr${r === 'FRANCHISE' ? ' style="font-weight:800"' : ''}><td>${r === 'FRANCHISE' ? 'Franchise' : qhE(restoShort(r))}</td>${ys.map(y => { const v = DASHBOARD_DATA[String(y)]?.[kpiId]?.[r]; return `<td class="c">${v == null ? '—' : `<span class="qh-dot qh-${qhSt(v)}" style="margin-right:6px"></span>${qhPct(v)}`}</td>`; }).join('')}</tr>`).join('')
-    + '</tbody></table></div>';
+  const ys = [YEAR_P2, YEAR_PREV, YEAR_CUR].filter(y => lines.some(r => DASHBOARD_DATA[String(y)]?.[kpiId]?.[r] != null));
+  const annual = `<details class="qh-det"><summary>Moyenne annuelle par restaurant</summary><div class="qh-scroll fit" style="margin-top:8px"><table class="qh-tbl"><thead><tr><th>${fr ? 'Restaurant' : ' '}</th>${ys.map(y => `<th class="c">${y}</th>`).join('')}</tr></thead><tbody>`
+    + lines.map(r => `<tr${r === 'FRANCHISE' ? ' class="tot"' : ''}><td>${r === 'FRANCHISE' ? 'Franchise' : qhE(restoShort(r))}</td>${ys.map(y => { const v = DASHBOARD_DATA[String(y)]?.[kpiId]?.[r]; return `<td class="c">${v == null ? '—' : qhDot(v) + ' ' + qhPct(v)}</td>`; }).join('')}</tr>`).join('')
+    + '</tbody></table></div></details>';
+  if (!months.length) return `<div class="qh-sec"><div class="qh-empty">Aucun${isAna ? 'e analyse' : ' audit'} détaillé${isAna ? 'e' : ''} enregistré${isAna ? 'e' : ''} pour le moment.<br>Les ${isAna ? 'analyses' : 'audits'} saisis dans l'onglet « Ponctuel » de la page de saisie apparaîtront ici.</div>${ys.length ? annual : ''}</div>`;
 
-  if (!all.length) return `<div class="qh-sec">${annual}<div class="qh-empty">Aucun${isAna ? 'e analyse' : ' audit'} détaillé${isAna ? 'e' : ''} enregistré${isAna ? 'e' : ''} pour le moment.<br>Les ${isAna ? 'analyses' : 'audits'} saisis dans l'onglet « Ponctuel » de la page de saisie apparaîtront ici.</div></div>`;
+  // Liste continue des mois (du premier au dernier mois avec des données) pour la navigation
+  const mlist = []; { let y = +months[0].slice(0, 4), m = +months[0].slice(5, 7); const ey = +months[months.length - 1].slice(0, 4), em = +months[months.length - 1].slice(5, 7);
+    while (y < ey || (y === ey && m <= em)) { mlist.push(y + '-' + String(m).padStart(2, '0')); if (++m > 12) { m = 1; y++; } } }
+  qhList = mlist;
+  if (!qhMonth || !mlist.includes(qhMonth)) qhMonth = months[months.length - 1];
+  const M = qhMonth, i = mlist.indexOf(M);
+  const nav = `<div class="qh-nav"><button onclick="qhStep(-1)" ${i > 0 ? '' : 'disabled'} title="Mois précédent">◀</button>
+    <select onchange="qhSetMonth(this.value)">${[...mlist].reverse().map(k => `<option value="${k}" ${k === M ? 'selected' : ''}>${qhMLabel(k)}${months.includes(k) ? '' : ' (aucune visite)'}</option>`).join('')}</select>
+    <button onclick="qhStep(1)" ${i < mlist.length - 1 ? '' : 'disabled'} title="Mois suivant">▶</button></div>`;
 
-  // Synthèse de la période affichée
-  const cnt = rows.filter(x => (x.ok || 0) + (x.nok || 0) > 0);
-  const avg = !rows.length ? null : (isAna && cnt.length === rows.length ? cnt.reduce((s, x) => s + (x.ok || 0), 0) / cnt.reduce((s, x) => s + (x.ok || 0) + (x.nok || 0), 0) : rows.reduce((s, x) => s + x.v, 0) / rows.length);
-  const nNok = rows.filter(x => x.v < QH_OBJ - 1e-9).length, best = rows.length ? Math.max(...rows.map(x => x.v)) : null, worst = rows.length ? Math.min(...rows.map(x => x.v)) : null;
-  const tot = isAna ? { ok: rows.reduce((s, x) => s + (x.ok || 0), 0), nok: rows.reduce((s, x) => s + (x.nok || 0), 0) } : null;
+  const inM = all.filter(x => x.m === M && restos.includes(x.r));
+  const prevRate = r => {                                         // dernier mois antérieur avec des visites (pour ce restaurant, ou toute la franchise)
+    for (let j = mlist.indexOf(M) - 1; j >= 0; j--) { const rows = all.filter(x => x.m === mlist[j] && (r === 'FRANCHISE' ? restos.includes(x.r) : x.r === r)); if (rows.length) return qhRate(rows, isAna); }
+    return null;
+  };
+  const rateM = qhRate(inM, isAna), nUnder = inM.filter(x => x.v < QH_OBJ - 1e-9).length;
+  const tot = isAna ? { ok: inM.reduce((s, x) => s + (x.ok || 0), 0), nok: inM.reduce((s, x) => s + (x.nok || 0), 0) } : null;
   const kp = `<div class="qh-kpis">
-    <div class="qh-kpi"><div class="l">${isAna ? 'Analyses' : 'Audits'}</div><div class="v">${rows.length}</div><div class="s">${isAna ? `${tot.ok} OK · ${tot.nok} NOK` : 'sur la période'}</div></div>
-    <div class="qh-kpi"><div class="l">Moyenne</div><div class="v">${qhPct(avg)}</div><div class="s">objectif ${qhPct(QH_OBJ, 0)}</div></div>
-    <div class="qh-kpi"><div class="l">Sous l'objectif</div><div class="v">${nNok}</div><div class="s">sur ${rows.length}</div></div>
-    <div class="qh-kpi"><div class="l">Meilleur · moins bon</div><div class="v" style="font-size:1rem">${qhPct(best)} · ${qhPct(worst)}</div><div class="s">résultats unitaires</div></div></div>`;
+    <div class="qh-kpi"><div class="l">${isAna ? 'Analyses' : 'Audits'} · ${qhMLabel(M)}</div><div class="v">${inM.length}</div><div class="s">${isAna ? `${tot.ok} OK · ${tot.nok} NOK${inM.some(x => !((x.ok || 0) + (x.nok || 0))) ? ' · ' + inM.filter(x => !((x.ok || 0) + (x.nok || 0))).length + ' sans détail' : ''}` : `${new Set(inM.map(x => x.r)).size} restaurant${new Set(inM.map(x => x.r)).size > 1 ? 's' : ''}`}</div></div>
+    <div class="qh-kpi"><div class="l">${isAna ? 'Taux de conformité' : 'Score moyen'}</div><div class="v">${qhPct(rateM)}</div><div class="s">objectif ${qhPct(QH_OBJ, 0)}${inM.length ? ' · ' + (qhEvo(rateM != null && prevRate('FRANCHISE') != null ? rateM - prevRate('FRANCHISE') : null)).replace(/<[^>]+>/g, '') + ' vs mois préc.' : ''}</div></div>
+    <div class="qh-kpi"><div class="l">Sous l'objectif</div><div class="v">${nUnder}</div><div class="s">sur ${inM.length} ${isAna ? 'analyse' : 'audit'}${inM.length > 1 ? 's' : ''}</div></div></div>`;
 
-  const head = `<th>Date</th>${fr ? '<th>Restaurant</th>' : ''}${isAna ? '<th class="c">OK</th><th class="c">NOK</th><th class="c">Taux</th>' : '<th class="c">Score</th>'}<th class="c">Évolution</th><th class="c">Statut</th>${isAna ? '' : '<th>Commentaire</th>'}`;
-  const body = [...rows].reverse().map(x => {
-    const evo = x.evo == null ? '<span style="color:var(--muted)">—</span>' : `<span class="${Math.abs(x.evo) < 0.0005 ? '' : (x.evo > 0 ? 'qh-pos' : 'qh-neg')}">${Math.abs(x.evo) < 0.0005 ? '=' : (x.evo > 0 ? '+' : '-') + (Math.abs(x.evo) * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' pt'}</span>`;
-    return `<tr><td>${qhFr(x.d)}</td>${fr ? `<td><b>${qhE(restoShort(x.r))}</b></td>` : ''}${isAna ? `<td class="c">${x.ok == null ? '—' : x.ok}</td><td class="c">${x.nok == null ? (x.ok == null ? '—' : 0) : x.nok}</td><td class="c"><b>${qhPct(x.v)}</b></td>` : `<td class="c"><b>${qhPct(x.v)}</b></td>`}<td class="c">${evo}</td><td class="c"><span class="qh-dot qh-${qhSt(x.v)}"></span></td>${isAna ? '' : `<td class="com">${qhE(x.com)}</td>`}</tr>`;
-  }).join('');
-  const ch = qhChart(rows, isAna, fr);
-  return `<div class="qh-sec">${chips}${kp}${ch ? `<div class="qh-lbl">Évolution${fr ? ' (moyenne mensuelle de la franchise)' : ''}</div><div class="qh-chart">${ch}</div>` : ''}${annual}<div class="qh-lbl">Historique ${isAna ? 'des analyses' : 'des audits'} · ${rows.length}</div>
-    <div class="qh-scroll"><table class="qh-tbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="8" class="qh-empty">Aucun résultat sur cette période.</td></tr>`}</tbody></table></div>
-    <div class="qh-note">Une ligne par ${isAna ? 'analyse' : 'audit'} saisi${isAna ? 'e' : ''} (onglet « Ponctuel »). « Évolution » = écart avec le résultat précédent du même restaurant. Vert ≥ 97 %, orange ≥ 90 %, rouge en dessous. Avant la saisie détaillée, seules les moyennes annuelles ci-dessus sont connues.</div></div>`;
+  // Tableau par restaurant (vue Franchise) pour le mois choisi
+  let perResto = '';
+  if (fr) {
+    const rowOf = r => { const rows = inM.filter(x => x.r === r); const v = qhRate(rows, isAna), p = prevRate(r); return { r, n: rows.length, ok: rows.reduce((s, x) => s + (x.ok || 0), 0), nok: rows.reduce((s, x) => s + (x.nok || 0), 0), hasCnt: rows.some(x => (x.ok || 0) + (x.nok || 0) > 0), v, evo: v != null && p != null ? v - p : null }; };
+    const line = (x, label, cls) => `<tr class="${cls || (x.n ? '' : 'none')}"><td><b>${label}</b></td><td class="c">${x.n || '—'}</td>${isAna ? `<td class="c">${x.n && x.hasCnt ? x.ok : '—'}</td><td class="c">${x.n && x.hasCnt ? x.nok : '—'}</td>` : ''}<td class="c">${x.n ? '<b>' + qhPct(x.v) + '</b>' : '—'}</td><td class="c">${x.n ? qhEvo(x.evo) : ''}</td><td class="c">${qhDot(x.v)}</td></tr>`;
+    const frRow = rowOf('FRANCHISE'); const rowsR = RESTOS.map(rowOf);
+    frRow.n = inM.length; frRow.v = rateM; frRow.ok = tot ? tot.ok : 0; frRow.nok = tot ? tot.nok : 0; frRow.hasCnt = inM.some(x => (x.ok || 0) + (x.nok || 0) > 0); { const p = prevRate('FRANCHISE'); frRow.evo = rateM != null && p != null ? rateM - p : null; }
+    perResto = `<div class="qh-lbl">Par restaurant · ${qhMLabel(M)}</div><div class="qh-scroll fit"><table class="qh-tbl"><thead><tr><th>Restaurant</th><th class="c">${isAna ? 'Analyses' : 'Audits'}</th>${isAna ? '<th class="c">OK</th><th class="c">NOK</th>' : ''}<th class="c">${isAna ? 'Taux' : 'Score moyen'}</th><th class="c">vs mois préc.</th><th class="c">Statut</th></tr></thead><tbody>`
+      + rowsR.map(x => line(x, qhE(restoShort(x.r)))).join('') + line(frRow, 'Franchise', 'tot') + '</tbody></table></div>';
+  }
+
+  // Détail des visites du mois (court : un mois seulement)
+  const head = `<th>Date</th>${fr ? '<th>Restaurant</th>' : ''}${isAna ? '<th class="c">OK</th><th class="c">NOK</th><th class="c">Taux</th>' : '<th class="c">Score</th>'}<th class="c">Statut</th>${isAna ? '' : '<th>Commentaire</th>'}`;
+  const body = [...inM].reverse().map(x => `<tr><td>${qhFr(x.d)}</td>${fr ? `<td><b>${qhE(restoShort(x.r))}</b></td>` : ''}${isAna ? `<td class="c">${x.ok == null ? '—' : x.ok}</td><td class="c">${x.nok == null ? (x.ok == null ? '—' : 0) : x.nok}</td><td class="c"><b>${qhPct(x.v)}</b></td>` : `<td class="c"><b>${qhPct(x.v)}</b></td>`}<td class="c">${qhDot(x.v)}</td>${isAna ? '' : `<td class="com">${qhE(x.com)}</td>`}</tr>`).join('');
+  const detail = `<div class="qh-lbl">Détail ${isAna ? 'des analyses' : 'des audits'} · ${qhMLabel(M)} · ${inM.length}</div><div class="qh-scroll"><table class="qh-tbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="8" class="qh-empty">Aucun${isAna ? 'e analyse' : ' audit'} ce mois-ci${fr ? '' : ' pour ce restaurant'}.</td></tr>`}</tbody></table></div>`;
+
+  return `<div class="qh-sec">${nav}${kp}${perResto}${detail}<div class="qh-note">Une ligne par ${isAna ? 'analyse' : 'audit'} saisi${isAna ? 'e' : ''} (onglet « Ponctuel »). Vert ≥ 97 %, orange ≥ 90 %, rouge en dessous. La courbe ci-dessous donne le résultat mensuel ; cliquer un point ouvre le mois.</div>${ys.length ? annual : ''}</div>`;
+}
+
+// Courbe mensuelle : même gabarit que les autres indicateurs (zone .chart-wrap, un trait par restaurant)
+function qhInitChart(canvas) {
+  if (typeof Chart === 'undefined') { return whenChart(() => qhInitChart(canvas)); }
+  const kpiId = currentKPI, isAna = qhIsAna(kpiId), fr = currentResto === 'FRANCHISE', restos = fr ? RESTOS : [currentResto];
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  const all = qhAll(kpiId); if (!all.length) { canvas.parentElement.style.display = 'none'; return; }
+  const ref = qhMonth || all[all.length - 1].m, yr = ref.slice(0, 4);
+  const ms = [...new Set(all.filter(x => x.m.startsWith(yr)).map(x => x.m))].sort();
+  canvas.parentElement.style.display = 'block';
+  const colors = ['#f5a500', '#27ae60', '#9b59b6', '#e74c3c', '#e67e22', '#16a085', '#e91e63', '#a1887f'];
+  const datasets = restos.map((r, k) => ({
+    label: restoDisplay(r), data: ms.map(m => { const v = qhRate(all.filter(x => x.m === m && x.r === r), isAna); return v == null ? null : Math.min(v, 1) * 100; }),
+    borderColor: colors[RESTOS.indexOf(r) % colors.length], backgroundColor: colors[RESTOS.indexOf(r) % colors.length], tension: .1, spanGaps: true, pointRadius: ms.map(m => m === ref ? 6 : 3), borderWidth: 1.6 }));
+  if (fr) datasets.push({ label: 'Franchise', data: ms.map(m => { const v = qhRate(all.filter(x => x.m === m), isAna); return v == null ? null : Math.min(v, 1) * 100; }), borderColor: '#111827', backgroundColor: '#111827', borderWidth: 3, tension: .1, spanGaps: true, pointRadius: ms.map(m => m === ref ? 6 : 3) });
+  datasets.push({ label: 'Objectif 97%', data: ms.map(() => QH_OBJ * 100), borderColor: '#22a447', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false });
+  const mn = Math.min(...datasets.flatMap(d => d.data.filter(v => v != null)));
+  chartInst = new Chart(canvas, {
+    type: 'line', data: { labels: ms.map(m => MONTH_SHORT[+m.slice(5, 7) - 1]), datasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      onClick: (e, els) => { if (els.length) qhSetMonth(ms[els[0].index]); },
+      plugins: { legend: { labels: { color: '#6b7280', font: { size: 11 }, boxWidth: 12 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.raw == null ? '—' : c.raw.toFixed(1).replace('.', ',') + '%'}` } } },
+      scales: { x: { grid: { display: false }, ticks: { color: '#6b7280', font: { size: 11 } } },
+        y: { suggestedMin: Math.max(0, Math.floor((mn - 5) / 5) * 5), max: 100, grid: { color: '#e8eaed' }, ticks: { color: '#6b7280', font: { size: 10 }, callback: v => v + '%' } } } }
+  });
 }
 </script>
 
@@ -8501,7 +8518,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261019-121106';
+const BUILD_VERSION = '20261019-174342';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
