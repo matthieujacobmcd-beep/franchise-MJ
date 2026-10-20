@@ -6223,6 +6223,83 @@ function renderWeekDetail() {
   }
 }
 
+// ── Bannière Jour / Semaine / Mois : vue « Par restaurant » ──
+// Tous les restaurants côte à côte (une ligne par restaurant, une colonne par indicateur), pour la période affichée
+// et comparés à l'an passé (jour / semaine équivalente, même mois). Clic sur un titre de colonne : classement ; clic sur un restaurant : ses cartes.
+let weekView = (() => { try { return localStorage.getItem('fmj_weekview') === 'resto' ? 'resto' : 'cards'; } catch (e) { return 'cards'; } })();
+let weekSortK = null, weekSortDir = -1;
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `
+.wkt-wrap { overflow-x:auto; border:1.5px solid var(--border); border-radius:12px; background:var(--card); }
+table.wkt { width:100%; border-collapse:collapse; font-size:.78rem; min-width:860px; }
+table.wkt th { background:var(--card2, var(--card)); color:var(--muted); font-size:.62rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; padding:9px 8px; border-bottom:1.5px solid var(--border); text-align:center; white-space:nowrap; cursor:pointer; user-select:none; }
+table.wkt th:first-child { text-align:left; cursor:default; position:sticky; left:0; z-index:2; }
+table.wkt th.on { color:#7c3aed; }
+table.wkt td { padding:7px 8px; border-bottom:1px solid var(--border); text-align:center; vertical-align:middle; white-space:nowrap; color:var(--text); }
+table.wkt td:first-child { text-align:left; font-weight:800; position:sticky; left:0; background:var(--card); z-index:1; cursor:pointer; }
+table.wkt td:first-child:hover { color:#7c3aed; }
+table.wkt tr:last-child td { border-bottom:0; }
+table.wkt tr.wkt-fr td { background:rgba(139,92,246,.07); font-weight:800; }
+table.wkt tr.wkt-fr td:first-child { background:#f1ebfd; cursor:default; color:#6d28d9; }
+.wkt-v { font-weight:800; font-size:.86rem; }
+.wkt-a { font-size:.66rem; font-weight:700; color:var(--muted); }
+.wkt-d { font-size:.66rem; font-weight:700; }
+.wkt-d.up { color:var(--green, #16a34a); } .wkt-d.down { color:var(--red, #dc2626); }
+.wkt-ns { color:var(--muted); font-weight:600; font-size:.7rem; font-style:italic; }
+.wkt-note { font-size:.68rem; color:var(--muted); margin:8px 2px 0; }
+.wk-view { display:inline-flex; gap:0; margin-left:auto; }
+.wk-view + .wk-nav { margin-left:0; }
+.wk-view button { border:1.5px solid rgba(139,92,246,.35); background:var(--card); color:#7c3aed; padding:3px 10px; font-weight:800; cursor:pointer; font-size:.75rem; }
+`;
+  document.head.appendChild(st);
+})();
+
+function weekSetView(v) { weekView = v; try { localStorage.setItem('fmj_weekview', v); } catch (e) {} weekOpenKpi = null; renderWeekStrip(); }
+function weekSortBy(k) {
+  if (weekSortK !== k) { weekSortK = k; weekSortDir = -1; } else if (weekSortDir === -1) weekSortDir = 1; else { weekSortK = null; weekSortDir = -1; }
+  renderWeekStrip();
+}
+function weekPickResto(r) { weekResto = r; weekSetView('cards'); if (typeof renderAutoSummary === 'function') renderAutoSummary(); }
+
+function weekRestoTable() {
+  const cell = (k, r) => {
+    const v = weekAgg(k.id, 'cur', r), p = weekAgg(k.id, 'n1', r);
+    return { v, p, d: (v != null && p) ? (v - p) / p * 100 : null, amt: k.amt ? weekAgg(k.amt, 'cur', r) : null };
+  };
+  let list = [...RESTOS];
+  if (weekSortK) {
+    const k = WEEK_KPIS.find(x => x.id === weekSortK);
+    const val = r => { const v = weekAgg(k.id, 'cur', r); return v == null ? null : v; };
+    list.sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (x - y) * weekSortDir; });
+  }
+  const td = (k, r) => {
+    const c = cell(k, r);
+    if (c.v == null) return `<td><span class="wkt-ns">non saisi</span></td>`;
+    const good = c.d == null ? true : (k.invert ? c.d < 0 : c.d >= 0);
+    return `<td><div class="wkt-v">${fmt(c.v, k.fmt)}</div>${k.amt && c.amt != null ? `<div class="wkt-a">${fmt(c.amt, 'euros')}</div>` : ''}${c.d == null ? '' : `<div class="wkt-d ${good ? 'up' : 'down'}">${c.d >= 0 ? '▲ +' : '▼ '}${Math.abs(c.d).toFixed(1)}%</div>`}</td>`;
+  };
+  const head = WEEK_KPIS.map(k => `<th class="${weekSortK === k.id ? 'on' : ''}" onclick="weekSortBy('${k.id}')" title="Classer les restaurants">${k.label}${weekSortK === k.id ? (weekSortDir === -1 ? ' ▼' : ' ▲') : ''}</th>`).join('');
+  const frRow = `<tr class="wkt-fr"><td>Franchise</td>${WEEK_KPIS.map(k => td(k, 'FRANCHISE')).join('')}</tr>`;
+  const rows = list.map(r => `<tr><td onclick="weekPickResto('${r}')" title="Voir les cartes de ${restoDisplay(r).replace(/'/g, '’')}">${restoShort(r)}</td>${WEEK_KPIS.map(k => td(k, r)).join('')}</tr>`).join('');
+  return `<div class="wkt-wrap"><table class="wkt"><thead><tr><th>Restaurant</th>${head}</tr></thead><tbody>${frRow}${rows}</tbody></table></div>
+    <div class="wkt-note">${WEEK.label} · variation vs ${{ d: 'jour équivalent', m: 'même mois', w: 'semaine équivalente' }[weekMode]} ${WEEK.yearN1}. Un titre de colonne classe les restaurants ; un clic sur un restaurant affiche ses cartes.</div>`;
+}
+
+// Ajoute le sélecteur « Cartes | Par restaurant » à la bannière et remplace les cartes par le tableau quand il est actif
+const __wkStripOrig = renderWeekStrip;
+renderWeekStrip = function () {
+  __wkStripOrig.apply(this, arguments);
+  const el = document.getElementById('weekStrip'); if (!el || !WEEK || !WEEK.days) return;
+  const nav = el.querySelector('.wk-nav');
+  const on = 'background:#7c3aed;color:#fff;border-color:#7c3aed;';
+  if (nav) nav.insertAdjacentHTML('beforebegin', `<span class="wk-view"><button onclick="weekSetView('cards')" style="${weekView === 'cards' ? on : ''}border-radius:8px 0 0 8px">Cartes</button><button onclick="weekSetView('resto')" style="${weekView === 'resto' ? on : ''}border-radius:0 8px 8px 0">Par restaurant</button></span>`);
+  if (weekView !== 'resto') return;
+  const car = document.getElementById('wkCar'); if (car) car.style.display = 'none';
+  const cards = el.querySelector('.week-cards'); if (cards) cards.outerHTML = weekRestoTable();
+  const det = document.getElementById('weekDetail'); if (det) det.innerHTML = '';
+};
+
 // Re-rendu du bandeau à chaque changement de vue / restaurant.
 // On ne referme le détail semaine QUE lorsqu'on ouvre un KPI principal
 // (pour ne pas encombrer). Un simple changement de restaurant ou de mode
@@ -7707,10 +7784,8 @@ function igWeekOf(iso) {                                          // semaine ISO
   return { key: y + '-W' + String(w).padStart(2, '0'), year: y, week: w, mon, sun: igAdd(mon, 6), thu, mi: +thu.slice(5, 7) - 1 };
 }
 const igObj = (kind, r) => { const c = (igCfg().indices || {})[kind]; if (c == null) return null; if (typeof c === 'number') return c; const v = c[r] != null ? c[r] : c.default; return igOk(v) ? v : null; };
-const igBudget = (r, iso) => {                                   // prévisionnel CA alim du jour : saisie jour par jour, sinon budget mensuel ramené au jour
-  const pj = DASHBOARD_DATA.prevjour?.[r]?.[iso]; if (pj && igOk(pj.alim)) return pj.alim;
-  const y = +iso.slice(0, 4), mi = +iso.slice(5, 7) - 1, mv = DASHBOARD_DATA[String(y)]?.ca_alim_prev?.[MONTHS[mi]]?.[r];
-  return igOk(mv) ? mv / new Date(Date.UTC(y, mi + 1, 0)).getUTCDate() : null;
+const igBudget = (r, iso) => {                                   // prévisionnel CA alim du jour : UNIQUEMENT s'il a été saisi (Prévision CA jour par jour), jamais déduit d'un budget mensuel
+  const pj = DASHBOARD_DATA.prevjour?.[r]?.[iso]; return pj && igOk(pj.alim) ? pj.alim : null;
 };
 const igOpen = (r, n1) => { const o = (DASHBOARD_DATA.meta || {}).open || {}; return !(o[r] && n1 < o[r]); };
 
@@ -7726,20 +7801,22 @@ function igWeeks() {
 function igWeekCalc(wk, end) {
   const days = [...Array(7)].map((_, i) => igAdd(wk.mon, i)), R = RESTOS;
   const D = days.map(d => {
-    const o = { d, cur: null, n1: null, prev: null, t: null, t1: null };
+    const o = { d, cur: null, n1: null, prev: null, t: null, t1: null, pm: 0 };
     for (const r of R) {
       const n1d = igAdd(d, -364); if (d > end || !igOpen(r, n1d)) continue;
       const a = igDv(r, 'alim', d); if (a == null) continue;
       o.cur = (o.cur || 0) + a;
       const a1 = igDv(r, 'alim', n1d); if (a1 != null) o.n1 = (o.n1 || 0) + a1;
-      const b = igBudget(r, d); if (b != null) o.prev = (o.prev || 0) + b;
+      const b = igBudget(r, d); if (b != null) o.prev = (o.prev || 0) + b; else o.pm++;      // restaurant saisi mais sans prévision ce jour-là
       const t = igDv(r, 'tacs', d); if (t != null) o.t = (o.t || 0) + t;
       const t1 = igDv(r, 'tacs', n1d); if (t1 != null) o.t1 = (o.t1 || 0) + t1;
     }
+    if (o.pm) o.prev = null;                                         // prévision incomplète sur la journée : on n'affiche rien plutôt que de supposer
     return o;
   });
   const sm = f => { let s = null; for (const x of D) if (x[f] != null) s = (s || 0) + x[f]; return s; };
-  const tot = { cur: sm('cur'), n1: sm('n1'), prev: sm('prev'), t: sm('t'), t1: sm('t1') };
+  const allPrev = D.some(x => x.prev != null) && D.every(x => x.cur == null || x.prev != null);   // objectif de la semaine : seulement si chaque jour saisi a sa prévision
+  const tot = { cur: sm('cur'), n1: sm('n1'), prev: allPrev ? sm('prev') : null, t: sm('t'), t1: sm('t1') };
   // VPH / pertes / CA total : mêmes jours et restaurants, numérateur et dénominateur saisis
   let al = 0, he = 0, al2 = 0, hg = 0, pe = 0, al3 = 0, cat = 0, cat1 = 0;
   for (const d of days) for (const r of R) {
@@ -7785,7 +7862,23 @@ function igRatio(r, fn, fd, from, to) {
 // ── indicateurs hebdomadaires : moyenne des semaines du mois (rattachées par leur jeudi), tables mensuelles sinon ──
 const IG_HEB = { oepe: ['oepe', 'oepe', 'oepe_annual'], r2p: ['r2p', 'r2p', 'r2p_annual'], oph: ['oph', 'oph', 'oph_annual'], hello: ['hello_mcdo', 'hello_mcdo', null],
                  reseaux: ['reseaux', 'reseau', null], uvhe: ['uvhe', 'uvhe_monthly', 'uvhe_annual'], tche: ['tche', 'tche_monthly', 'tche_annual'] };
+// OPH = avis négatifs × 100 000 ÷ transactions (règle du dashboard) : le nombre d'avis est saisi chaque semaine ; on cumule les avis des semaines du mois
+// (rattachées par leur jeudi) et on les rapporte aux transactions du mois saisies jusqu'à la fin de la dernière semaine retenue.
+function igOphMonth(r, y, mi, maxKey) {
+  let avis = 0, n = 0, endW = null;
+  for (const x of DASHBOARD_DATA.hebdo || []) {
+    if (x.restaurant !== r || !/^\d{4}-W\d{2}$/.test(x.periode) || (maxKey && x.periode > maxKey)) continue;
+    const w = igWeekOfKey(x.periode); if (w.year !== y || w.mi !== mi) continue;
+    const a = igNum(x.avis); if (a == null) continue;
+    avis += a; n++; if (!endW || w.sun > endW) endW = w.sun;
+  }
+  if (!n) return null;
+  const m1 = y + '-' + String(mi + 1).padStart(2, '0'), mEnd = igIso(Date.UTC(y, mi + 1, 0)), to = endW < mEnd ? endW : mEnd;
+  let tx = 0; for (let t = igT(m1 + '-01'); t <= igT(to); t += IG_D) { const v = igDv(r, 'tacs', igIso(t)); if (v != null) tx += v; }
+  return tx ? { v: avis * 100000 / tx, w: tx } : null;
+}
 function igHebMonth(k, r, y, mi, maxKey) {
+  if (k === 'oph') { const o = igOphMonth(r, y, mi, maxKey); if (o) return o.v; }
   const f = IG_HEB[k][0], vals = [];
   for (const x of DASHBOARD_DATA.hebdo || []) {
     if (x.restaurant !== r || !/^\d{4}-W\d{2}$/.test(x.periode) || (maxKey && x.periode > maxKey)) continue;
@@ -7805,7 +7898,8 @@ function igAnnual(k, r, y, wk) {
   const vals = [], w = [];
   for (let mi = 0; mi <= wk.mi; mi++) {
     const v = igMonthVal(k, r, y, mi, wk, null); if (v == null) continue;
-    vals.push(v); w.push(k === 'oph' ? (DASHBOARD_DATA[String(y)]?.tacs?.[MONTHS[mi]]?.[r] || 0) : 1);
+    const o = k === 'oph' && mi === wk.mi ? igOphMonth(r, y, mi, wk.key) : null;                 // mois en cours : poids = transactions des semaines saisies
+    vals.push(v); w.push(k === 'oph' ? (o ? o.w : (DASHBOARD_DATA[String(y)]?.tacs?.[MONTHS[mi]]?.[r] || 0)) : 1);
   }
   if (!vals.length) return null;
   const sw = w.reduce((a, b) => a + b, 0);
@@ -7976,7 +8070,7 @@ function igMissing(wk) {
   const days = [...Array(7)].map((_, i) => igAdd(wk.mon, i)).filter(d => d <= last);
   const lab = a => a.length > 3 ? a.length + ' jours' : a.map(d => igJours[igWd(d)].slice(0, 3) + ' ' + d.slice(8)).join(', ');
   const heb = (DASHBOARD_DATA.hebdo || []).filter(x => x.periode === wk.key);
-  const F = [['oepe', 'OEPE'], ['r2p', 'R2P'], ['oph', 'OPH'], ['hello_mcdo', 'Hello McDo'], ['reseaux', 'Réseaux'], ['uvhe', 'UVHE'], ['tche', 'TCHE']];
+  const F = [['oepe', 'OEPE'], ['r2p', 'R2P'], ['avis', 'Avis négatifs (OPH)'], ['hello_mcdo', 'Hello McDo'], ['reseaux', 'Réseaux'], ['uvhe', 'UVHE'], ['tche', 'TCHE']];
   const out = [];
   for (const r of RESTOS) {
     const it = [], ds = days.filter(d => !(open[r] && d < open[r]));
@@ -7988,7 +8082,7 @@ function igMissing(wk) {
     const pe = have.filter(d => igDv(r, 'perte', d) == null); if (pe.length) it.push(['Pertes', lab(pe)]);
     const pv = have.filter(d => igBudget(r, d) == null); if (pv.length) it.push(['Prévision CA', lab(pv)]);
     if (wk.sun <= last) {                                          // indicateurs hebdomadaires : attendus une fois la semaine terminée
-      const row = heb.find(x => x.restaurant === r), m = F.filter(([k]) => { const v = row ? igNum(row[k]) : null; return v == null || (v === 0 && k !== 'oph'); }).map(f => f[1]);
+      const row = heb.find(x => x.restaurant === r), m = F.filter(([k]) => { const v = row ? igNum(row[k]) : null; return v == null || (v === 0 && k !== 'avis'); }).map(f => f[1]);
       if (m.length) it.push(['Hebdomadaire', m.length === F.length ? 'non saisi' : m.join(', ')]);
     }
     if (it.length) out.push({ r, it });
@@ -8070,7 +8164,7 @@ function igGo() {
       <div class="faq-item"><div class="faq-q">Les modes (<span data-y="0">2026</span> · <span data-y="1">2025</span> · N-1 · Prév · Classement)</div><div class="faq-a"><b><span data-y="0">2026</span></b> : l'année en cours. <b><span data-y="1">2025</span></b> : l'année passée seule. <b>N-1</b> : <span data-y="0">2026</span> face à <span data-y="1">2025</span> côte à côte. <b>Prév</b> : le réel <span data-y="0">2026</span> face au prévisionnel (budget). <b>Classement</b> : comparer les restaurants entre eux sur un indicateur.</div></div>
       <div class="faq-item"><div class="faq-q">Comparable « à date »</div><div class="faq-a">Les écarts avec <span data-y="1">2025</span> ne comptent que la <b>même période écoulée</b> : au 12 juillet <span data-y="0">2026</span>, on compare au 1<sup>er</sup>→12 juillet <span data-y="1">2025</span>, jamais à l'année pleine. Sur les courbes, <span data-y="1">2025</span> peut s'afficher sur toute l'année pour référence, mais le pourcentage d'évolution reste à date.</div></div>
       <div class="faq-item"><div class="faq-q">Détail d'un indicateur</div><div class="faq-a">Cliquer une carte KPI ouvre le graphique et le tableau mois par mois, avec bascule <b>Annuel / Mensuel</b> et navigation d'un restaurant à l'autre.</div></div>
-      <div class="faq-item"><div class="faq-q">Bandeau semaine</div><div class="faq-a">Sous les bannières, les chiffres clés de la <b>semaine en cours</b> (CA, alim, transactions, VPHE, pertes) vs la semaine équivalente de l'an dernier, et le CA vs le <b>prévisionnel</b>. Les flèches ◀ ▶ changent de semaine ; la météo et les commentaires saisis s'affichent dessous. Cliquer une carte déroule le détail jour par jour.</div></div>
+      <div class="faq-item"><div class="faq-q">Bandeau semaine</div><div class="faq-a">Sous les bannières, les chiffres clés de la <b>semaine en cours</b> (CA, alim, transactions, VPHE, pertes) vs la semaine équivalente de l'an dernier, et le CA vs le <b>prévisionnel</b>. Les flèches ◀ ▶ changent de période ; le bouton <b>Par restaurant</b> affiche tous les restaurants côte à côte (clic sur un titre de colonne pour les classer) ; la météo et les commentaires saisis s'affichent dessous. Cliquer une carte déroule le détail jour par jour.</div></div>
       <div class="faq-item"><div class="faq-q">Recherche par période 🔍</div><div class="faq-a">Choisir un restaurant et une période — un raccourci (cette semaine, ce mois, cette année) ou des dates au calendrier — pour obtenir CA, alim, transactions et VPHE sur cette période vs 2025.</div></div>
       <div class="faq-item"><div class="faq-q">Exporter</div><div class="faq-a"><b>Exporter</b> produit un fichier <b>Excel</b> mis en forme (restaurants et indicateurs au choix, mois par mois, cumul et comparaison N-1) ou une <b>image</b> de la vue affichée.</div></div>
       <div class="faq-item"><div class="faq-q">Indices de gestion</div><div class="faq-a"><b>Indices</b> (bouton rouge) génère le <b>rapport hebdomadaire imprimable</b> (A4, 2 pages) : CA de la semaine et détail jour par jour, puis classements des restaurants (CA, OEPE, R2P, UVHE, pertes, VPHE, analyses, Hello McDo, réseaux, OPH, TCHE, FID, turn over). Choisis la semaine, ajoute les événements et campagnes, puis « Imprimer / PDF ». Les comparaisons de CA se font à jours équivalents (même jour de semaine l'an dernier). Un bloc sans donnée est masqué ; « vs S-1 » demande que la semaine et la précédente soient saisies dans l'onglet Hebdomadaire.</div></div>
@@ -8518,7 +8612,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261019-174342';
+const BUILD_VERSION = '20261020-104643';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
