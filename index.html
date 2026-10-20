@@ -57,6 +57,12 @@
   min-height: 20px; font-weight: 600;
 }
 .login-footer { margin-top: 28px; font-size: .72rem; color: #9ca3af; }
+.login-remember { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: #6b7280; margin: 0 0 14px; cursor: pointer; user-select: none; text-align: left; }
+.login-remember input { width: auto !important; margin: 0 !important; accent-color: #27ae60; }
+.login-btn.loading { background: #1e8449; cursor: wait; }
+.login-btn:disabled { opacity: .92; }
+.login-spin { display: inline-block; width: 15px; height: 15px; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: loginspin .7s linear infinite; vertical-align: -3px; margin-right: 9px; }
+@keyframes loginspin { to { transform: rotate(360deg); } }
 
   /* ── BANNIÈRES ─────────────────────────────────────────────── */
   .banners-wrap {
@@ -171,16 +177,28 @@ async function sha256(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
+function _loginBusy(on) {
+  const b = document.getElementById('login-btn'); if (!b) return;
+  b.disabled = on; b.classList.toggle('loading', on);
+  b.innerHTML = on ? '<span class="login-spin"></span>Connexion en cours…' : 'Connexion';
+}
 async function checkPassword() {
+  const b = document.getElementById('login-btn'); if (b && b.disabled) return;
   const input = document.getElementById('pwd-input').value;
-  const hash  = await sha256(input);
+  _loginBusy(true);                                                 // indicateur visible tout de suite
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
+  const hash = await sha256(input);
   if (hash === PWD_HASH) {
     sessionStorage.setItem(SESSION_KEY, '1');
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
+    try { if (document.getElementById('rem-me').checked) localStorage.setItem('fmj_remember', hash); else localStorage.removeItem('fmj_remember'); } catch (e) {}
+    document.getElementById('app').style.display = 'block';        // l'application se prépare derrière l'écran de connexion
+    await new Promise(r => setTimeout(r, 350));
     renderTabs();
     renderMain();
+    document.getElementById('login-screen').style.display = 'none';
+    _loginBusy(false);
   } else {
+    _loginBusy(false);
     const err = document.getElementById('login-error');
     err.textContent = 'Mot de passe incorrect';
     document.getElementById('pwd-input').value = '';
@@ -188,10 +206,18 @@ async function checkPassword() {
     setTimeout(() => err.textContent = '', 3000);
   }
 }
+// Oublier cet appareil (déconnexion)
+function logoutDevice() {
+  try { localStorage.removeItem('fmj_remember'); } catch (e) {}
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  location.reload();
+}
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Déjà authentifié dans cette session ?
-  if (sessionStorage.getItem(SESSION_KEY) === '1') {
+  // Déjà authentifié dans cette session, ou appareil mémorisé ?
+  let _ok = sessionStorage.getItem(SESSION_KEY) === '1';
+  if (!_ok) { try { if (localStorage.getItem('fmj_remember') === PWD_HASH) { _ok = true; sessionStorage.setItem(SESSION_KEY, '1'); } } catch (e) {} }
+  if (_ok) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
   }
@@ -1088,7 +1114,8 @@ window.addEventListener('DOMContentLoaded', () => {
     <div class="login-title">Franchise MJ</div>
     <div class="login-sub">Dashboard KPI — Accès restreint</div>
     <input type="password" id="pwd-input" placeholder="Mot de passe" autofocus>
-    <button class="login-btn" onclick="checkPassword()">Connexion</button>
+    <label class="login-remember"><input type="checkbox" id="rem-me"> Se souvenir de moi</label>
+    <button class="login-btn" id="login-btn" onclick="checkPassword()">Connexion</button>
     <div class="login-error" id="login-error"></div>
     <div class="login-footer">© Franchise MJ — Usage interne uniquement</div>
   </div>
@@ -8167,6 +8194,7 @@ function igGo() {
       <div class="faq-item"><div class="faq-q">Bandeau semaine</div><div class="faq-a">Sous les bannières, les chiffres clés de la <b>semaine en cours</b> (CA, alim, transactions, VPHE, pertes) vs la semaine équivalente de l'an dernier, et le CA vs le <b>prévisionnel</b>. Les flèches ◀ ▶ changent de période ; le bouton <b>Par restaurant</b> affiche tous les restaurants côte à côte (clic sur un titre de colonne pour les classer) ; la météo et les commentaires saisis s'affichent dessous. Cliquer une carte déroule le détail jour par jour.</div></div>
       <div class="faq-item"><div class="faq-q">Recherche par période 🔍</div><div class="faq-a">Choisir un restaurant et une période — un raccourci (cette semaine, ce mois, cette année) ou des dates au calendrier — pour obtenir CA, alim, transactions et VPHE sur cette période vs 2025.</div></div>
       <div class="faq-item"><div class="faq-q">Exporter</div><div class="faq-a"><b>Exporter</b> produit un fichier <b>Excel</b> mis en forme (restaurants et indicateurs au choix, mois par mois, cumul et comparaison N-1) ou une <b>image</b> de la vue affichée.</div></div>
+      <div class="faq-item"><div class="faq-q">Connexion</div><div class="faq-a">La case <b>Se souvenir de moi sur cet appareil</b> évite de retaper le mot de passe. À ne cocher que sur ton propre appareil. <button onclick="logoutDevice()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:800;font-size:.76rem;cursor:pointer">Se déconnecter de cet appareil</button></div></div>
       <div class="faq-item"><div class="faq-q">Indices de gestion</div><div class="faq-a"><b>Indices</b> (bouton rouge) génère le <b>rapport hebdomadaire imprimable</b> (A4, 2 pages) : CA de la semaine et détail jour par jour, puis classements des restaurants (CA, OEPE, R2P, UVHE, pertes, VPHE, analyses, Hello McDo, réseaux, OPH, TCHE, FID, turn over). Choisis la semaine, ajoute les événements et campagnes, puis « Imprimer / PDF ». Les comparaisons de CA se font à jours équivalents (même jour de semaine l'an dernier). Un bloc sans donnée est masqué ; « vs S-1 » demande que la semaine et la précédente soient saisies dans l'onglet Hebdomadaire.</div></div>
 
       <div class="faq-sec-title" style="color:#0ea5e9;border-color:#0ea5e9">🗄️ Sources des données</div>
@@ -8612,7 +8640,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261020-104643';
+const BUILD_VERSION = '20261020-144915';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

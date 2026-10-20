@@ -18,6 +18,12 @@
   .login-box input{ width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:11px; font-size:1rem; font-family:inherit; margin-bottom:12px; }
   .login-box button{ width:100%; padding:11px; border:none; border-radius:11px; background:var(--gold); color:#fff; font-size:1rem; font-weight:800; cursor:pointer; font-family:inherit; }
   .login-err{ color:var(--red); font-size:.8rem; height:18px; margin-top:4px; }
+  .login-box label.rem{ display:flex; align-items:center; gap:8px; font-size:.8rem; color:var(--muted); margin:0 0 14px; cursor:pointer; user-select:none; text-align:left; }
+  .login-box label.rem input{ width:auto; margin:0; padding:0; accent-color:var(--gold); }
+  .login-box button.loading{ cursor:wait; opacity:.92; }
+  .lspin{ display:inline-block; width:15px; height:15px; border:2.5px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:lspin .7s linear infinite; vertical-align:-3px; margin-right:9px; }
+  @keyframes lspin{ to{ transform:rotate(360deg); } }
+  .foot-out{ text-align:center; padding:18px 12px 26px; font-size:.74rem; } .foot-out a{ color:var(--muted); cursor:pointer; text-decoration:underline; }
   /* App */
   #app{ display:none; }
   .topbar{ background:#fff; border-bottom:1px solid var(--border); padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; position:sticky; top:0; z-index:20; }
@@ -144,7 +150,8 @@
     <h1>Franchise MJ — Saisie</h1>
     <p>Saisie des indicateurs par restaurant</p>
     <input type="password" id="pwd" placeholder="Mot de passe" autocomplete="current-password">
-    <button onclick="checkPwd()">Accéder</button>
+    <label class="rem"><input type="checkbox" id="remMe"> Se souvenir de moi</label>
+    <button id="loginBtn" onclick="checkPwd()">Accéder</button>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
@@ -170,6 +177,7 @@
   </div>
   <div class="tab-bar" id="tabBar"></div>
   <div class="wrap"><div class="panel" id="panel"></div></div>
+  <div class="foot-out"><a onclick="logoutSaisie()">Se déconnecter de cet appareil</a></div>
   <div class="cfg-warn" id="cfgWarn" style="display:none">⚙️ La page n'est pas encore reliée au Google Sheet — remplace <b>APPS_SCRIPT_URL</b> en haut du script par l'URL de ton Apps Script (étape 3). En attendant, l'enregistrement est désactivé.</div>
 </div>
 
@@ -184,12 +192,22 @@ const OPEN_DATES = CFG.open || {};            // dates d'ouverture : aucun CA av
 
 // ── Mot de passe ──
 async function sha256(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function loginBusy(on){ const b=document.getElementById('loginBtn'); if(!b) return; b.disabled=on; b.classList.toggle('loading',on); b.innerHTML=on?'<span class="lspin"></span>Connexion en cours…':'Accéder'; }
 async function checkPwd(){
+  const b=document.getElementById('loginBtn'); if(b&&b.disabled) return;
   const v=document.getElementById('pwd').value;
+  loginBusy(true);                                                   // indicateur visible tout de suite
+  await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,60)));
   const hv=await sha256(v);
-  if(hv===PWD_HASH){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',hv); showApp(); }
-  else { const e=document.getElementById('loginErr'); e.textContent='Mot de passe incorrect'; setTimeout(()=>e.textContent='',2500); }
+  if(hv===PWD_HASH){
+    sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',hv);
+    try{ if(document.getElementById('remMe').checked) localStorage.setItem('mj_remember',hv); else localStorage.removeItem('mj_remember'); }catch(e){}
+    await new Promise(r=>setTimeout(r,350));
+    showApp(); loginBusy(false);
+  }
+  else { loginBusy(false); const e=document.getElementById('loginErr'); e.textContent='Mot de passe incorrect'; setTimeout(()=>e.textContent='',2500); }
 }
+function logoutSaisie(){ try{ localStorage.removeItem('mj_remember'); }catch(e){} try{ sessionStorage.removeItem('mj_saisie'); sessionStorage.removeItem('mj_pwdhash'); }catch(e){} location.reload(); }
 function showApp(){ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; init(); }
 
 // ── Modèle ──
@@ -1220,7 +1238,9 @@ async function pvExport() {
 
 // ── Démarrage ──
 document.getElementById('pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') checkPwd(); });
-if(sessionStorage.getItem('mj_saisie')==='1') showApp();
+(function(){ let ok=sessionStorage.getItem('mj_saisie')==='1';
+  if(!ok){ try{ if(localStorage.getItem('mj_remember')===PWD_HASH){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); ok=true; } }catch(e){} }
+  if(ok) showApp(); })();
 </script>
 </body>
 </html>
