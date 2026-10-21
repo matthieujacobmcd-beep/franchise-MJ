@@ -935,6 +935,34 @@ const PV_TAB = 'prevca';
 let PREVJ = null, PREVT = null, ALIMM = null;              // prévisions enregistrées (CA alim / CA total) et CA alim réel : { restaurant: { 'AAAA-MM-JJ': euros } }
 const PV = { ym: null, resto: null, vals: {}, objU: 'e', w: '7030', coef: 1.01 };
 const PV_MIN = '2026-11', PV_YMAX = new Date().getFullYear() + 6, PV_MAX = PV_YMAX + '-12';   // saisie à partir de novembre 2026 et jusqu'à 6 ans après l'année en cours (glisse avec le temps)
+// ── Brouillons : les prévisions saisies mais pas encore enregistrées ne se perdent plus quand on change de mois, de restaurant ou qu'on recharge la page ──
+const PV_DKEY = 'mj_pvdraft';
+PV.drafts = (() => { try { const d = JSON.parse(localStorage.getItem(PV_DKEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
+const pvKey = (r, ym) => r + '|' + ym;
+function pvSavedVals(r, ym) { const o = {}; for (const iso of pvDays(ym)) { const v = ((PREVJ || {})[r] || {})[iso]; if (v != null) o[iso] = v; } return o; }
+function pvDiffDays(a, b) { const ks = new Set([...Object.keys(a), ...Object.keys(b)]); let n = 0; for (const k of ks) if (a[k] == null || b[k] == null || Math.abs(a[k] - b[k]) >= 0.005) n++; return n; }
+function pvDraftPersist() { try { if (Object.keys(PV.drafts).length) localStorage.setItem(PV_DKEY, JSON.stringify(PV.drafts)); else localStorage.removeItem(PV_DKEY); } catch (e) {} }
+function pvStash() {                                         // range les saisies du mois affiché dans les brouillons (ou les retire si elles sont identiques à l'enregistré)
+  if (!PV.resto || !PV.loadedYm || !PREVJ) return;
+  const k = pvKey(PV.resto, PV.loadedYm);
+  if (!pvDiffDays(PV.vals, pvSavedVals(PV.resto, PV.loadedYm))) delete PV.drafts[k]; else PV.drafts[k] = Object.assign({}, PV.vals);
+  pvDraftPersist();
+}
+function pvPending() {                                       // [{ r, ym, n }] : mois dont la saisie diffère de l'enregistré (mois affiché compris)
+  if (!PREVJ) return [];
+  const out = [], seen = {}, add = (k, vals) => { const [r, ym] = k.split('|'), n = pvDiffDays(vals, pvSavedVals(r, ym)); if (n) out.push({ r, ym, n }); seen[k] = 1; };
+  if (PV.resto && PV.loadedYm) add(pvKey(PV.resto, PV.loadedYm), PV.vals);
+  for (const k of Object.keys(PV.drafts)) if (!seen[k]) add(k, PV.drafts[k]);
+  return out;
+}
+function pvDraftBar() {
+  const box = document.getElementById('pvDraftBar'); if (!box) return;
+  const p = pvPending();
+  if (!p.length) { box.innerHTML = ''; return; }
+  const lab = x => `${(RESTOS.find(r => r[0] === x.r) || [0, x.r])[1]} · ${MONTHS[+x.ym.slice(5) - 1].toLowerCase()} ${x.ym.slice(0, 4)} (${x.n} jour${x.n > 1 ? 's' : ''})`;
+  box.innerHTML = `<div style="background:#fff7ed;border:1.5px solid #fdba74;color:#7c2d12;border-radius:10px;padding:9px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.7">⚠ <b>Prévisions non enregistrées</b> : ${p.map(lab).join(' ; ')}. Elles sont gardées si tu changes de mois ou de restaurant, mais ne comptent qu'une fois enregistrées. <button class="btn-save" style="padding:6px 14px;margin-left:6px" onclick="pvSave()">Enregistrer${p.length > 1 ? ' tout' : ''}</button></div>`;
+}
+window.addEventListener('beforeunload', e => { try { if (pvPending().length) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
 const PV_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const _pvT = s => Date.parse(s + 'T00:00:00Z');
 const pvShift = (iso, days) => new Date(_pvT(iso) + days * 86400000).toISOString().slice(0, 10);
@@ -976,9 +1004,12 @@ function pvInit() {
   const now = new Date();
   if (!PV.ym) PV.ym = [`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`, PV_MIN].sort().pop();
   if (PV.ym < PV_MIN) PV.ym = PV_MIN; if (PV.ym > PV_MAX) PV.ym = PV_MAX;
-  if (PV.resto !== curResto || PV.loadedYm !== PV.ym) {     // nouveau restaurant / nouveau mois : on repart des valeurs enregistrées
-    PV.resto = curResto; PV.loadedYm = PV.ym; PV.vals = {};
-    for (const iso of pvDays(PV.ym)) { const v = ((PREVJ || {})[curResto] || {})[iso], t = ((PREVT || {})[curResto] || {})[iso]; if (v != null) { PV.vals[iso] = v; if (t && v) PV.coef = Math.round(t / v * 10000) / 10000; } }
+  if (PV.resto !== curResto || PV.loadedYm !== PV.ym) {     // nouveau restaurant / nouveau mois : le mois quitté est mis en brouillon s'il a été modifié, puis on charge l'enregistré (ou le brouillon)
+    pvStash();
+    PV.resto = curResto; PV.loadedYm = PV.ym;
+    const dk = PV.drafts[pvKey(curResto, PV.ym)];
+    PV.vals = dk ? Object.assign({}, dk) : pvSavedVals(curResto, PV.ym);
+    for (const iso of pvDays(PV.ym)) { const v = ((PREVJ || {})[curResto] || {})[iso], t = ((PREVT || {})[curResto] || {})[iso]; if (v != null && t && v) PV.coef = Math.round(t / v * 10000) / 10000; }
   }
 }
 function renderPrevCa() {
@@ -1010,6 +1041,7 @@ function renderPrevCa() {
         <select id="pvM" onchange="pvPick()">${mois.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''} ${i + 1 < minM || i + 1 > maxM ? 'disabled' : ''}>${n}</option>`).join('')}</select>
         <select id="pvY" onchange="pvPick()">${Array.from({ length: PV_YMAX - 2025 }, (_, i) => 2026 + i).map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <button class="step next" onclick="pvMonth(1)">Mois suivant ▶</button></div></div>
+    <div id="pvDraftBar"></div>
     <div class="pv-recap" id="pvRecap"></div>
     <div class="pv-obj"><div class="field"><label>Objectif du mois (CA alimentaire)</label><div style="display:flex;gap:6px"><input type="number" step="any" id="pvObj" placeholder="ex. 450000 ou 3"><select id="pvObjU" style="max-width:90px"><option value="e">€</option><option value="p">% vs N-1</option></select></div></div>
       <div class="field"><label>Ventilation sur les jours selon</label><select id="pvW"><option value="1000">N-1 seul</option><option value="7030" selected>N-1 (70 %) + N-2 (30 %)</option><option value="5050">N-1 et N-2 à parts égales</option></select></div>
@@ -1021,7 +1053,7 @@ function renderPrevCa() {
       <select id="pvBase" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="alim">Export : CA alimentaire</option><option value="total">Export : CA net total</option></select>
       <select id="pvScope" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="year">ce restaurant · toute l'année</option><option value="month">ce restaurant · ce mois</option><option value="all">tous les restaurants · l'année</option></select>
       <button class="step" onclick="pvExport()">⬇ Excel</button><span class="save-msg" id="pvMsg"></span></div>
-    <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne sont enregistrées qu'au clic sur « Enregistrer ».</div>`;
+    <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne comptent qu'après le clic sur « Enregistrer » ; en attendant, tes saisies sont gardées si tu changes de mois ou de restaurant.</div>`;
   for (const iso of days) pvRefresh(iso);
   pvRecap();
 }
@@ -1067,6 +1099,7 @@ function pvRecap() {
     + k('Prévision saisie', pvEur(s.prev), `${s.nPrev} jour${s.nPrev > 1 ? 's' : ''} sur ${s.nDays}`)
     + k('Prévision CA net total', pvEur(s.prev * PV.coef), `× ${String(PV.coef).replace('.', ',')}`)
     + k('vs N-1', s.n1 ? pvPct(s.prevOnN1 / s.n1 - 1) : '—', 'sur les jours saisis') + k('vs N-2', s.n2 ? pvPct(s.prevOnN2 / s.n2 - 1) : '—', 'sur les jours saisis');
+  pvStash(); pvDraftBar();                                  // les saisies sont mises à l'abri à chaque modification
 }
 function pvVentiler() {
   const days = pvDays(PV.ym), t = String(document.getElementById('pvObj').value).replace(',', '.').trim(), u = document.getElementById('pvObjU').value, w = document.getElementById('pvW').value;
@@ -1099,21 +1132,28 @@ function pvArrondir() {
 }
 function pvMsg(c, t) { const m = document.getElementById('pvMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
 async function pvSave() {
-  const btn = document.getElementById('pvSave'), days = pvDays(PV.ym), rows = [];
-  for (const iso of days) {
-    const v = PV.vals[iso], old = ((PREVJ || {})[curResto] || {})[iso];
-    const oldT = ((PREVT || {})[curResto] || {})[iso], newT = v != null ? Math.round(v * PV.coef * 100) / 100 : null;
-    if (v != null) { if (old !== v || oldT !== newT) rows.push({ restaurant: curResto, periode: iso, data: { ca_alim_prev: Math.round(v * 100) / 100, ca_total_prev: newT } }); }
-    else if (old != null) rows.push({ restaurant: curResto, periode: iso, data: { ca_alim_prev: '', ca_total_prev: '' } });
+  const btn = document.getElementById('pvSave'); pvStash();
+  const touched = Object.keys(PV.drafts), rows = [];
+  for (const k of touched) {                                 // tout ce qui est en attente est enregistré : mois affiché, autres mois, autres restaurants
+    const [r, ym] = k.split('|'), vals = PV.drafts[k];
+    for (const iso of pvDays(ym)) {
+      const v = vals[iso], old = ((PREVJ || {})[r] || {})[iso];
+      const oldT = ((PREVT || {})[r] || {})[iso], newT = v != null ? Math.round(v * PV.coef * 100) / 100 : null;
+      if (v != null) { if (old !== v || oldT !== newT) rows.push({ restaurant: r, periode: iso, data: { ca_alim_prev: Math.round(v * 100) / 100, ca_total_prev: newT } }); }
+      else if (old != null) rows.push({ restaurant: r, periode: iso, data: { ca_alim_prev: '', ca_total_prev: '' } });
+    }
   }
   if (!rows.length) { pvMsg('err', 'Rien à enregistrer (aucune modification).'); return; }
-  btn.disabled = true; pvMsg('', 'Enregistrement…');
+  if (btn) btn.disabled = true; pvMsg('', 'Enregistrement…');
   const j = await postJson({ action: 'bulk_save', frequence: 'prevjour', pwd: pwdHash(), rows });
-  btn.disabled = false;
-  if (!j.ok) { pvMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé')); return; }
-  PREVJ[curResto] = PREVJ[curResto] || {}; PREVT[curResto] = PREVT[curResto] || {};
-  for (const iso of days) { if (PV.vals[iso] != null) { PREVJ[curResto][iso] = PV.vals[iso]; PREVT[curResto][iso] = Math.round(PV.vals[iso] * PV.coef * 100) / 100; } else { delete PREVJ[curResto][iso]; delete PREVT[curResto][iso]; } }
-  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour).`);
+  if (btn) btn.disabled = false;
+  if (!j.ok) { pvMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + ' — tes saisies sont conservées, réessaie.'); return; }
+  for (const k of touched) {
+    const [r, ym] = k.split('|'); PREVJ[r] = PREVJ[r] || {}; PREVT[r] = PREVT[r] || {};
+    for (const iso of pvDays(ym)) { const v = PV.drafts[k][iso]; if (v != null) { PREVJ[r][iso] = v; PREVT[r][iso] = Math.round(v * PV.coef * 100) / 100; } else { delete PREVJ[r][iso]; delete PREVT[r][iso]; } }
+  }
+  PV.drafts = {}; pvDraftPersist(); pvDraftBar();
+  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour${touched.length > 1 ? ', ' + touched.length + ' mois / restaurants' : ''}).`);
 }
 
 // ── Export Excel : modèle « PREV ET BUDGET » (mois côte à côte, jours alignés par jour de la semaine) ──
