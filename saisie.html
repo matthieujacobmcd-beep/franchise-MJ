@@ -213,7 +213,7 @@ function showApp(){ document.getElementById('login').style.display='none'; docum
 // ── Modèle ──
 const RESTOS=CFG.restos.map(r=>[r.key,r.label]);
 const MONTHS=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
-const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['documents','Documents']];
+const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['simu','Simulateur prévisionnel'],['documents','Documents']];
 // Indicateurs saisis chaque semaine : le mois correspondant (onglet Mensuel)
 // se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
 const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
@@ -347,7 +347,7 @@ function init(){
   const before=curResto?JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]):null;
   loadLast().then(()=>{
     loadRecent();                                   // CA des dernières semaines (léger) : contrôle de cohérence avant enregistrement
-    if(!curResto||curTab==='documents'||curTab==='ponctuel'||curTab==='prevca') return;
+    if(!curResto||curTab==='documents'||curTab==='ponctuel'||curTab==='prevca'||curTab==='simu') return;
     const typed=[...document.querySelectorAll('#fieldsGrid input, #fieldsGrid textarea')].some(e=>!e.readOnly&&e.value!=='');
     const changed=before!==JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]);
     if(GATE_ON || (!typed && changed)) renderPanel();   // porte ouverte, ou dernière saisie différente du cache et rien de saisi : on se cale sur la bonne date
@@ -414,6 +414,7 @@ let GATE_ON=false;
 function renderPanel(keepPeriod){
   if(curTab==='documents') return renderDocuments();
   if(curTab==='prevca') return renderPrevCa();
+  if(curTab==='simu') return renderSimu();
   const p=document.getElementById('panel');
   if(['quotidien','hebdomadaire','mensuel'].includes(curTab) && LAST_STATE==='loading'){   // jamais de date « du jour » par défaut : on attend la dernière saisie
     GATE_ON=true;
@@ -467,7 +468,7 @@ function loadTx(){
       const pv={}, pt={}; (j.prevjour||[]).forEach(x=>{ const v=Number(x.ca_alim_prev), t=Number(x.ca_total_prev); if(x.ca_alim_prev!==''&&x.ca_alim_prev!=null&&isFinite(v)){ (pv[x.restaurant]=pv[x.restaurant]||{})[x.periode]=v; if(x.ca_total_prev!==''&&x.ca_total_prev!=null&&isFinite(t)) (pt[x.restaurant]=pt[x.restaurant]||{})[x.periode]=t; } });
       TX=m; CAM=caMap; ALIMM=alMap; PREVJ=pv; PREVT=pt;
     }catch(e){ TX=null; }
-    TXLoading=null; if(curTab==='prevca') renderPrevCa(); else recompute();
+    TXLoading=null; if(curTab==='prevca') renderPrevCa(); else if(curTab==='simu') renderSimu(); else recompute();
   })();
 }
 function periodDates(){
@@ -1254,8 +1255,9 @@ const pvTotRef = (r, iso) => { const ri = pvShift(iso, -364), v = ((CAM || {})[r
 async function pvExport() {
   const scope = document.getElementById('pvScope').value, base = document.getElementById('pvBase').value, [Y, M] = PV.ym.split('-').map(Number);
   const restos = scope === 'all' ? RESTOS.map(r => r[0]) : [curResto], months = scope === 'month' ? [M] : [...Array(12)].map((_, i) => i + 1);
-  const prevOf = (r, iso) => (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym) ? PV.vals[iso] : ((PREVJ || {})[r] || {})[iso]);   // inclut la saisie en cours à l'écran
-  const prevT = (r, iso, v) => (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) ? v * PV.coef : (((PREVT || {})[r] || {})[iso] ?? v * 1.01);
+  const draftOf = (r, iso) => PV.drafts[pvKey(r, iso.slice(0, 7))];                       // saisie non enregistrée (ou simulation appliquée) de ce restaurant et de ce mois
+  const prevOf = (r, iso) => { if (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) return PV.vals[iso]; const dk = draftOf(r, iso); return dk ? dk[iso] : ((PREVJ || {})[r] || {})[iso]; };   // inclut la saisie en cours à l'écran
+  const prevT = (r, iso, v) => ((r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) || draftOf(r, iso)) ? v * PV.coef : (((PREVT || {})[r] || {})[iso] ?? v * 1.01);
   const sheets = restos.map(r => pvModelSheet(r, Y, months, base, prevOf, prevT)).filter(sh => sh.hasData || restos.length === 1);
   if (!sheets.length || !sheets.some(sh => sh.hasData)) { pvMsg('err', 'Aucune prévision à exporter.'); return; }
   // feuille de détail jour (données brutes)
@@ -1274,6 +1276,247 @@ async function pvExport() {
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
     pvMsg('ok', '✓ Fichier Excel généré (modèle PREV ET BUDGET).');
   } catch (e) { pvMsg('err', 'Export impossible : ' + e.message); }
+}
+
+// ── Simulateur de prévision annuelle (CA alimentaire journalier) ──
+// Même principe que le classeur « PREV ET BUDGET » : pour chaque jour de l'année cible, on part du jour équivalent de l'année précédente
+// (même jour de la semaine, −364 j) : TAC'S prévus = TAC'S N-1 × (1 + évolution TAC'S) ; panier moyen prévu = PM N-1 × (1 + évolution PM) ;
+// CA prévu = TAC'S × PM, arrondi (100 € par défaut). Évolutions réglables globalement, par mois, par période ou par jour ;
+// les jours fériés qui ne tombent pas sur le même type de jour que l'an passé reçoivent un ajustement proposé (appris sur l'historique du restaurant).
+// « Appliquer » dépose le résultat dans le calendrier Prévision CA (brouillon) : rien n'est enregistré avant « Enregistrer ».
+const SIM_KEY = 'mj_simu';
+const SIM = (() => { try { const d = JSON.parse(localStorage.getItem(SIM_KEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
+SIM.byResto = SIM.byResto || {};
+SIM.ty = SIM.ty || (new Date().getFullYear() + 1);
+const SIMV = { month: null };                               // état d'affichage (mois du calendrier détaillé)
+const SIMM = {};                                            // mémos (tendances, coefficients fériés)
+const MN = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase());
+function simSave() { try { localStorage.setItem(SIM_KEY, JSON.stringify(SIM)); } catch (e) {} }
+function simCfg(r) { return SIM.byResto[r] = SIM.byResto[r] || { jt: null, lp: null, rnd: 100, months: {}, ov: {}, ranges: [] }; }
+const simT = (r, iso) => { if (OPEN_DATES[r] && iso < OPEN_DATES[r]) return null; const v = ((TX || {})[r] || {})[iso]; return (typeof v === 'number' && v > 0) ? v : null; };
+const simA = (r, iso) => pvCa(r, iso);
+const simPct = (v, d = 1) => v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d).replace('.', ',') + ' %';
+const simNum = v => v == null ? '' : String(Math.round(v * 1000) / 10).replace('.', ',');       // 0.045 → « 4,5 »
+const simParse = t => { const s = String(t).replace(',', '.').trim(); return s === '' || isNaN(+s) ? null : (+s) / 100; };
+function simIsoWeek(iso) { const t = _pvT(iso), dow = (new Date(t).getUTCDay() + 6) % 7, th = t - dow * 86400000 + 3 * 86400000, y = new Date(th).getUTCFullYear(), j4 = Date.UTC(y, 0, 4); return { y, w: 1 + Math.round(((th - j4) / 86400000 - 3 + ((new Date(j4).getUTCDay() + 6) % 7)) / 7), mon: pvShift(iso, -dow) }; }
+
+// Tendance de l'année Y vs Y-1 sur les jours équivalents déjà saisis (TAC'S et panier moyen alimentaire)
+function simTrend(r, Y) {
+  const k = 'T|' + r + '|' + Y; if (k in SIMM) return SIMM[k];
+  const A = (ALIMM || {})[r] || {}; let t1 = 0, c1 = 0, t0 = 0, c0 = 0, n = 0;
+  for (const d of Object.keys(A)) {
+    if (d.slice(0, 4) !== String(Y)) continue;
+    const b = pvShift(d, -364), ta = simT(r, d), ca = simA(r, d), tb = simT(r, b), cb = simA(r, b);
+    if (ta && ca && tb && cb) { t1 += ta; c1 += ca; t0 += tb; c0 += cb; n++; }
+  }
+  return SIMM[k] = (n >= 30 && t0 && c0) ? { jt: t1 / t0 - 1, lp: (c1 / t1) / (c0 / t0) - 1, n, t1, t0 } : null;
+}
+// Effet « jour férié » appris : TAC'S du jour férié ÷ TAC'S moyen des mêmes jours de semaine non fériés (±1 à 3 semaines)
+function simHol(r, Y) {
+  const k = 'H|' + r + '|' + Y; if (SIMM[k]) return SIMM[k];
+  const acc = {};
+  for (const yy of [Y, Y - 1]) for (const [iso, name] of Object.entries(pvFeries(yy))) {
+    const t = simT(r, iso);
+    const refs = []; for (const d of [-21, -14, -7, 7, 14, 21]) { const x = pvShift(iso, d); if (pvFerie(x)) continue; const v = simT(r, x); if (v) refs.push(v); }
+    if (refs.length < 2) continue;
+    (acc[name] = acc[name] || []).push((t || 0) / (refs.reduce((a, b) => a + b, 0) / refs.length));        // pas de TAC'S ce jour-là alors que les jours voisins sont saisis : restaurant fermé (coefficient 0)
+  }
+  const out = {}; for (const [n, a] of Object.entries(acc)) out[n] = a.reduce((x, y) => x + y, 0) / a.length;
+  return SIMM[k] = out;
+}
+function simAuto(iso, b1, F, c) {                           // ajustement TAC'S quand férié cible et jour de base ne sont pas de même nature : valeur fixée dans les réglages, sinon effet appris sur l'historique
+  const nd = pvFerie(iso), nb = pvFerie(b1); if (!nd && !nb) return null; if (nd && nb && nd === nb) return null;
+  if (nd && F[nd] != null && F[nd] < 0.05) return -1;                                       // jour férié où le restaurant est fermé
+  if (nd && !nb && c.hp != null) return c.hp; if (!nd && nb && c.hm != null) return c.hm;
+  const fd = nd ? F[nd] : 1, fb = nb ? Math.max(F[nb], 0.25) : 1; if (fd == null || fb == null || F[nb] == null && nb) return null;
+  const adj = Math.min(3, Math.max(-1, fd / fb - 1)); return Math.abs(adj) < 0.03 ? null : Math.round(adj * 100) / 100;
+}
+function simDefaults(r, Ty) {                               // leviers par défaut : tendance observée de l'année de base
+  const tr = simTrend(r, Ty - 1), c = simCfg(r);
+  return { jt: c.jt != null ? c.jt : (tr ? Math.round(tr.jt * 1000) / 1000 : 0), lp: c.lp != null ? c.lp : (tr ? Math.round(tr.lp * 1000) / 1000 : 0), tr };
+}
+
+// Calcul d'une année complète pour un restaurant
+function simYear(r) {
+  const Ty = +SIM.ty, c = simCfg(r), D = simDefaults(r, Ty), F = simHol(r, Ty - 1), trB = simTrend(r, Ty - 1);   // trB : progression N-2 → N-1 observée, pour mettre à niveau les jours dont N-1 n'est pas encore connu
+  const rnd = c.rnd || 100, days = []; let nBase = 0, nFall = 0, nNone = 0;
+  const jan1 = Date.UTC(Ty, 0, 1), n = Math.round((Date.UTC(Ty + 1, 0, 1) - jan1) / 86400000);
+  for (let i = 0; i < n; i++) {
+    const iso = new Date(jan1 + i * 86400000).toISOString().slice(0, 10), m = +iso.slice(5, 7), b1 = pvShift(iso, -364), b2 = pvShift(iso, -728);
+    let T1 = simT(r, b1), A1 = simA(r, b1), src = 'N-1', bU = b1;
+    if (!(T1 > 0 && A1 > 0)) {
+      const T2 = simT(r, b2), A2 = simA(r, b2);
+      if (T2 > 0 && A2 > 0) { T1 = T2 * (1 + (trB ? trB.jt : 0)); A1 = T1 * (A2 / T2) * (1 + (trB ? trB.lp : 0)); src = 'N-2'; bU = b2; nFall++; } else { src = null; nNone++; }
+    } else nBase++;
+    const d = { iso, m, dow: (new Date(_pvT(iso)).getUTCDay() + 6) % 7, b1: bU, fer: pvFerie(iso), ferB: pvFerie(bU), src };
+    if (src) {
+      const P1 = A1 / T1, mo = c.months[m] || {}, rg = (c.ranges || []).find(x => iso >= x.from && iso <= x.to), ov = c.ov[iso], au = simAuto(iso, bU, F, c);
+      let jt = mo.j != null ? mo.j : D.jt, lp = mo.l != null ? mo.l : D.lp, kind = '';
+      if (au != null) { jt = au; kind = 'férié'; }
+      if (rg) { if (rg.j != null) jt = rg.j; if (rg.l != null) lp = rg.l; kind = rg.lbl || 'période'; }
+      if (ov) { if (ov.j != null) jt = ov.j; if (ov.l != null) lp = ov.l; kind = 'jour'; }
+      const T = Math.round(T1 * (1 + jt)), P = P1 * (1 + lp);
+      Object.assign(d, { T1, A1, P1, jt, lp, kind, auto: au, T, P, ca: Math.round(T * P / rnd) * rnd });
+    }
+    days.push(d);
+  }
+  return { Ty, days, nBase, nFall, nNone, D, c };
+}
+function simSum(days) {
+  const s = { a: 0, t0: 0, ca: 0, t: 0, n: 0 };
+  for (const d of days) if (d.ca != null) { s.a += d.A1; s.t0 += d.T1; s.ca += d.ca; s.t += d.T; s.n++; }
+  return s;
+}
+
+// ── Réglages ──
+function simSet(k, v) { const c = simCfg(curResto); if (k === 'jt' || k === 'lp' || k === 'hp' || k === 'hm') c[k] = simParse(v); else if (k === 'rnd') c.rnd = +v || 100; else if (k === 'ty') SIM.ty = +v; simSave(); renderSimu(); }
+function simMonth(m, f, v) { const c = simCfg(curResto), o = c.months[m] = c.months[m] || {}; const x = simParse(v); if (x == null) delete o[f]; else o[f] = x; if (!Object.keys(o).length) delete c.months[m]; simSave(); renderSimu(); }
+function simDay(iso, f, v) {
+  const c = simCfg(curResto), o = c.ov[iso] = c.ov[iso] || {}; const x = simParse(v);
+  if (x == null) delete o[f]; else o[f] = x; if (!Object.keys(o).length) delete c.ov[iso]; simSave(); renderSimu();
+}
+function simDayReset(iso) { delete simCfg(curResto).ov[iso]; simSave(); renderSimu(); }
+function simTrendReset() { const c = simCfg(curResto); c.jt = null; c.lp = null; simSave(); renderSimu(); }
+function simRangeAdd() {
+  const g = id => document.getElementById(id).value, from = g('simRf'), to = g('simRt');
+  if (!from || !to || to < from) { simMsg('err', 'Renseigne une période valide (du … au …).'); return; }
+  const j = simParse(g('simRj')), l = simParse(g('simRl')); if (j == null && l == null) { simMsg('err', 'Saisis une évolution TAC\'S et/ou PM pour la période.'); return; }
+  simCfg(curResto).ranges.push({ from, to, j, l, lbl: g('simRn').trim() || 'période' }); simSave(); renderSimu();
+}
+function simRangeDel(i) { simCfg(curResto).ranges.splice(i, 1); simSave(); renderSimu(); }
+function simCopyAll() {
+  if (!confirm('Copier les réglages (évolutions, arrondi, mois, périodes) de ce restaurant vers tous les autres ?\nLes jours particuliers saisis à la main ne sont pas copiés.')) return;
+  const c = simCfg(curResto), D = simDefaults(curResto, +SIM.ty);
+  for (const [r] of RESTOS) if (r !== curResto) { const x = simCfg(r); x.jt = D.jt; x.lp = D.lp; x.hp = c.hp; x.hm = c.hm; x.rnd = c.rnd; x.months = JSON.parse(JSON.stringify(c.months)); x.ranges = JSON.parse(JSON.stringify(c.ranges)); }
+  simSave(); simMsg('ok', '✓ Réglages copiés vers tous les restaurants.');
+}
+function simMsg(c, t) { const m = document.getElementById('simMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
+function simPickMonth(m) { SIMV.month = +m; renderSimu(); }
+
+// Dépose la simulation dans le calendrier Prévision CA (brouillons) ; l'enregistrement se fait ensuite depuis l'onglet Prévision CA
+function simApply(all) {
+  const list = all ? RESTOS.map(r => r[0]) : [curResto], plan = []; let skipped = 0, repl = 0, nDays = 0;
+  for (const r of list) {
+    const Y = simYear(r); if (Y.nBase + Y.nFall < 200) { skipped++; continue; }
+    for (let m = 1; m <= 12; m++) {
+      const ym = Y.Ty + '-' + pad2(m); if (ym < PV_MIN || ym > PV_MAX) continue;
+      const vals = {}; for (const d of Y.days) if (d.m === m && d.ca != null) vals[d.iso] = d.ca;
+      const saved = pvSavedVals(r, ym); for (const k of Object.keys(vals)) if (saved[k] != null && saved[k] !== vals[k]) repl++;
+      plan.push({ r, ym, vals }); nDays += Object.keys(vals).length;
+    }
+  }
+  if (!plan.length) { simMsg('err', 'Pas assez de CA / TAC\'S de l\'année de base pour simuler ' + (all ? 'ces restaurants' : 'ce restaurant') + '.'); return; }
+  if (repl && !confirm(`${repl} jour(s) déjà enregistrés dans le calendrier seront remplacés par la simulation (une fois enregistrée).\nContinuer ?`)) return;
+  pvStash(); PV.resto = null; PV.loadedYm = null;           // le mois affiché ne doit pas écraser les brouillons créés
+  for (const p of plan) { if (pvDiffDays(p.vals, pvSavedVals(p.r, p.ym))) PV.drafts[pvKey(p.r, p.ym)] = p.vals; else delete PV.drafts[pvKey(p.r, p.ym)]; }
+  pvDraftPersist(); PV.ym = pvClamp(SIM.ty + '-' + pad2(Math.max(1, +(SIMV.month || 1))));
+  setTab('prevca');
+  setTimeout(() => pvMsg('ok', `✓ Simulation ${SIM.ty} déposée dans le calendrier (${nDays} jours, ${new Set(plan.map(p => p.r)).size} restaurant(s))${skipped ? `, ${skipped} restaurant(s) sans base suffisante` : ''} — vérifie puis « Enregistrer ».`), 80);
+}
+
+// ── Affichage ──
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `
+.sim-note{ font-size:.78rem; color:var(--muted); line-height:1.55; margin:0 0 12px; }
+.sim-lev{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; background:var(--card2); border:1.5px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+.sim-lev .field{ margin:0; } .sim-lev input,.sim-lev select{ width:100%; }
+.sim-trend{ font-size:.72rem; color:var(--muted); grid-column:1/-1; line-height:1.5; }
+.sim-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+.sim-kpi{ background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:9px 12px; } .sim-kpi span{ display:block; font-size:.62rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); }
+.sim-kpi b{ display:block; font-size:1.15rem; margin-top:2px; } .sim-kpi i{ font-style:normal; font-size:.72rem; color:var(--muted); }
+.sim-h{ font-size:.66rem; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin:16px 2px 8px; }
+.sim-wrap{ overflow-x:auto; border:1.5px solid var(--border); border-radius:12px; background:var(--card); }
+table.sim{ width:100%; border-collapse:collapse; font-size:.78rem; min-width:720px; }
+table.sim th{ background:var(--card2); color:var(--muted); font-size:.62rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; padding:8px 8px; border-bottom:1.5px solid var(--border); text-align:right; white-space:nowrap; position:sticky; top:0; }
+table.sim th:first-child,table.sim td:first-child{ text-align:left; } table.sim th.l,table.sim td.l{ text-align:left; }
+table.sim td{ padding:5px 8px; border-bottom:1px solid var(--border); text-align:right; white-space:nowrap; }
+table.sim tr:last-child td{ border-bottom:0; } table.sim tr.tot td{ font-weight:800; background:var(--card2); } table.sim tr.we td{ background:rgba(59,130,246,.05); } table.sim tr.fe td{ background:rgba(245,158,11,.09); }
+table.sim input{ width:70px; padding:4px 6px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:.78rem; text-align:right; }
+table.sim input.ov{ border-color:#7c3aed; background:rgba(124,58,237,.07); }
+.sim-pos{ color:var(--green); font-weight:700; } .sim-neg{ color:var(--red); font-weight:700; } .sim-src{ font-size:.62rem; color:#b45309; font-weight:800; margin-left:4px; }
+.sim-form{ display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-top:10px; } .sim-form label{ font-size:.66rem; font-weight:800; color:var(--muted); display:block; margin-bottom:3px; } .sim-form input{ padding:7px 9px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; width:130px; }
+details.sim-d{ margin-top:12px; } details.sim-d summary{ cursor:pointer; font-size:.7rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); padding:5px 2px; }`;
+  document.head.appendChild(st);
+})();
+const simSign = v => v == null ? '' : (v >= 0 ? 'sim-pos' : 'sim-neg');
+function renderSimu() {
+  const p = document.getElementById('panel');
+  if (!pwdHash()) {
+    p.innerHTML = `<div class="panel-head"><div class="panel-title">Simulateur de prévision</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie pour utiliser le simulateur.</div>
+      <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
+  }
+  if (!ALIMM || !PREVJ || !TX) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Simulateur de prévision</div></div><div class="hint">⏳ Chargement du CA et des TAC'S des années précédentes…</div>`; loadTx(); return; }
+  const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Y = simYear(r), Ty = Y.Ty, c = Y.c, D = Y.D, rnd = c.rnd || 100;
+  if (SIMV.month == null) SIMV.month = Math.min(12, Math.max(1, new Date().getFullYear() === Ty ? new Date().getMonth() + 1 : 1));
+  const S = simSum(Y.days), evo = S.a ? S.ca / S.a - 1 : null, evoT = S.t0 ? S.t / S.t0 - 1 : null, pmB = S.t0 ? S.a / S.t0 : null, pmF = S.t ? S.ca / S.t : null;
+  const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
+  const tr = D.tr;
+  // Mois
+  const mrows = MN.map((mn, i) => {
+    const m = i + 1, ds = Y.days.filter(d => d.m === m), s = simSum(ds), o = c.months[m] || {};
+    const ev = s.a ? s.ca / s.a - 1 : null;
+    return `<tr><td>${mn}</td><td><input type="text" inputmode="decimal" class="${o.j != null ? 'ov' : ''}" value="${o.j != null ? simNum(o.j) : ''}" placeholder="${simNum(D.jt)}" onchange="simMonth(${m},'j',this.value)"></td>
+      <td><input type="text" inputmode="decimal" class="${o.l != null ? 'ov' : ''}" value="${o.l != null ? simNum(o.l) : ''}" placeholder="${simNum(D.lp)}" onchange="simMonth(${m},'l',this.value)"></td>
+      <td>${s.n ? pvEur(s.a) : '—'}</td><td><b>${s.n ? pvEur(s.ca) : '—'}</b></td><td class="${simSign(ev)}">${simPct(ev)}</td><td>${s.n ? Math.round(s.t).toLocaleString('fr-FR') : '—'}</td><td>${s.t ? (s.ca / s.t).toFixed(2).replace('.', ',') + ' €' : '—'}</td><td>${s.n}/${ds.length}</td></tr>`;
+  }).join('');
+  // Jours fériés de l'année cible + jours saisis à la main
+  const spec = Y.days.filter(d => d.fer || c.ov[d.iso]);
+  const srows = spec.map(d => `<tr><td>${d.iso.slice(8)}/${d.iso.slice(5, 7)} <small>${PV_JOURS[d.dow].toLowerCase()}</small></td><td class="l">${d.fer ? '🎉 ' + escH(d.fer) : 'Jour saisi à la main'}</td>
+      <td class="l"><small>${d.b1.slice(8)}/${d.b1.slice(5, 7)}/${d.b1.slice(2, 4)}${d.ferB ? ' · ' + escH(d.ferB) : ''}</small></td><td>${d.A1 != null ? pvEur(d.A1) : '—'}</td>
+      <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].j != null ? 'ov' : ''}" value="${simNum(d.jt)}" onchange="simDay('${d.iso}','j',this.value)">` : '—'}</td><td><b>${d.ca != null ? pvEur(d.ca) : '—'}</b></td>
+      <td>${d.auto != null ? `<small>proposé ${simPct(d.auto, 0)}</small>` : '<small>—</small>'}</td><td>${c.ov[d.iso] ? `<button class="step" onclick="simDayReset('${d.iso}')" title="Revenir au calcul automatique">↺</button>` : ''}</td></tr>`).join('');
+  // Périodes
+  const rrows = (c.ranges || []).map((x, i) => `<tr><td>${x.from.slice(8)}/${x.from.slice(5, 7)} → ${x.to.slice(8)}/${x.to.slice(5, 7)}</td><td class="l">${escH(x.lbl)}</td><td>${x.j != null ? simPct(x.j) : '—'}</td><td>${x.l != null ? simPct(x.l) : '—'}</td><td><button class="step" onclick="simRangeDel(${i})">✕</button></td></tr>`).join('');
+  // Semaines
+  const wk = {};
+  for (const d of Y.days) { const w = simIsoWeek(d.iso), k = w.mon; (wk[k] = wk[k] || { w: w.w, y: w.y, ds: [] }).ds.push(d); }
+  const wrows = Object.keys(wk).sort().map(k => { const g = wk[k], s = simSum(g.ds), e = s.a ? s.ca / s.a - 1 : null, et = s.t0 ? s.t / s.t0 - 1 : null;
+    return `<tr><td>S ${g.w}${g.ds.length < 7 ? ' <small>(partielle)</small>' : ''} <small>${k.slice(8)}/${k.slice(5, 7)}</small></td><td>${s.n ? pvEur(s.a) : '—'}</td><td><b>${s.n ? pvEur(s.ca) : '—'}</b></td><td class="${simSign(e)}">${simPct(e)}</td><td>${s.n ? Math.round(s.t).toLocaleString('fr-FR') : '—'}</td><td class="${simSign(et)}">${simPct(et)}</td></tr>`; }).join('');
+  // Calendrier du mois choisi
+  const M = SIMV.month, cd = Y.days.filter(d => d.m === M), sM = simSum(cd);
+  const crows = cd.map(d => `<tr class="${d.fer ? 'fe' : (d.dow > 4 ? 'we' : '')}"><td>${PV_JOURS[d.dow]} ${+d.iso.slice(8)}${d.fer ? ' 🎉' : ''}${d.kind && !d.fer ? ` <small>${escH(d.kind)}</small>` : ''}</td>
+      <td>${d.src ? pvEur(d.A1) : '—'}${d.src === 'N-2' ? '<span class="sim-src">base 2 ans</span>' : ''}<br><small>${d.src ? Math.round(d.T1).toLocaleString('fr-FR') + ' TAC\'S' : ''}</small></td>
+      <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].j != null ? 'ov' : ''}" value="${simNum(d.jt)}" onchange="simDay('${d.iso}','j',this.value)">` : ''}</td>
+      <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].l != null ? 'ov' : ''}" value="${simNum(d.lp)}" onchange="simDay('${d.iso}','l',this.value)">` : ''}</td>
+      <td><b>${d.ca != null ? pvEur(d.ca) : '—'}</b><br><small>${d.src ? Math.round(d.T).toLocaleString('fr-FR') + ' TAC\'S' : ''}</small></td><td class="${d.ca != null ? simSign(d.ca / d.A1 - 1) : ''}">${d.ca != null ? simPct(d.ca / d.A1 - 1) : '—'}</td>
+      <td>${d.ca != null && sM.ca ? (d.ca / sM.ca * 100).toFixed(1).replace('.', ',') + ' %' : ''}</td></tr>`).join('');
+  p.innerHTML = `
+    <div class="panel-head"><div><div class="panel-title">Simulateur de prévision ${Ty} · ${escH(name)}</div>
+      <div class="last-saisie">Part du CA et des TAC'S réels de ${Ty - 1} (jour équivalent, même jour de la semaine) et applique une évolution de TAC'S et de panier moyen : CA prévu = TAC'S × panier moyen, arrondi à ${rnd} €. Ajuste par mois, par période ou par jour, puis dépose le résultat dans le calendrier Prévision CA.</div></div>
+      <div class="period"><select id="simTy" onchange="simSet('ty',this.value)">${years.map(v => `<option ${v === Ty ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>
+    <div class="sim-note">Base : ${Y.nBase} jour(s) réels de ${Ty - 1}${Y.nFall ? `, ${Y.nFall} jour(s) repris sur ${Ty - 2} et mis au niveau de ${Ty - 1} (CA de ${Ty - 1} pas encore complet)` : ''}${Y.nNone ? `, ${Y.nNone} jour(s) sans donnée (non simulés)` : ''}.</div>
+    <div class="sim-lev">
+      <div class="field"><label>Évolution TAC'S (%)</label><input type="text" inputmode="decimal" value="${simNum(D.jt)}" onchange="simSet('jt',this.value)"></div>
+      <div class="field"><label>Évolution panier moyen (%)</label><input type="text" inputmode="decimal" value="${simNum(D.lp)}" onchange="simSet('lp',this.value)"></div>
+      <div class="field"><label>Jour férié (équivalent N-1 normal) · TAC'S %</label><input type="text" inputmode="decimal" placeholder="auto" value="${c.hp != null ? simNum(c.hp) : ''}" onchange="simSet('hp',this.value)"></div>
+      <div class="field"><label>Équivalent N-1 férié, jour normal · TAC'S %</label><input type="text" inputmode="decimal" placeholder="auto" value="${c.hm != null ? simNum(c.hm) : ''}" onchange="simSet('hm',this.value)"></div>
+      <div class="field"><label>Arrondi du CA du jour</label><select onchange="simSet('rnd',this.value)">${[1, 10, 50, 100].map(v => `<option value="${v}" ${v === rnd ? 'selected' : ''}>${v} €</option>`).join('')}</select></div>
+      <div class="sim-trend">${tr ? `Tendance observée ${Ty - 1} vs ${Ty - 2} (${tr.n} jours comparables) : TAC'S <b>${simPct(tr.jt)}</b> · panier moyen <b>${simPct(tr.lp)}</b>. ` : `Pas assez d'historique pour calculer une tendance. `}Jours fériés : « auto » = effet appris sur l'historique du restaurant (modifiable jour par jour ci-dessous). <a style="cursor:pointer;text-decoration:underline" onclick="simTrendReset()">Reprendre la tendance</a> · <a style="cursor:pointer;text-decoration:underline" onclick="simCopyAll()">Copier ces réglages vers tous les restaurants</a></div>
+    </div>
+    <div class="sim-kpis">
+      <div class="sim-kpi"><span>CA alim. ${Ty - 1} (base)</span><b>${pvEur(S.a)}</b><i>${S.n} jours simulés</i></div>
+      <div class="sim-kpi"><span>Prévision ${Ty}</span><b>${pvEur(S.ca)}</b><i class="${simSign(evo)}">${simPct(evo)} vs ${Ty - 1}</i></div>
+      <div class="sim-kpi"><span>TAC'S prévus</span><b>${Math.round(S.t).toLocaleString('fr-FR')}</b><i class="${simSign(evoT)}">${simPct(evoT)}</i></div>
+      <div class="sim-kpi"><span>Panier moyen prévu</span><b>${pmF ? pmF.toFixed(2).replace('.', ',') + ' €' : '—'}</b><i>${pmB ? 'base ' + pmB.toFixed(2).replace('.', ',') + ' €' : ''}</i></div>
+      <div class="sim-kpi"><span>CA net total prévu</span><b>${pvEur(S.ca * PV.coef)}</b><i>× ${String(PV.coef).replace('.', ',')}</i></div></div>
+    <div class="sim-h">Évolutions par mois <small style="text-transform:none;letter-spacing:0;font-weight:600">(laisser vide = évolution globale ; violet = réglage propre au mois)</small></div>
+    <div class="sim-wrap"><table class="sim"><thead><tr><th>Mois</th><th>TAC'S %</th><th>PM %</th><th>CA ${Ty - 1}</th><th>CA prévu</th><th>Évol.</th><th>TAC'S prévus</th><th>PM prévu</th><th>Jours</th></tr></thead><tbody>${mrows}
+      <tr class="tot"><td>Année</td><td></td><td></td><td>${pvEur(S.a)}</td><td>${pvEur(S.ca)}</td><td class="${simSign(evo)}">${simPct(evo)}</td><td>${Math.round(S.t).toLocaleString('fr-FR')}</td><td>${pmF ? pmF.toFixed(2).replace('.', ',') + ' €' : '—'}</td><td>${S.n}</td></tr></tbody></table></div>
+    <div class="sim-h">Jours fériés et jours particuliers</div>
+    <div class="sim-wrap"><table class="sim" style="min-width:760px"><thead><tr><th>Date</th><th class="l">Jour</th><th class="l">Jour de base ${Ty - 1}</th><th>CA base</th><th>TAC'S %</th><th>CA prévu</th><th>Auto</th><th></th></tr></thead><tbody>${srows || '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Aucun</td></tr>'}</tbody></table></div>
+    <div class="hint" style="margin-top:6px">Un ajustement est proposé quand le jour férié ne tombe pas sur le même type de jour que l'an passé (appris sur l'effet « férié » de ce restaurant) ; tu peux le modifier ou le remplacer.</div>
+    <div class="sim-h">Périodes particulières (vacances, événements, campagnes)</div>
+    ${rrows ? `<div class="sim-wrap"><table class="sim" style="min-width:520px"><thead><tr><th>Période</th><th class="l">Libellé</th><th>TAC'S</th><th>PM</th><th></th></tr></thead><tbody>${rrows}</tbody></table></div>` : ''}
+    <div class="sim-form"><div><label>Du</label><input type="date" id="simRf" min="${Ty}-01-01" max="${Ty}-12-31"></div><div><label>Au</label><input type="date" id="simRt" min="${Ty}-01-01" max="${Ty}-12-31"></div><div><label>TAC'S (%)</label><input type="text" id="simRj" inputmode="decimal" placeholder="ex. 5" style="width:80px"></div><div><label>PM (%)</label><input type="text" id="simRl" inputmode="decimal" placeholder="ex. 2" style="width:80px"></div><div><label>Libellé</label><input type="text" id="simRn" placeholder="ex. Vacances de Noël"></div><button class="step" onclick="simRangeAdd()">+ Ajouter la période</button></div>
+    <details class="sim-d"><summary>Semaines</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:560px"><thead><tr><th>Semaine</th><th>CA ${Ty - 1}</th><th>CA prévu</th><th>Évol.</th><th>TAC'S prévus</th><th>Évol.</th></tr></thead><tbody>${wrows}</tbody></table></div></details>
+    <details class="sim-d" open><summary>Calendrier jour par jour</summary>
+      <div class="period" style="margin:8px 0"><select onchange="simPickMonth(this.value)">${MN.map((n, i) => `<option value="${i + 1}" ${i + 1 === M ? 'selected' : ''}>${n} ${Ty}</option>`).join('')}</select></div>
+      <div class="sim-wrap"><table class="sim" style="min-width:700px"><thead><tr><th>Jour</th><th>Base ${Ty - 1}</th><th>TAC'S %</th><th>PM %</th><th>CA prévu</th><th>Évol.</th><th>Part du mois</th></tr></thead><tbody>${crows}
+        <tr class="tot"><td>${MN[M - 1]}</td><td>${pvEur(sM.a)}</td><td></td><td></td><td>${pvEur(sM.ca)}</td><td class="${simSign(sM.a ? sM.ca / sM.a - 1 : null)}">${simPct(sM.a ? sM.ca / sM.a - 1 : null)}</td><td></td></tr></tbody></table></div></details>
+    <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="simApply(false)">Appliquer au calendrier Prévision CA · ${escH(name)}</button>
+      <button class="step" onclick="simApply(true)">Appliquer à tous les restaurants</button><span class="save-msg" id="simMsg"></span></div>
+    <div class="hint">« Appliquer » remplit le calendrier Prévision CA (à partir de novembre 2026) sans rien enregistrer : tu peux encore ajuster jour par jour, puis « Enregistrer tout » dans l'onglet Prévision CA. Les réglages du simulateur sont gardés sur cet appareil.</div>`;
 }
 
 // ── Démarrage ──
