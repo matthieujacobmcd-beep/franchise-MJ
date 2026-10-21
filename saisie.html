@@ -185,7 +185,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════
-/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
+/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
 const APPS_SCRIPT_URL = CFG.apps_script_url;   // …/exec
 const PWD_HASH = CFG.pwd_hash;
 // ── Accès par rôle (directeur de restaurant, superviseur de secteur, franchisé) : mots de passe distincts de celui de la saisie ──
@@ -1609,7 +1609,9 @@ function renderSimu() {
 const BD_KEY = 'mj_budget';
 const BUD = (() => { try { const d = JSON.parse(localStorage.getItem(BD_KEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
 BUD.byResto = BUD.byResto || {};
-BUD.view = ['e', 'p', 'ep'].includes(BUD.view) ? BUD.view : 'ep';   // compte de résultat : montants, % du CA, ou les deux
+BUD.view = ['e', 'p', 'ep'].includes(BUD.view) ? BUD.view : 'ep';
+BUD.period = BUD.period === 'a' ? 'a' : 'm';                       // compte de résultat : mensuel (12 colonnes) ou annuel
+BUD.entry = BUD.entry === 'm' ? 'm' : 'a';                         // saisie des hypothèses : annuelle ou mois par mois   // compte de résultat : montants, % du CA, ou les deux
 function bdSave() { try { localStorage.setItem(BD_KEY, JSON.stringify(BUD)); } catch (e) {} }
 const bdNorm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/g, 'oe').replace(/\s+/g, ' ').trim();
 
@@ -1645,12 +1647,16 @@ const BD_LINES = [
 ];
 const BD_BY = Object.fromEntries(BD_LINES.map(x => [x.k, x]));
 const BD_PCT = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn'), BD_FIX = BD_LINES.filter(x => x.t === 'fix');
+// Services extérieurs : détail par prestation et société (onglet « DEP CONTROLABLE » du classeur) ; le total de chaque ligne alimente le compte de résultat
+const BD_DET_KEYS = ['nett', 'secu', 'banque', 'maint', 'autres'];
+const BD_PREST = ['Sté nettoyage', 'Sté sécurité', 'Télésurveillance', 'Dératisation / Désinsectisation', 'Climatisation', 'Extraction graisse', 'Entretien matériel frigorifique', 'Entretien hygiène', 'Vérification électricité + gaz', 'Entretien des canalisations', 'Maintenance informatique', 'Machine à café', 'Prestation froid', 'Entretien extincteurs', 'Prestation hygiène (analyses)', 'Prestation Ansul', 'Ramassage monnaie', 'Enlèvement ordures ménagères', 'Espaces verts', 'Contrat adoucisseur', 'Maintenance réseau', 'Maintenance Play Land', 'Collecte huiles usagées', 'Archivage', 'Maintenance lave-verres', 'Prestation GIE', 'Licence balance', 'Location bouteilles gaz', 'Location TPE', 'Locations diverses', 'Médecine du travail', 'Redevance SIR', 'Redevance SACEM', 'Refacturation services extérieurs', 'Frais bancaires', 'Commissions CB', 'Commissions titres-restaurant / ANCV', 'Commissions Paypal / Worldline', 'Entretien & réparations'];
 const BD_STD = { achat: 0, repas: 0, dechets: 0, embal: 0, divmo: 0, foodtech: 0, pub: 0.04, promo: 0, redev: 0.16, incent: 0, redsvc: 0.05, ga: 0.04 };   // seuls les taux réseau sont préremplis
 
 function bdParams(r) {
   const o = BUD.byResto[r] = BUD.byResto[r] || {};
   if (!o.p) {
     const p = { rn: 1.01, naCost: 1, tis: 0.25, infl: 0, vphe: Array(12).fill(100), coutH: Array(12).fill(0), tEq: Array(12).fill(0.23), tMg: Array(12).fill(0.45) };
+    p.det = []; p.pm = {};
     for (const x of BD_PCT) p[x.k] = BD_STD[x.k] || 0;
     for (const x of BD_FIX) p[x.k] = Array(12).fill(0);
     o.p = p;
@@ -1660,10 +1666,27 @@ function bdParams(r) {
 
 // ── Calcul (mêmes formules que l'onglet PNL du classeur) ──
 function bdMode(p, k) { return (p.m && p.m[k]) || (BD_BY[k].t === 'fix' ? 'a' : 'r'); }   // r = % du CA (alimentaire ; CA net pour les commissions) · a = montant mensuel
+// Saisie « comme dans Excel » : 288,4+1136 · 491,68*12 · (6354,77*12)+(5283,5+113)*12 → nombre (ou null si invalide)
+function bdExpr(t) {
+  const s = String(t == null ? '' : t).replace(/[\s€]/g, '').replace(/^=/, '').replace(/,/g, '.'); if (!s || !/^[0-9+\-*/().]+$/.test(s)) return null;
+  let i = 0;
+  const num = () => { const m = s.slice(i).match(/^\d*\.?\d+/); if (!m) throw 0; i += m[0].length; return parseFloat(m[0]); };
+  const fac = () => { if (s[i] === '-') { i++; return -fac(); } if (s[i] === '+') { i++; return fac(); } if (s[i] === '(') { i++; const v = sum(); if (s[i] !== ')') throw 0; i++; return v; } return num(); };
+  const term = () => { let v = fac(); while (s[i] === '*' || s[i] === '/') { const o = s[i++], w = fac(); v = o === '*' ? v * w : v / w; } return v; };
+  const sum = () => { let v = term(); while (s[i] === '+' || s[i] === '-') { const o = s[i++], w = term(); v = o === '+' ? v + w : v - w; } return v; };
+  try { const v = sum(); return i === s.length && isFinite(v) ? v : null; } catch (e) { return null; }
+}
+const bdIsExpr = t => /[+\-*/()]/.test(String(t).trim().replace(/^[=-]/, ''));
+// Montants mensuels des lignes de services extérieurs issus du détail par société (budget annuel ÷ 12, ou mois par mois si saisi) : { clé de ligne : [12 mois] }
+function bdDetM(p) {
+  const out = {};
+  for (const x of (p.det || [])) { if (!BD_DET_KEYS.includes(x.k)) continue; const a = out[x.k] = out[x.k] || Array(12).fill(0); for (let i = 0; i < 12; i++) a[i] += x.m ? (x.m[i] || 0) : (x.amt || 0) / 12; }
+  return out;
+}
 // Équipe de direction (EDG) saisie par poste (initiales, jamais de noms) : coût mensuel = brut + primes (prime annuelle répartie sur les mois travaillés) ; null = ligne « brut managers » saisie à la main
 const BD_POSTES = ['Directeur', 'Adjoint', 'Assistant', 'Manager'];
 function bdEdgM(p) {
-  if (typeof accCan === 'function' && !accCan('edg')) return null;      // salaires par poste : franchisé seul (même sur un appareil partagé)
+  if (typeof accCan === 'function' && !accCan('edg')) return null;      // salaires par poste : réservés aux accès qui ont le droit « edg »
   const e = p.edg; if (!e || !e.on || !(e.rows || []).some(x => (x.sal || []).some(v => v > 0))) return null;
   const out = Array(12).fill(0);
   for (const x of e.rows) { const act = x.sal.filter(v => v > 0).length || 1; for (let i = 0; i < 12; i++) if (x.sal[i] > 0) out[i] += x.sal[i] + (x.prime || 0) / act; }
@@ -1671,10 +1694,10 @@ function bdEdgM(p) {
 }
 function bdCompute(p, alim) {
   const L = {}; for (const x of BD_LINES) L[x.k] = Array(12).fill(0);
-  const edgM = bdEdgM(p);
+  const edgM = bdEdgM(p), detM = bdDetM(p), rate = (k, i) => (p.pm && p.pm[k]) ? (p.pm[k][i] || 0) : (p[k] || 0);
   for (let i = 0; i < 12; i++) {
     const A = alim[i] || 0, N = A * p.rn, g = k => L[k][i], s = (k, v) => { L[k][i] = v; };
-    const lv = k => bdMode(p, k) === 'r' ? (BD_BY[k].t === 'pctn' ? N : A) * (p[k] || 0) : (p[k][i] || 0) * (1 + (p.infl || 0));
+    const lv = k => detM[k] ? detM[k][i] : bdMode(p, k) === 'r' ? (BD_BY[k].t === 'pctn' ? N : A) * rate(k, i) : (p[k][i] || 0) * (1 + (p.infl || 0));
     s('alim', A); s('net', N);
     for (const k of ['achat', 'repas', 'dechets', 'embal', 'vaisselle']) s(k, lv(k));
     s('marge', A - g('achat') - g('repas') - g('dechets') - g('embal') - g('vaisselle'));
@@ -1714,20 +1737,21 @@ async function bdZip(buf) {
   return { get: async nm => { const f = out[nm]; if (!f) return null; return new TextDecoder().decode(f.meth === 0 ? f.data : await bdInflate(f.data)); } };
 }
 const bdCol = s => { let n = 0; for (const c of s) n = n * 26 + c.charCodeAt(0) - 64; return n; };
-async function bdBook(buf, wantSheet) {
+async function bdBook(buf, wantSheet, label = 'PNL') {
   const z = await bdZip(buf), dp = new DOMParser(), xml = async nm => { const t = await z.get(nm); return t ? dp.parseFromString(t, 'application/xml') : null; };
   const wb = await xml('xl/workbook.xml'), rels = await xml('xl/_rels/workbook.xml.rels'), ss = await xml('xl/sharedStrings.xml');
   const strings = ss ? [...ss.getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join('')) : [];
   const sheets = [...wb.getElementsByTagName('sheet')].map(s => ({ name: s.getAttribute('name'), rid: s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') }));
-  const sh = sheets.find(s => wantSheet(s.name)); if (!sh) throw new Error('onglet « PNL » introuvable dans ce classeur');
+  const sh = sheets.find(s => wantSheet(s.name)); if (!sh) throw new Error('onglet « ' + label + ' » introuvable dans ce classeur');
   const rel = [...rels.getElementsByTagName('Relationship')].find(x => x.getAttribute('Id') === sh.rid), target = rel.getAttribute('Target').replace(/^\/?(xl\/)?/, 'xl/');
-  const doc = await xml(target), cells = {};
+  const doc = await xml(target), cells = {}, formulas = {};
   for (const c of doc.getElementsByTagName('c')) {
     const v = c.getElementsByTagName('v')[0]; if (!v) continue; const t = c.getAttribute('t'); let val = v.textContent;
+    const fe = c.getElementsByTagName('f')[0]; if (fe && fe.textContent) formulas[c.getAttribute('r')] = fe.textContent;
     if (t === 's') val = strings[+val]; else if (t === 'str' || t === 'inlineStr' || t === 'e') val = val; else val = +val;
     cells[c.getAttribute('r')] = val;
   }
-  return { name: sh.name, cells, get: (col, row) => cells[col + row], getN: (col, row) => { const v = cells[col + row]; return typeof v === 'number' ? v : null; } };
+  return { name: sh.name, cells, formulas, get: (col, row) => cells[col + row], getN: (col, row) => { const v = cells[col + row]; return typeof v === 'number' ? v : null; } };
 }
 const BD_MONTHS_RE = [/^janv/, /^fev/, /^mars/, /^avr/, /^mai/, /^juin/, /^juil/, /^aout/, /^sept/, /^oct/, /^nov/, /^dec/];
 function bdColLetter(n) { let s = ''; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; }
@@ -1762,6 +1786,30 @@ function bdFromBook(book) {
   // IS : 25 % sauf indication contraire (le classeur l'applique dans la formule) ; participation et charges fixes reprises ci-dessus
   for (const k of ['alim', 'net', 'marge', 'mo', 'pac', 'cf', 'rn']) { const rr = k === 'alim' ? rAlim : k === 'net' ? rNet : find({ marge: /^marge brute/, mo: /sous-total main d.oeuvre/, pac: /profit apres controlables|^pac/, cf: /^cash flow/, rn: /^resultat net$/ }[k]); ref[k] = rr ? [...Array(12)].map((_, i) => num(val(rr, i))) : Array(12).fill(0); }
   return { p, ref, miss };
+}
+
+// Onglet « DEP CONTROLABLE » : prestations (colonne A, société en E, info en F, montants selon l'année en en-tête) et frais bancaires / entretien & réparations (colonne I)
+function bdDetFromBook(book) {
+  const rows = [], txt = (c, r) => { const v = book.get(c, r); return v == null ? '' : String(v).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(); };
+  let maxRow = 0; for (const a of Object.keys(book.cells)) { const m = a.match(/^([A-Z]+)(\d+)$/); if (m) maxRow = Math.max(maxRow, +m[2]); }
+  const year = (c, r) => { const v = book.getN(c, r); return v > 2000 && v < 2100 ? v : null; };
+  const pick = (cols, r) => { let b = null; for (const c of cols) { const y = year(c, r); if (y && (!b || y > b.y)) b = { c, y }; } return b; };
+  const exprOf = (c, r) => { const f = book.formulas && book.formulas[c + r]; return f && /^[0-9+\-*/().\s]+$/.test(f) && /[+\-*/]/.test(f) ? f.replace(/\s/g, '').replace(/(\d)\.(\d)/g, '$1,$2') : undefined; };
+  const sides = [{ lab: 'A', soc: 'E', info: 'F', val: ['D', 'G'], blocks: ['nett', 'autres'] }, { lab: 'I', soc: null, info: null, val: ['L', 'M', 'N'], blocks: ['banque', 'maint'] }];
+  let refY = 0;
+  for (const sd of sides) {
+    let blk = -1, col = null;
+    for (let r = 4; r <= maxRow; r++) {
+      const lb = txt(sd.lab, r), n = bdNorm(lb); if (!lb) continue;
+      if (/^prestations/.test(n)) { blk++; const pk = pick(sd.val, r); col = pk ? pk.c : null; if (pk) refY = Math.max(refY, pk.y); continue; }
+      if (/^total|^montant mensuel/.test(n)) { col = null; continue; }
+      if (blk < 0 || blk > 1 || !col) continue;
+      const ref = book.getN(col, r) || 0, soc = sd.soc ? txt(sd.soc, r) : ''; if (!ref && !soc) continue;
+      const k = sd.lab === 'A' && blk === 0 ? (/securit/.test(n) ? 'secu' : 'nett') : sd.blocks[blk], f = exprOf(col, r), v = Math.round(ref * 100) / 100;
+      rows.push({ id: Math.random().toString(36).slice(2, 9), k, pr: lb, soc, info: sd.info ? txt(sd.info, r) : '', ref: v, refF: f, amt: v, amtF: f });
+    }
+  }
+  return { rows, refY: refY || null };
 }
 
 // ── CA alimentaire mensuel issu de la prévision journalière (calendrier Prévision CA : brouillon en cours, sinon enregistré) ──
@@ -1812,15 +1860,43 @@ function bdSwitch(k, to) {                                   // € ↔ % du CA 
   const ca = bdCa(curResto, +SIM.ty).alim, A = ca.reduce((a, b) => a + b, 0), N = A * p.rn, base = BD_BY[k].t === 'pctn' ? N : A; p.m = p.m || {};
   if (to === 'r') p[k] = base ? p[k].reduce((a, b) => a + b, 0) * (1 + (p.infl || 0)) / base : 0;
   else p[k] = ca.map(a => (BD_BY[k].t === 'pctn' ? a * p.rn : a) * p[k]);
-  p.m[k] = to; bdSave(); renderBudget();
+  p.m[k] = to; if (p.pm) delete p.pm[k]; bdSave(); renderBudget();
 }
 function bdSetLine(k, v) {                                   // valeur saisie : % du CA (mode r) ou montant annuel (mode a)
   const o = bdParams(curResto), p = o.p, x = bdPar(v); if (x == null) return;
-  if (bdMode(p, k) === 'r') p[k] = x / 100; else { const old = p[k].reduce((a, b) => a + b, 0); p[k] = old ? p[k].map(m => m * x / old) : Array(12).fill(x / 12); }
+  if (bdMode(p, k) === 'r') { p[k] = x / 100; if (p.pm) delete p.pm[k]; } else { const old = p[k].reduce((a, b) => a + b, 0); p[k] = old ? p[k].map(m => m * x / old) : Array(12).fill(x / 12); }
   bdSave(); renderBudget();
 }
 function bdSetM(k, i, v) { const x = bdPar(v); if (x == null) return; bdParams(curResto).p[k][i] = x; bdSave(); renderBudget(); }
 function bdView(v) { BUD.view = v; bdSave(); renderBudget(); }
+function bdPeriod(v) { BUD.period = v; bdSave(); renderBudget(); }               // affichage du compte de résultat : m = mensuel (12 colonnes) · a = annuel
+function bdEntry(v) { BUD.entry = v; bdSave(); renderBudget(); }                 // saisie des hypothèses : a = annuelle · m = mois par mois
+let bdFlash = null;
+function bdSetPm(k, i, v) { const x = bdPar(v); if (x == null) return; const p = bdParams(curResto).p; p.pm = p.pm || {}; p.pm[k] = p.pm[k] || Array(12).fill(p[k] || 0); p.pm[k][i] = x / 100; bdSave(); renderBudget(); }
+// Services extérieurs : détail par prestation et société (saisie de calculs « comme Excel » : 491,68*12 · 288,4+1136)
+const bdRaw = v => v == null || v === '' ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
+function bdDet() { const p = bdParams(curResto).p; return p.det = p.det || []; }
+function bdSocList() { const set = new Set(); for (const r of Object.keys(BUD.byResto)) for (const x of ((BUD.byResto[r].p || {}).det || [])) if (x.soc) set.add(x.soc); return [...set].sort(); }
+function bdDetAdd(k) { bdDet().push({ id: Math.random().toString(36).slice(2, 9), k: k || 'autres', pr: '', soc: '', info: '', ref: 0, amt: 0 }); bdSave(); renderBudget(); }
+function bdDetDel(id) { const d = bdDet(), i = d.findIndex(x => x.id === id); if (i < 0) return; if (!confirm('Supprimer cette ligne (' + ((d[i].pr + ' ' + d[i].soc).trim() || 'sans nom') + ') ?')) return; d.splice(i, 1); bdSave(); renderBudget(); }
+function bdDetSet(id, f, v) {
+  const x = bdDet().find(r => r.id === id); if (!x) return;
+  if (f === 'k') { if (BD_DET_KEYS.includes(v)) x.k = v; }
+  else if (f === 'pr' || f === 'soc' || f === 'info') x[f] = String(v).slice(0, f === 'soc' ? 80 : 60);
+  else if (f === 'ref' || f === 'amt') {
+    const n = String(v).trim() === '' ? 0 : bdExpr(v);
+    if (n == null) { bdFlash = ['err', `Calcul non reconnu : « ${v} » (chiffres et + − * / ( ) seulement, par exemple 491,68*12).`]; renderBudget(); return; }
+    if (f === 'amt' && x.m) { const old = x.m.reduce((a, b) => a + b, 0); x.m = old ? x.m.map(m => m * n / old) : Array(12).fill(n / 12); }
+    x[f] = n; if (bdIsExpr(v)) x[f + 'F'] = String(v).trim(); else delete x[f + 'F'];
+  }
+  bdSave(); renderBudget();
+}
+function bdDetSetM(id, m, v) {
+  const x = bdDet().find(r => r.id === id); if (!x) return; const n = String(v).trim() === '' ? 0 : bdExpr(v);
+  if (n == null) { bdFlash = ['err', `Calcul non reconnu : « ${v} ».`]; renderBudget(); return; }
+  x.m = x.m || Array(12).fill((x.amt || 0) / 12); x.m[m] = n; x.amt = x.m.reduce((a, b) => a + b, 0); delete x.amtF; bdSave(); renderBudget();
+}
+function bdDetEven(id) { const x = bdDet().find(r => r.id === id); if (x) { delete x.m; bdSave(); renderBudget(); } }
 // Équipe de direction : salaires par poste
 function bdEdg() { const p = bdParams(curResto).p; return p.edg = p.edg || { on: true, rows: [] }; }
 function bdEdgAdd(poste) { bdEdg().rows.push({ poste: poste || 'Manager', ini: '', ctr: '', sal: Array(12).fill(0), prime: 0, from: 0 }); bdSave(); renderBudget(); }
@@ -1843,12 +1919,14 @@ async function bdImport(inp) {
   const f = inp.files && inp.files[0]; if (!f) return;
   try {
     bdMsg('', 'Lecture du classeur…');
-    const book = await bdBook(await f.arrayBuffer(), n => /^pnl/i.test(n.trim()));
+    const buf = await f.arrayBuffer(), book = await bdBook(buf, n => /^pnl/i.test(n.trim()));
     const res = bdFromBook(book), o = bdParams(curResto);
+    let det = null; try { det = bdDetFromBook(await bdBook(buf, n => /^dep\s*controlable/.test(bdNorm(n)), 'DEP CONTROLABLE')); } catch (e) { det = null; }   // détail des services extérieurs par société
+    res.p.det = det && det.rows.length ? det.rows : ((o.p && o.p.det) || []); res.p.detRefY = det ? det.refY : (o.p && o.p.detRefY); res.p.pm = {};
     if (o.p && o.p.edg) res.p.edg = o.p.edg;
     o.p = res.p; o.ref = res.ref; o.file = f.name; o.date = new Date().toISOString().slice(0, 10); bdSave();
     renderBudget();
-    bdMsg('ok', `✓ Hypothèses reprises de « ${f.name} »${res.miss.length ? ' — non trouvé : ' + res.miss.join(', ') : ''}.`);
+    bdMsg('ok', `✓ Hypothèses reprises de « ${f.name} »${det && det.rows.length ? ' — ' + det.rows.length + ' prestations / sociétés de services extérieurs' : ' — pas d\'onglet DEP CONTROLABLE'}${res.miss.length ? ' — non trouvé : ' + res.miss.join(', ') : ''}.`);
   } catch (e) { bdMsg('err', 'Import impossible : ' + e.message); }
   inp.value = '';
 }
@@ -1856,7 +1934,7 @@ async function bdImport(inp) {
 function renderBudget() {
   const pn = document.getElementById('panel');
   if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
-  if (!accCan('budget', curResto)) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd', curResto)}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel est ouvert au directeur du restaurant, au superviseur de son secteur et au franchisé (chacun son mot de passe). Les salaires par poste restent réservés au franchisé.</div>`; return; }
+  if (!accCan('budget', curResto)) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd', curResto)}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel est ouvert au directeur du restaurant, au superviseur de son secteur et au franchisé (chacun son mot de passe). Chaque échelon saisit ses salaires par poste ; la saisie d'un échelon n'est jamais visible des échelons en dessous.</div>`; return; }
   if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Ty = +SIM.ty, o = bdParams(r), p = o.p, ca = bdCa(r, Ty), L = bdCompute(p, ca.alim);
   const tot = k => L[k].reduce((a, b) => a + b, 0), A = tot('alim'), ref = o.ref, view = BUD.view;
@@ -1878,18 +1956,65 @@ function renderBudget() {
   const cmpA = L.alim.reduce((a, v, i) => a + (okM[i] ? v : 0), 0), cmpN = hN.reduce((a, x, i) => a + (okM[i] ? x.A : 0), 0), nOk = okM.filter(Boolean).length;
   const n1Row = `<tr><td>CA alim. ${Ty - 1} (réel)</td>${hN.map(x => `<td>${x.n ? bdE(x.A) + (x.n < x.nd ? `<span class="sim-src" title="${x.n} jour(s) saisis sur ${x.nd}">*</span>` : '') : '—'}</td>`).join('')}<td><b>${bdE(sN)}</b></td>${view === 'e' ? '<td></td>' : ''}</tr>`;
   const evRow = `<tr><td>Évolution du CA ${Ty} vs ${Ty - 1}</td>${L.alim.map((a, i) => { const e = okM[i] && a ? a / hN[i].A - 1 : null; return `<td class="${simSign(e)}">${e == null ? '—' : simPct(e)}</td>`; }).join('')}<td class="${simSign(cmpN && nOk ? cmpA / cmpN - 1 : null)}" title="${nOk} mois complets de ${Ty - 1}">${cmpN && nOk ? simPct(cmpA / cmpN - 1) : '—'}</td>${view === 'e' ? '<td></td>' : ''}</tr>`;
-  const canEdg = accCan('edg', r), edgM = bdEdgM(p), edg = bdEdg();
+  // vue annuelle : une colonne par grandeur (année, % du CA, référence du classeur importé, écart)
+  const per = BUD.period, hasRef = !!refT, RK = ['alim', 'net', 'marge', 'mo', 'pac', 'cf', 'rn'], evYear = cmpN && nOk ? cmpA / cmpN - 1 : null, refTail = hasRef ? '<td></td><td></td><td></td>' : '';
+  const linesA = BD_LINES.map(x => {
+    const t = sum(L[x.k]), cls = x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : '', r0 = hasRef && RK.includes(x.k) ? refT[x.k] : null;
+    return `<tr class="${cls}"><td>${x.l}</td><td><b>${bdE(t)}</b></td><td class="p">${A ? bdP(t / A) : ''}</td>${hasRef ? `<td>${r0 != null ? bdE(r0) : ''}</td><td class="p">${r0 != null && refT.alim ? bdP(r0 / refT.alim) : ''}</td><td class="${simSign(r0 ? t / r0 - 1 : null)}">${r0 ? simPct(t / r0 - 1) : ''}</td>` : ''}</tr>`;
+  }).join('');
+  const plAnnual = `<table class="bd" style="min-width:560px"><thead><tr><th>Ligne</th><th>Année ${Ty}</th><th>% CA alim.</th>${hasRef ? '<th>Réf. classeur</th><th>% CA réf.</th><th>Écart</th>' : ''}</tr></thead><tbody>
+    <tr><td>CA alim. ${Ty - 1} (réel)</td><td><b>${bdE(sN)}</b></td><td></td>${refTail}</tr><tr><td>Évolution du CA ${Ty} vs ${Ty - 1}</td><td class="${simSign(evYear)}">${evYear == null ? '—' : simPct(evYear)}</td><td></td>${refTail}</tr>${linesA}</tbody></table>`;
+  const plMonthly = `<table class="bd"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th>${view === 'e' ? '<th>% CA alim.</th>' : ''}</tr></thead><tbody>${srcRow}${n1Row}${evRow}${lines}</tbody></table>`;
+  const vBtn = (v, l, rd) => `<button class="step" style="border-radius:${rd};${view === v ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdView('${v}')">${l}</button>`;
+  const seg = (cur, v, l, rd, fn) => `<button class="step" style="border-radius:${rd};${cur === v ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="${fn}('${v}')">${l}</button>`;
+  const plHead = `<div class="sim-h" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>Compte de résultat prévisionnel ${Ty} <small style="text-transform:none;letter-spacing:0;font-weight:600">(% = part du CA alimentaire${per === 'a' ? '' : ' du mois'})</small></span>
+    <span style="display:inline-flex;gap:10px;flex-wrap:wrap"><span style="display:inline-flex">${seg(per, 'm', 'Mensuel', '8px 0 0 8px', 'bdPeriod')}${seg(per, 'a', 'Annuel', '0 8px 8px 0', 'bdPeriod')}</span>${per === 'm' ? `<span style="display:inline-flex">${vBtn('e', '€', '8px 0 0 8px')}${vBtn('ep', '€ + %', '0')}${vBtn('p', '% du CA', '0 8px 8px 0')}</span>` : ''}</span></div>`;
+  const canEdg = accCan('edg', r), edgM = bdEdgM(p), edg = bdEdg(), detM = bdDetM(p);
   const avg = a => a.reduce((x, y) => x + y, 0) / 12;
   const editable = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn' || x.t === 'fix');
   const hypRows = editable.map(x => {
+    if (detM[x.k]) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= détail par société (${(p.det || []).filter(d => d.k === x.k).length} ligne(s), ci-dessus)</td><td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
     if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de direction, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
     const md = bdMode(p, x.k), base = x.t === 'pctn' ? 'CA net' : 'CA alim.';
-    const val = md === 'r' ? bdIn(p[x.k]) : String(Math.round(sum(p[x.k])));
+    const varM = md === 'r' && p.pm && p.pm[x.k], wr = varM ? sum(L[x.k]) / (x.t === 'pctn' ? sum(L.net) : A) : null;
+    const val = md === 'r' ? bdIn(varM ? (wr || 0) : p[x.k]) : String(Math.round(sum(p[x.k])));
     return `<tr><td>${x.l}</td><td style="text-align:center"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;${md === 'a' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','a')">€</button><button class="step" style="border-radius:0 8px 8px 0;${md === 'r' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','r')">% du ${base}</button></span></td>
-      <td><input type="text" inputmode="decimal" style="width:110px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;text-align:right;font-family:inherit" value="${val}" onchange="bdSetLine('${x.k}',this.value)"> <small style="color:var(--muted)">${md === 'r' ? '%' : '€ / an'}</small></td>
+      <td><input type="text" inputmode="decimal" style="width:110px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;text-align:right;font-family:inherit" value="${val}" onchange="bdSetLine('${x.k}',this.value)"> <small style="color:var(--muted)">${md === 'r' ? (varM ? '% (moyenne : varie selon les mois)' : '%') : '€ / an'}</small></td>
       <td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
   }).join('');
-  const fixRows = editable.map(x => bdMode(p, x.k) === 'a' && !(x.k === 'momg' && edgM) ? `<tr><td>${x.l}</td>${p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(p[x.k]))}</b></td><td></td></tr>` : '').join('');
+  const fixRows = editable.map(x => bdMode(p, x.k) === 'a' && !detM[x.k] && !(x.k === 'momg' && edgM) ? `<tr><td>${x.l}</td>${p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(p[x.k]))}</b></td><td></td></tr>` : '').join('');
+  const mIn = 'width:62px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem';
+  const gridRows = editable.map(x => {
+    const ro = detM[x.k] ? ['détail par société', detM[x.k]] : (x.k === 'momg' && edgM ? ['salaires par poste', edgM] : null);
+    if (ro) return `<tr><td>${x.l} <small style="color:var(--muted)">(${ro[0]})</small></td>${ro[1].map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(ro[1]))}</b></td><td></td></tr>`;
+    const md = bdMode(p, x.k), pcn = x.t === 'pctn';
+    const cells = md === 'a' ? p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')
+      : MN.map((_, i) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${bdIn((p.pm && p.pm[x.k]) ? p.pm[x.k][i] : p[x.k])}" onchange="bdSetPm('${x.k}',${i},this.value)"></td>`).join('');
+    const yr = md === 'a' ? bdE(sum(p[x.k])) : bdP(sum(L[x.k]) / ((pcn ? sum(L.net) : A) || 1));
+    return `<tr><td>${x.l} <button class="step" style="font-size:.6rem;padding:1px 7px" title="Changer le mode de saisie de cette ligne" onclick="bdSwitch('${x.k}','${md === 'a' ? 'r' : 'a'}')">${md === 'a' ? '€ → %' : '% → €'}</button></td>${cells}<td><b>${yr}</b></td><td class="p">${md === 'a' ? (A ? bdP(sum(L[x.k]) / A) : '') : '% du CA'}</td></tr>`;
+  }).join('');
+  // services extérieurs : détail par prestation et société, comme l'onglet « DEP CONTROLABLE » du classeur
+  const dets = p.det || [], dIn = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;', refY = p.detRefY || (Ty - 1);
+  const detOpts = sel => BD_DET_KEYS.map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${BD_BY[k].l}</option>`).join('');
+  const detRows = dets.map(x => { const v = x.ref ? x.amt / x.ref - 1 : null;
+    return `<tr><td class="l"><select style="${dIn}max-width:210px" onchange="bdDetSet('${x.id}','k',this.value)">${detOpts(x.k)}</select></td>
+      <td class="l"><input type="text" list="bdPrest" value="${escH(x.pr || '')}" placeholder="Prestation" style="${dIn}width:190px" onchange="bdDetSet('${x.id}','pr',this.value)"></td>
+      <td class="l"><input type="text" list="bdSoc" value="${escH(x.soc || '')}" placeholder="Société(s)" style="${dIn}width:190px" onchange="bdDetSet('${x.id}','soc',this.value)"></td>
+      <td><input type="text" value="${escH(x.refF || bdRaw(x.ref))}" style="${dIn}width:110px;text-align:right" title="Un calcul est accepté : 491,68*12 · 288,4+1136" onchange="bdDetSet('${x.id}','ref',this.value)"></td>
+      <td><input type="text" value="${escH(x.amtF || bdRaw(x.amt))}" style="${dIn}width:110px;text-align:right${x.m ? ';background:rgba(124,58,237,.07)' : ''}" title="${x.m ? 'Saisi mois par mois (voir le détail mensuel)' : 'Un calcul est accepté : 491,68*12 · 288,4+1136'}" onchange="bdDetSet('${x.id}','amt',this.value)"></td>
+      <td class="${simSign(v)}">${v == null ? '—' : simPct(v)}</td>
+      <td class="l"><input type="text" value="${escH(x.info || '')}" placeholder="Info" style="${dIn}width:150px" onchange="bdDetSet('${x.id}','info',this.value)"></td>
+      <td><button class="step" onclick="bdDetDel('${x.id}')" title="Supprimer cette ligne">✕</button></td></tr>`; }).join('');
+  const detRecap = BD_DET_KEYS.filter(k => dets.some(x => x.k === k)).map(k => { const a = dets.filter(x => x.k === k), tb = sum(a.map(x => x.amt || 0)), tr = sum(a.map(x => x.ref || 0)); return `<tr><td class="l">${BD_BY[k].l}</td><td>${a.length}</td><td>${bdE(tr)}</td><td><b>${bdE(tb)}</b></td><td class="${simSign(tr ? tb / tr - 1 : null)}">${tr ? simPct(tb / tr - 1) : '—'}</td><td class="p">${A ? bdP(tb / A) : ''}</td></tr>`; }).join('');
+  const detGrid = dets.map(x => `<tr><td>${escH(((x.pr || '') + (x.soc ? ' · ' + x.soc : '')).trim() || '(sans nom)')} <small style="color:var(--muted)">${escH(BD_BY[x.k].l)}</small>${x.m ? ` <button class="step" style="font-size:.6rem;padding:1px 7px" title="Revenir à une répartition égale sur les mois" onclick="bdDetEven('${x.id}')">lisser</button>` : ''}</td>${MN.map((_, i) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${bdRaw(x.m ? x.m[i] : (x.amt || 0) / 12)}" onchange="bdDetSetM('${x.id}',${i},this.value)"></td>`).join('')}<td><b>${bdE(x.amt)}</b></td><td></td></tr>`).join('');
+  const detPanel = `<details class="sim-d" open><summary>Services extérieurs : détail par prestation et société</summary>
+      <div class="hint" style="margin:6px 0 8px">Comme l'onglet « DEP CONTROLABLE » du classeur : une ligne par prestation avec sa société, le montant de référence (${refY}) et le budget ${Ty}. Tu peux saisir des calculs (<b>491,68*12</b>, <b>288,4+1136</b>) et ajouter autant de sociétés que nécessaire ; le total de chaque ligne alimente le compte de résultat (réparti sur 12 mois, ou mois par mois en saisie mensuelle). L'import du classeur reprend les prestations et les sociétés.</div>
+      ${dets.length ? `<div class="sim-wrap"><table class="sim" style="min-width:1050px"><thead><tr><th class="l">Ligne du compte de résultat</th><th class="l">Prestation</th><th class="l">Société(s)</th><th>Réf. ${refY} (€ / an)</th><th>Budget ${Ty} (€ / an)</th><th>Var.</th><th class="l">Info</th><th></th></tr></thead><tbody>${detRows}<tr class="tot"><td class="l" colspan="3">Total services extérieurs détaillés</td><td>${bdE(sum(dets.map(x => x.ref || 0)))}</td><td>${bdE(sum(dets.map(x => x.amt || 0)))}</td><td></td><td></td><td></td></tr></tbody></table></div>` : '<div class="hint">Aucune ligne : ajoute une société ci-dessous ou importe le classeur (onglet DEP CONTROLABLE).</div>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${BD_DET_KEYS.map(k => `<button class="step" onclick="bdDetAdd('${k}')">+ ${BD_BY[k].l}</button>`).join('')}</div>
+      ${detRecap ? `<div class="sim-wrap" style="margin-top:10px"><table class="sim" style="min-width:560px"><thead><tr><th class="l">Total par ligne du compte de résultat</th><th>Lignes</th><th>Réf. ${refY}</th><th>Budget ${Ty}</th><th>Var.</th><th>% CA alim.</th></tr></thead><tbody>${detRecap}</tbody></table></div>` : ''}
+      ${dets.length && BUD.entry === 'm' ? `<div class="sim-h">Détail mensuel (budget ${Ty})</div><div class="sim-wrap"><table class="bd" style="min-width:1250px"><thead><tr><th>Prestation · société</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${detGrid}</tbody></table></div>` : ''}
+      <datalist id="bdPrest">${BD_PREST.map(x => `<option value="${escH(x)}">`).join('')}</datalist><datalist id="bdSoc">${bdSocList().map(x => `<option value="${escH(x)}">`).join('')}</datalist>
+    </details>`;
   // équipe de direction : une ligne par poste (initiales pour reconnaître la personne sans la nommer)
   const eIn = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;';
   const eCost = x => x.sal.reduce((a, b) => a + b, 0) + (x.sal.some(v => v > 0) ? (x.prime || 0) : 0);
@@ -1904,7 +2029,6 @@ function renderBudget() {
   const edgGrid = edg.rows.map((x, i) => `<tr><td>${escH(x.poste)} · ${escH(x.ini || '#' + (i + 1))}</td>${x.sal.map((v, k) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${v ? Math.round(v) : ''}" onchange="bdEdgMonth(${i},${k},this.value)"></td>`).join('')}<td><b>${bdE(x.sal.reduce((a, b) => a + b, 0))}</b></td><td></td></tr>`).join('');
   const edgBrut = Array.from({ length: 12 }, (_, k) => edg.rows.reduce((a, x) => a + (x.sal[k] || 0), 0)), edgTotRows = edg.rows.length ? `<tr class="b"><td>Brut total</td>${edgBrut.map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(edgBrut))}</b></td><td></td></tr>
       <tr class="k"><td>Coût équipe de direction (brut + primes)</td>${(edgM || Array(12).fill(0)).map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(edgM ? sum(edgM) : 0)}</b></td><td></td></tr>` : '';
-  const vBtn = (v, l, rd) => `<button class="step" style="border-radius:${rd};${view === v ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdView('${v}')">${l}</button>`;
   pn.innerHTML = `
     <div class="panel-head"><div><div class="panel-title">Budget & PNL ${Ty} · ${escH(name)}</div>
       <div class="last-saisie">Le CA alimentaire de chaque mois est la somme de la prévision de CA journalière du calendrier « Prévision CA » (la simulation s'y dépose aussi). Le compte de résultat en découle avec les hypothèses du restaurant, comme dans l'onglet PNL du classeur « PREV ET BUDGET ».</div></div>
@@ -1916,20 +2040,22 @@ function renderBudget() {
       <a style="cursor:pointer;text-decoration:underline;margin-left:8px" onclick="setTab('prevca')">Ouvrir la Prévision CA (calendrier et simulation) →</a></div>
     <div class="sim-kpis">${kp('CA alim. ' + Ty, pvEur(A), refT ? evC(ev(A, refT.alim)) : '')}${kp('Marge brute', bdP(A ? tot('marge') / A : null), pvEur(tot('marge')))}${kp('Main-d\'œuvre', bdP(A ? tot('mo') / A : null), pvEur(tot('mo')))}
       ${kp('PAC', bdP(A ? tot('pac') / A : null), pvEur(tot('pac')) + ' ' + (refT ? evC(ev(tot('pac'), refT.pac)) : ''))}${kp('Cash flow', pvEur(tot('cf')), bdP(A ? tot('cf') / A : null) + ' du CA ' + (refT ? evC(ev(tot('cf'), refT.cf)) : ''))}${kp('Résultat net', pvEur(tot('rn')), bdP(A ? tot('rn') / A : null) + ' du CA ' + (refT ? evC(ev(tot('rn'), refT.rn)) : ''))}</div>
-    <div class="sim-h" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>Compte de résultat prévisionnel ${Ty} <small style="text-transform:none;letter-spacing:0;font-weight:600">(% = part du CA alimentaire du mois)</small></span><span style="display:inline-flex">${vBtn('e', '€', '8px 0 0 8px')}${vBtn('ep', '€ + %', '0')}${vBtn('p', '% du CA', '0 8px 8px 0')}</span></div>
-    <div class="sim-wrap"><table class="bd"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th>${view === 'e' ? '<th>% CA alim.</th>' : ''}</tr></thead><tbody>${srcRow}${n1Row}${evRow}${lines}</tbody></table></div>
+    ${plHead}
+    <div class="sim-wrap">${per === 'a' ? plAnnual : plMonthly}</div>
     <div class="hint" style="margin-top:6px">* mois de ${Ty - 1} encore incomplet (jours saisis / jours du mois au survol) : l'évolution n'est calculée que sur les mois complets.</div>
     ${canEdg ? `    <details class="sim-d" open><summary>Équipe de direction : salaires par poste</summary>
-      <div class="hint" style="margin:6px 0 8px">Saisis un poste par ligne avec les <b>initiales</b> de la personne (jamais son nom) : brut mensuel, mois d'effet (revalorisation, arrivée ; départ = 0 à partir du mois) et prime annuelle. Le total alimente la ligne « Main d'œuvre brute managers » du compte de résultat ; les charges sociales managers s'y appliquent. <b>Ces montants restent sur cet appareil</b> : ils ne sont ni envoyés au Sheet ni publiés (« Appliquer » n'enregistre que le coût de main-d'œuvre en % du CA).</div>
+      <div class="hint" style="margin:6px 0 8px">Saisis un poste par ligne avec les <b>initiales</b> de la personne (jamais son nom) : brut mensuel, mois d'effet (revalorisation, arrivée ; départ = 0 à partir du mois) et prime annuelle. Le total alimente la ligne « Main d'œuvre brute managers » du compte de résultat ; les charges sociales managers s'y appliquent. <b>Ta saisie est enregistrée à part dans le dossier de validation</b> (« Enregistrer ma version ») : elle est visible de toi et des échelons au-dessus de toi, jamais des échelons en dessous, et tu ne vois jamais la saisie des échelons au-dessus. Elle n'est ni publiée ni envoyée au Sheet public (« Appliquer » n'enregistre que le coût de main-d'œuvre en % du CA).</div>
       <label style="font-size:.78rem"><input type="checkbox" ${edg.on ? 'checked' : ''} onchange="bdEdgOn(this.checked)"> utiliser ces salaires pour la ligne « Main d'œuvre brute managers »${edg.on && !edgM ? ' <small style="color:var(--muted)">(aucun salaire saisi : la ligne reste celle des hypothèses)</small>' : ''}</label>
       ${edg.rows.length ? `<div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:760px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Brut mensuel (€)</th><th class="l">À partir de</th><th>Prime annuelle (€)</th><th>Coût ${Ty} (€)</th><th></th></tr></thead><tbody>${edgRows}<tr class="tot"><td class="l">Total équipe de direction</td><td></td><td></td><td></td><td></td><td></td><td>${bdE(edgTotal)}</td><td></td></tr></tbody></table></div>` : '<div class="hint" style="margin-top:8px">Aucun poste saisi.</div>'}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${BD_POSTES.map(po => `<button class="step" onclick="bdEdgAdd('${po}')">+ ${po}</button>`).join('')}<button class="step" onclick="bdEdgPreset()" title="1 directeur, 2 adjoints, 2 assistants, 4 managers (comme le classeur)">Structure type du classeur</button></div>
       ${edg.rows.length ? `<details class="sim-d"><summary>Salaires mois par mois (ajustements)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Poste · initiales</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${edgGrid}${edgTotRows}</tbody></table></div></details>` : ''}
     </details>
 ` : ''}
+    ${detPanel}
     <details class="sim-d" open><summary>Hypothèses par ligne : montant (€) ou % du CA</summary>
-      <div class="hint" style="margin:6px 0 8px">Pour chaque ligne, choisis de saisir un <b>montant annuel</b> (réparti sur les mois selon le profil repris du classeur) ou un <b>% du CA</b> (qui suit le CA de chaque mois). Basculer d'un mode à l'autre convertit la valeur sans changer le résultat.</div>
-      <div class="sim-wrap"><table class="sim" style="min-width:640px"><thead><tr><th>Ligne</th><th style="text-align:center">Saisie en</th><th>Valeur</th><th>Année (€)</th><th>% CA alim.</th></tr></thead><tbody>${hypRows}</tbody></table></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0"><b style="font-size:.76rem">Saisie :</b><span style="display:inline-flex">${seg(BUD.entry, 'a', 'Annuelle', '8px 0 0 8px', 'bdEntry')}${seg(BUD.entry, 'm', 'Mensuelle', '0 8px 8px 0', 'bdEntry')}</span></div>
+      <div class="hint" style="margin:0 0 8px">${BUD.entry === 'm' ? 'Chaque ligne se saisit <b>mois par mois</b> : en € ou en % du CA du mois (bouton « € → % » à côté du nom de la ligne).' : 'Pour chaque ligne, choisis de saisir un <b>montant annuel</b> (réparti sur les mois selon le profil repris du classeur) ou un <b>% du CA</b> (qui suit le CA de chaque mois). Basculer d\'un mode à l\'autre convertit la valeur sans changer le résultat.'}</div>
+      ${BUD.entry === 'm' ? `<div class="sim-wrap"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${gridRows}</tbody></table></div>` : `<div class="sim-wrap"><table class="sim" style="min-width:640px"><thead><tr><th>Ligne</th><th style="text-align:center">Saisie en</th><th>Valeur</th><th>Année (€)</th><th>% CA alim.</th></tr></thead><tbody>${hypRows}</tbody></table></div>`}
       <div class="sim-h">Autres paramètres</div><div class="bd-grid" style="margin-top:6px">
       <div class="f"><label>CA net ÷ CA alimentaire</label><input type="text" inputmode="decimal" value="${String(Math.round(p.rn * 10000) / 10000).replace('.', ',')}" onchange="bdSet('rn',this.value,'num')"></div>
       <div class="f"><label>VPHE équipier (€ / h)</label><input type="text" inputmode="decimal" value="${String(Math.round(avg(p.vphe) * 100) / 100).replace('.', ',')}" onchange="bdSet('vphe',this.value,'arr')"></div>
@@ -1938,9 +2064,10 @@ function renderBudget() {
       <div class="f"><label>Charges sociales managers (%)</label><input type="text" inputmode="decimal" value="${bdIn(avg(p.tMg))}" onchange="bdSet('tMg',this.value,'arrp')"></div>
       <div class="f"><label>Impôt sur les sociétés (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.tis)}" onchange="bdSet('tis',this.value,'pct')"></div>
       <div class="f"><label>Évolution des montants fixes (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.infl || 0)}" onchange="bdSet('infl',this.value,'pct')"></div></div></details>
-    <details class="sim-d"><summary>Montants mois par mois (lignes saisies en €)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne (€ / mois)</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${fixRows}</tbody></table></div></details>
+    ${BUD.entry === 'm' ? '' : `<details class="sim-d"><summary>Montants mois par mois (lignes saisies en €)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne (€ / mois)</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${fixRows}</tbody></table></div></details>`}
     <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button><button class="step" onclick="bdExport()">⬇ Excel (PNL)</button><span class="save-msg" id="bdApplyMsg"></span></div>
     <div class="hint">« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net (ratios en % du CA alimentaire). Les hypothèses et les salaires sont gardés sur cet appareil.</div>`;
+  if (bdFlash) { const m = document.getElementById('bdMsg'); if (m) { m.className = 'save-msg ' + bdFlash[0]; m.textContent = bdFlash[1]; } bdFlash = null; }
 }
 
 function bdRowsFrom(r, Ty, L) {                             // lignes du Prévisionnel mensuel (Sheet) : ratios en % du CA alimentaire
@@ -1973,8 +2100,12 @@ async function bdExport() {
   for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); rows.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map(v => ({ v: Math.round(v * 100) / 100, s: x.b ? 'eurb' : 'eur' })), { v: Math.round(t * 100) / 100, s: 'eurb' }, A ? { v: t / A, s: 'pct' } : '']); }
   const prow = [[{ v: `Budget & PNL ${Ty} — ${name} : % du CA alimentaire`, s: 'head' }], [], [{ v: 'Ligne', s: 'gris' }, ...MN.map(m => ({ v: m, s: 'gris' })), { v: 'Année', s: 'gris' }]];
   for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); prow.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map((v, i) => L.alim[i] ? { v: v / L.alim[i], s: 'pct' } : ''), A ? { v: t / A, s: 'pct' } : '']); }
+  const dets = o.p.det || [], drows = [[{ v: `Services extérieurs ${Ty} — ${name}`, s: 'head' }], [], ['Ligne du compte de résultat', 'Prestation', 'Société(s)', `Réf. ${o.p.detRefY || Ty - 1}`, `Budget ${Ty}`, 'Variation', 'Info'].map(v => ({ v, s: 'gris' }))];
+  for (const x of dets) drows.push([BD_BY[x.k].l, x.pr || '', x.soc || '', { v: Math.round((x.ref || 0) * 100) / 100, s: 'eur' }, { v: Math.round((x.amt || 0) * 100) / 100, s: 'eur' }, x.ref ? { v: x.amt / x.ref - 1, s: 'pct' } : '', x.info || '']);
+  const sheetsOut = [{ name: `PNL ${Ty}`, rows, widths: [38, ...Array(12).fill(12), 14, 11], header: false, freeze: [1, 3] }, { name: `PNL ${Ty} en %`, rows: prow, widths: [38, ...Array(12).fill(10), 11], header: false, freeze: [1, 3] }];
+  if (dets.length) sheetsOut.push({ name: `Services ext. ${Ty}`, rows: drows, widths: [34, 34, 34, 14, 14, 11, 30], header: false, freeze: [1, 3] });
   try {
-    const blob = await xlsxBuild([{ name: `PNL ${Ty}`, rows, widths: [38, ...Array(12).fill(12), 14, 11], header: false, freeze: [1, 3] }, { name: `PNL ${Ty} en %`, rows: prow, widths: [38, ...Array(12).fill(10), 11], header: false, freeze: [1, 3] }]);
+    const blob = await xlsxBuild(sheetsOut);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PNL_${Ty}_${r.replace(/\s+/g, '_')}.xlsx`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   } catch (e) { const m = document.getElementById('bdApplyMsg'); if (m) { m.className = 'save-msg err'; m.textContent = 'Export impossible : ' + e.message; } }
 }
@@ -1983,7 +2114,8 @@ async function bdExport() {
 // Un dossier par restaurant et par année, partagé dans le Google Sheet (onglets « Validation » et « ValidationJournal », via l'Apps Script).
 // Chacun travaille dans ses écrans (Prévision CA, simulation, Budget & PNL) puis « enregistre sa version » dans le dossier ; il valide pour transmettre
 // à l'échelon suivant. Seul le franchisé déverrouille un dossier et le finalise ; la finalisation publie la prévision jour par jour et mensuelle.
-// Le contenu partagé ne contient jamais les salaires par poste (seul le total « main d'œuvre managers » du budget, comme dans le Prévisionnel mensuel).
+// Salaires par poste (initiales) : chaque échelon enregistre sa propre saisie, visible de lui et des échelons au-dessus ; le serveur ne renvoie jamais la saisie d'un échelon supérieur.
+// Le contenu partagé du dossier (prévision, budget, simulation) ne contient jamais de salaires.
 const WF = { year: null, byKey: {}, listAt: 0, cur: null, backend: null, flash: null, sync: {} };   // sync : version du dossier sur laquelle l'écran local est calé (pull / save / open)
 const WF_STEP = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' };
 const wfKey = (r, y) => r + '|' + y;
@@ -2039,12 +2171,18 @@ function wfCollect(r, Y) {
     const src = cur || PV.drafts[pvKey(r, ym)] || pvSavedVals(r, ym), arr = days.map(iso => src[iso] != null ? Math.round(src[iso] * 100) / 100 : null);
     if (arr.some(v => v != null)) cal[ym] = arr;
   }
-  const o = bdParams(r), bud = JSON.parse(JSON.stringify(o.p)), edgM = bdEdgM(o.p);
-  delete bud.edg;
-  if (edgM) { bud.momg = edgM.map(v => Math.round(v)); bud.m = Object.assign({}, bud.m, { momg: 'a' }); }   // total seulement : jamais le détail par poste
+  const o = bdParams(r), bud = JSON.parse(JSON.stringify(o.p));
+  delete bud.edg;                                                        // les salaires voyagent à part (saisie par échelon), jamais dans le contenu partagé
   return { v: 1, y: +Y, coef: PV.coef, cal, bud, sim: JSON.parse(JSON.stringify(simCfg(r))) };
 }
-function wfApply(r, P) {                                                  // charge la version partagée dans les écrans (brouillons du calendrier, budget, simulation)
+// Saisie de salaires par poste de l'appelant (envoyée à part : le serveur la range sous son échelon) ; undefined = rien à envoyer
+function wfEdgSeg(r) {
+  if (!accCan('edg', r)) return undefined; const e = bdParams(r).p.edg; if (!e) return undefined;
+  const m = bdEdgM(bdParams(r).p); return { on: e.on !== false, rows: JSON.parse(JSON.stringify(e.rows || [])), momg: m ? m.map(v => Math.round(v)) : null };
+}
+const wfTopSeg = sal => (sal && (sal.franchise || sal.superviseur || sal.directeur)) || null;     // saisie la plus haute visible
+const wfLocalRows = r => { const e = bdParams(r).p.edg; return JSON.stringify(e && e.rows ? e.rows : []); };
+function wfApply(r, P, sal) {                                                  // charge la version partagée dans les écrans (brouillons du calendrier, budget, simulation)
   pvStash(); PV.resto = null; PV.loadedYm = null;
   for (let m = 1; m <= 12; m++) {
     const ym = P.y + '-' + pad2(m), arr = (P.cal || {})[ym], vals = {};
@@ -2052,11 +2190,13 @@ function wfApply(r, P) {                                                  // cha
     if (pvDiffDays(vals, pvSavedVals(r, ym))) PV.drafts[pvKey(r, ym)] = vals; else delete PV.drafts[pvKey(r, ym)];
   }
   pvDraftPersist(); if (P.coef) PV.coef = P.coef;
-  const o = bdParams(r), keep = o.p.edg; o.p = P.bud; if (keep) o.p.edg = keep; bdSave();
+  const o = bdParams(r), keep = o.p.edg, top = wfTopSeg(sal); o.p = P.bud;
+  if (top && accCan('edg', r)) o.p.edg = { on: top.on !== false, rows: JSON.parse(JSON.stringify(top.rows || [])) }; else if (keep) o.p.edg = keep;
+  bdSave();
   if (P.sim) SIM.byResto[r] = P.sim; SIM.ty = P.y; simSave();
 }
 function wfParse(s) { try { const P = JSON.parse(s); return P && P.cal && P.bud ? P : null; } catch (e) { return null; } }
-function wfRows(r, P) {                                                   // lignes écrites dans le Sheet à la finalisation (mêmes formats que « Enregistrer » et « Appliquer »)
+function wfRows(r, P, seg) {                                                   // lignes écrites dans le Sheet à la finalisation (mêmes formats que « Enregistrer » et « Appliquer »)
   const pj = [], co = P.coef || 1.01, rd = v => Math.round(v * 100) / 100;
   for (let m = 1; m <= 12; m++) {
     const ym = P.y + '-' + pad2(m), arr = (P.cal || {})[ym] || [];
@@ -2066,12 +2206,13 @@ function wfRows(r, P) {                                                   // lig
       else if (old != null) pj.push({ restaurant: r, periode: iso, data: { ca_alim_prev: '', ca_total_prev: '' } });
     });
   }
-  const mm = bdRowsFrom(r, P.y, bdCompute(P.bud, wfAlim(P)));
+  const mm = bdRowsFrom(r, P.y, bdCompute(seg ? Object.assign({}, P.bud, { edg: { on: seg.on !== false, rows: seg.rows } }) : P.bud, wfAlim(P)));
   return { prevjour: pj, previsionnel: mm.rows, bad: mm.bad };
 }
 const wfAlim = P => MN.map((_, i) => { const a = (P.cal || {})[P.y + '-' + pad2(i + 1)]; return a ? a.reduce((s, v) => s + (v || 0), 0) : 0; });
-function wfSummary(P, r) {
+function wfSummary(P, r, sal) {
   try {
+    const top = wfTopSeg(sal); P = top ? Object.assign({}, P, { bud: Object.assign({}, P.bud, { edg: { on: top.on !== false, rows: top.rows || [] } }) }) : P;
     const alim = wfAlim(P), full = MN.map((_, i) => { const a = (P.cal || {})[P.y + '-' + pad2(i + 1)]; return !!a && a.every(v => v != null); }), L = bdCompute(P.bud, alim);
     const A = alim.reduce((a, b) => a + b, 0), t = k => L[k].reduce((a, b) => a + b, 0), hN = simHist(r, P.y - 1);
     const ok = MN.map((_, i) => full[i] && hN[i].n === hN[i].nd), cmpA = alim.reduce((a, v, i) => a + (ok[i] ? v : 0), 0), cmpN = hN.reduce((a, x, i) => a + (ok[i] ? x.A : 0), 0);
@@ -2113,8 +2254,8 @@ function renderValid() {
     const d = doneBy(e), cur = D && !isFinal && etape === e, passed = D && (isFinal || idx > i) && d;
     return `<div class="wf-st ${passed ? 'done' : (cur ? 'cur' : '')}"><b>${i + 1} · ${WF_STEP[e]}</b><small>${passed ? `✓ ${e === 'franchise' ? 'Finalisé' : 'Validé'} le ${wfDate(d.at)}<br>${escH(d.by)}` : (cur ? `⏳ En cours${D.statut === 'rouvert' ? ' (rouvert)' : ''}` : (D ? 'À venir' : '—'))}</small></div>`;
   }).join('') + `<div class="wf-st ${isFinal ? 'fin' : ''}"><b>✔ Finalisé</b><small>${isFinal ? 'Publié dans le Sheet le ' + wfDate(D.at) : 'Publication par le franchisé'}</small></div>`;
-  const P = D ? wfParse(D.donnees) : null, S = P ? wfSummary(P, r) : null;
-  const dirty = P ? JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) : false;
+  const P = D ? wfParse(D.donnees) : null, S = P ? wfSummary(P, r, C.salaires) : null, topSeg = wfTopSeg(C.salaires);
+  const dirty = P ? (JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) || wfLocalRows(r) !== JSON.stringify(topSeg && topSeg.rows ? topSeg.rows : [])) : false;
   const kp = (l, v, sub) => `<div class="sim-kpi"><span>${l}</span><b>${v}</b><i>${sub || ''}</i></div>`;
   const tiles = S ? `<div class="sim-kpis">${kp('CA alim. ' + Y, pvEur(S.A), `${S.nFull}/12 mois complets${S.evo != null ? ' · <span class="' + simSign(S.evo) + '">' + simPct(S.evo) + ' vs ' + (Y - 1) + '</span>' : ''}`)}${S.hyp ? kp('Marge brute', bdP(S.marge), '') + kp('Main-d\'œuvre', bdP(S.mo), '') + kp('PAC', bdP(S.pac), '') + kp('Cash flow', pvEur(S.cf), '') + kp('Résultat net', pvEur(S.rn), bdP(S.rnp) + ' du CA') : kp('Budget', 'à renseigner', 'hypothèses de coûts non saisies')}</div>` : '';
   let box = '';
@@ -2140,12 +2281,16 @@ function renderValid() {
     const t = { open: 'a ouvert le dossier', validate: 'a validé', finalize: 'a finalisé et publié', unlock: `a déverrouillé (retour à ${WF_STEP[x.to] || x.to})`, comment: 'a commenté' }[x.action] || x.action;
     return `<li><b>${escH(x.by)}</b> ${t}${x.action === 'validate' ? ` → ${WF_STEP[x.to] || x.to}` : ''} <small>· ${wfDate(x.at)} · v${x.version}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`;
   }).join('');
+  const LV = { franchise: 'Franchisé', superviseur: 'Superviseur', directeur: 'Directeur' }, myRank = { directeur: 0, superviseur: 1, franchise: 2 }[(me || {}).role];
+  const salBlocks = ['franchise', 'superviseur', 'directeur'].filter(k => (C.salaires || {})[k]).map(k => { const sg = C.salaires[k], rows = sg.rows || [], cost = x => (x.sal || []).reduce((a, b) => a + b, 0) + ((x.sal || []).some(v => v > 0) ? (x.prime || 0) : 0);
+    return `<tr class="tot"><td class="l" colspan="3">Saisie du ${LV[k]}${{ directeur: 0, superviseur: 1, franchise: 2 }[k] === myRank ? ' (la tienne)' : ''}</td><td>${bdE(rows.reduce((a, x) => a + cost(x), 0))}</td></tr>` + rows.map(x => `<tr><td class="l">${escH(x.poste || '')}</td><td class="l">${escH(x.ini || '')}</td><td class="l">${escH(x.ctr || '')}</td><td>${bdE(cost(x))}</td></tr>`).join(''); }).join('');
+  const salSec = salBlocks ? `<details class="sim-d"><summary>Salaires par poste enregistrés dans le dossier</summary><div class="hint" style="margin:6px 0 8px">Chaque échelon voit sa propre saisie et celles des échelons en dessous ; la saisie d'un échelon supérieur ne t'est jamais transmise. Coût annuel (brut + prime) par poste, repéré par les initiales.</div><div class="sim-wrap"><table class="sim" style="min-width:480px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Coût ${Y} (€)</th></tr></thead><tbody>${salBlocks}</tbody></table></div></details>` : '';
   const mine = RESTOS.filter(x => accCan('valid', x[0])), ov = mine.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th><th class="l">Étape</th><th class="l">Dernière action</th><th></th></tr></thead><tbody>${mine.map(x => {
     const d = WF.byKey[wfKey(x[0], Y)];
     return `<tr><td class="l">${escH(x[1])}</td><td class="l">${d ? (d.etape === 'final' ? '✔ Finalisé' : WF_STEP[d.etape] + (d.statut === 'rouvert' ? ' (rouvert)' : '')) : '<span style="color:var(--muted)">non ouvert</span>'}</td><td class="l">${d ? wfDate(d.at) + ' · ' + escH(d.by) : ''}</td><td><button class="step" onclick="setResto('${x[0].replace(/'/g, "\\'")}')">Ouvrir</button></td></tr>`;
   }).join('')}</tbody></table></div></details>` : '';
-  pn.innerHTML = head + who + `<div class="wf-steps">${steps}</div>` + box + tiles + `<div class="sim-h">Historique et échanges</div>${L ? `<ul class="wf-log">${L}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}` + ov +
-    `<div class="hint" style="margin-top:12px">« Enregistrer ma version » partage dans le dossier la prévision journalière ${Y}, les hypothèses du budget (sans les salaires par poste) et les réglages de simulation. La version partagée ne remplace tes écrans que si tu cliques sur « Reprendre ».</div>`;
+  pn.innerHTML = head + who + `<div class="wf-steps">${steps}</div>` + box + tiles + salSec + `<div class="sim-h">Historique et échanges</div>${L ? `<ul class="wf-log">${L}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}` + ov +
+    `<div class="hint" style="margin-top:12px">« Enregistrer ma version » partage dans le dossier la prévision journalière ${Y}, les hypothèses du budget et les réglages de simulation ; ta saisie de salaires par poste est enregistrée à part (visible de toi et des échelons au-dessus). La version partagée ne remplace tes écrans que si tu cliques sur « Reprendre ».</div>`;
   if (WF.flash) { wfMsg(WF.flash[0], WF.flash[1]); WF.flash = null; }
 }
 
@@ -2154,7 +2299,7 @@ async function wfOpen() {
   const r = curResto, Y = WF.year, P = wfCollect(r, Y);
   if (!Object.keys(P.cal).length && !confirm(`Aucune prévision journalière n'est saisie pour ${Y}. Ouvrir quand même le dossier ?`)) return;
   wfMsg('', 'Ouverture du dossier…');
-  const j = await wfCall('open', r, Y, { donnees: JSON.stringify(P), comment: wfCm() }, 'directeur');
+  const j = await wfCall('open', r, Y, { donnees: JSON.stringify(P), salaires: wfEdgSeg(r), comment: wfCm() }, 'directeur');
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   WF.sync[wfKey(r, Y)] = j.version; WF.cur = null; WF.byKey[wfKey(r, Y)] = { restaurant: r, year: String(Y), etape: j.etape, statut: j.statut, version: j.version, at: '', by: '' }; renderValid();
 }
@@ -2162,7 +2307,7 @@ async function wfSave() {
   const C = WF.cur, r = curResto, Y = WF.year;
   if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
   wfMsg('', 'Enregistrement…');
-  const j = await wfCall('save', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), base_version: C.dossier.version }, C.dossier.etape);
+  const j = await wfCall('save', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), salaires: wfEdgSeg(r), base_version: C.dossier.version }, C.dossier.etape);
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   WF.sync[wfKey(r, Y)] = j.version; WF.flash = ['ok', '✓ Ta version est enregistrée dans le dossier (v' + j.version + ').']; WF.cur = null; renderValid();
 }
@@ -2173,17 +2318,17 @@ async function wfValidate() {
   if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
   if (!confirm(`Valider ta version et la transmettre au ${WF_STEP[next]} ?\nTu ne pourras plus la modifier : seul le franchisé peut déverrouiller.`)) return;
   wfMsg('', 'Validation…');
-  const j = await wfCall('validate', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), base_version: C.dossier.version, comment: wfCm() }, C.dossier.etape);
+  const j = await wfCall('validate', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), salaires: wfEdgSeg(r), base_version: C.dossier.version, comment: wfCm() }, C.dossier.etape);
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   WF.flash = ['ok', '✓ Dossier validé et transmis.']; WF.cur = null; WF.listAt = 0; renderValid();
 }
 async function wfFinalize() {
-  const C = WF.cur, r = curResto, Y = WF.year, P = wfCollect(r, Y), R = wfRows(r, P), name = RESTOS.find(x => x[0] === r)[1];
+  const C = WF.cur, r = curResto, Y = WF.year, P = wfCollect(r, Y), seg = wfEdgSeg(r), R = wfRows(r, P, seg), name = RESTOS.find(x => x[0] === r)[1];
   if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
   if (!P.cal || !Object.keys(P.cal).length) return wfMsg('err', 'Aucune prévision journalière à publier.');
   if (!confirm(`Finaliser et publier le prévisionnel ${Y} de ${name} ?\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ${Y} seront remplacées. Seul le franchisé pourra ensuite déverrouiller.`)) return;
   wfMsg('', 'Publication…');
-  const j = await wfCall('finalize', r, Y, { donnees: JSON.stringify(P), base_version: C.dossier.version, comment: wfCm(), rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel }, 'franchise');
+  const j = await wfCall('finalize', r, Y, { donnees: JSON.stringify(P), salaires: seg, base_version: C.dossier.version, comment: wfCm(), rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel }, 'franchise');
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   PREVJ[r] = PREVJ[r] || {}; PREVT = PREVT || {}; PREVT[r] = PREVT[r] || {};
   for (const x of R.prevjour) { if (x.data.ca_alim_prev === '') { delete PREVJ[r][x.periode]; delete PREVT[r][x.periode]; } else { PREVJ[r][x.periode] = x.data.ca_alim_prev; PREVT[r][x.periode] = x.data.ca_total_prev; } }
@@ -2207,8 +2352,9 @@ async function wfComment() {
 function wfPull() {
   const C = WF.cur, r = curResto, Y = WF.year, P = C && C.dossier ? wfParse(C.dossier.donnees) : null;
   if (!P) return wfMsg('err', 'Version partagée illisible.');
-  if (JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) && !confirm('Remplacer tes brouillons de Prévision CA, tes hypothèses de budget et tes réglages de simulation (' + Y + ') par la version partagée ?')) return;
-  wfApply(r, P); WF.sync[wfKey(r, Y)] = C.dossier.version; WF.flash = ['ok', '✓ Version partagée chargée : consulte-la dans Prévision CA et Budget & PNL.']; renderValid();
+  const top = wfTopSeg(C.salaires), sameSal = wfLocalRows(r) === JSON.stringify(top && top.rows ? top.rows : []);
+  if ((JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) || !sameSal) && !confirm('Remplacer tes brouillons de Prévision CA, tes hypothèses de budget, tes réglages de simulation et ta saisie de salaires (' + Y + ') par la version partagée ?')) return;
+  wfApply(r, P, C.salaires); WF.sync[wfKey(r, Y)] = C.dossier.version; WF.flash = ['ok', '✓ Version partagée chargée : consulte-la dans Prévision CA et Budget & PNL.']; renderValid();
 }
 
 // ── Démarrage ──
