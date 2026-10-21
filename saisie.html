@@ -185,9 +185,26 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════
-/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}};/*CFG_END*/
+/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "access": [{"id": "franchise", "label": "Franchisé", "can": ["sim", "budget"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "equipe", "label": "Équipe", "can": ["sim"], "pwd_hash": "32eb35c2900ca07fe3ab35a966aa5a83a936513c1cc8b927930f90e1952b225a"}]};/*CFG_END*/
 const APPS_SCRIPT_URL = CFG.apps_script_url;   // …/exec
 const PWD_HASH = CFG.pwd_hash;
+// ── Accès « simulation » : mots de passe propres au franchisé (simulation + budget & PNL) et aux autres personnes (simulation), distincts de celui de la saisie ──
+const ACCESS = CFG.access || [];
+function accRights(){ try{ return JSON.parse(sessionStorage.getItem('mj_access')||'[]'); }catch(e){ return []; } }
+function accCan(r){ return accRights().includes(r); }
+function accGrant(a){ const s=new Set(accRights()); (a.can||[]).forEach(x=>s.add(x)); try{ sessionStorage.setItem('mj_access',JSON.stringify([...s])); sessionStorage.setItem('mj_accessname',a.label); }catch(e){} }
+function accLabel(){ try{ return sessionStorage.getItem('mj_accessname')||''; }catch(e){ return ''; } }
+const ACC_NEED = { sim:'la simulation du prévisionnel', budget:'le Budget & PNL' };
+function accLock(right, id){          // bandeau de déverrouillage : mot de passe de l'accès concerné
+  return `<div class="entry-banner" style="display:block;background:var(--card2);border:1.5px solid var(--border);color:var(--text)"><b>🔒 Accès réservé</b> — ${ACC_NEED[right]||right} s'ouvre avec un mot de passe d'accès « simulation » (distinct de celui de la saisie).
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><input type="password" id="${id}" placeholder="Mot de passe d'accès" autocomplete="off" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;min-width:200px" onkeydown="if(event.key==='Enter')accTry('${right}','${id}')"><button class="btn-save" style="padding:8px 16px" onclick="accTry('${right}','${id}')">Déverrouiller</button><span class="save-msg" id="${id}Msg"></span></div></div>`;
+}
+async function accTry(right, id){
+  const inp=document.getElementById(id), m=document.getElementById(id+'Msg'); if(!inp) return;
+  const h=await sha256(inp.value), a=ACCESS.find(x=>x.pwd_hash===h && (x.can||[]).includes(right));
+  if(!a){ if(m){ m.className='save-msg err'; m.textContent='Mot de passe incorrect'; setTimeout(()=>{ m.textContent=''; },2500); } return; }
+  accGrant(a); buildTabs(); renderPanel();
+}
 const OPEN_DATES = CFG.open || {};            // dates d'ouverture : aucun CA avant
 
 // ── Mot de passe ──
@@ -198,22 +215,22 @@ async function checkPwd(){
   const v=document.getElementById('pwd').value;
   loginBusy(true);                                                   // indicateur visible tout de suite
   await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,60)));
-  const hv=await sha256(v);
-  if(hv===PWD_HASH){
-    sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',hv);
+  const hv=await sha256(v), acc=ACCESS.find(a=>a.pwd_hash===hv);
+  if(hv===PWD_HASH || acc){                                          // un accès « simulation » ouvre aussi la saisie (les enregistrements utilisent l'empreinte de la saisie)
+    sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); if(acc) accGrant(acc);
     try{ if(document.getElementById('remMe').checked) localStorage.setItem('mj_remember',hv); else localStorage.removeItem('mj_remember'); }catch(e){}
     await new Promise(r=>setTimeout(r,350));
     showApp(); loginBusy(false);
   }
   else { loginBusy(false); const e=document.getElementById('loginErr'); e.textContent='Mot de passe incorrect'; setTimeout(()=>e.textContent='',2500); }
 }
-function logoutSaisie(){ try{ localStorage.removeItem('mj_remember'); }catch(e){} try{ sessionStorage.removeItem('mj_saisie'); sessionStorage.removeItem('mj_pwdhash'); }catch(e){} location.reload(); }
+function logoutSaisie(){ try{ localStorage.removeItem('mj_remember'); }catch(e){} try{ sessionStorage.removeItem('mj_saisie'); sessionStorage.removeItem('mj_pwdhash'); sessionStorage.removeItem('mj_access'); sessionStorage.removeItem('mj_accessname'); }catch(e){} location.reload(); }
 function showApp(){ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; init(); }
 
 // ── Modèle ──
 const RESTOS=CFG.restos.map(r=>[r.key,r.label]);
 const MONTHS=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
-const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['simu','Simulateur prévisionnel'],['budget','Budget & PNL'],['documents','Documents']];
+const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['budget','Budget & PNL'],['documents','Documents']];
 // Indicateurs saisis chaque semaine : le mois correspondant (onglet Mensuel)
 // se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
 const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
@@ -336,18 +353,18 @@ function lastLabel(tab){
   return p.charAt(0)+p.slice(1).toLowerCase();
 }
 
+function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; tb.innerHTML=TABS.map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${k==='budget'&&!accCan('budget')?'🔒 ':''}${n}</button>`).join(''); }
 function init(){
   if(!configured()) document.getElementById('cfgWarn').style.display='block';
   document.getElementById('pickGrid').innerHTML=RESTOS.map(([k,n])=>`<button class="pick-btn" onclick="setResto('${k}')">${n}</button>`).join('');
-  const tb=document.getElementById('tabBar');
-  tb.innerHTML=TABS.map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${n}</button>`).join('');
+  buildTabs();
   let saved=null; try{ saved=sessionStorage.getItem('mj_resto'); }catch(e){}
   // la page s'affiche tout de suite ; la dernière saisie (pour proposer la période suivante) arrive ensuite
   if(saved && RESTOS.some(r=>r[0]===saved)) setResto(saved); else showPicker();
   const before=curResto?JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]):null;
   loadLast().then(()=>{
     loadRecent();                                   // CA des dernières semaines (léger) : contrôle de cohérence avant enregistrement
-    if(!curResto||curTab==='documents'||curTab==='ponctuel'||curTab==='prevca'||curTab==='simu'||curTab==='budget') return;
+    if(!curResto||curTab==='documents'||curTab==='ponctuel'||curTab==='prevca'||curTab==='budget') return;
     const typed=[...document.querySelectorAll('#fieldsGrid input, #fieldsGrid textarea')].some(e=>!e.readOnly&&e.value!=='');
     const changed=before!==JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]);
     if(GATE_ON || (!typed && changed)) renderPanel();   // porte ouverte, ou dernière saisie différente du cache et rien de saisi : on se cale sur la bonne date
@@ -414,7 +431,6 @@ let GATE_ON=false;
 function renderPanel(keepPeriod){
   if(curTab==='documents') return renderDocuments();
   if(curTab==='prevca') return renderPrevCa();
-  if(curTab==='simu') return renderSimu();
   if(curTab==='budget') return renderBudget();
   const p=document.getElementById('panel');
   if(['quotidien','hebdomadaire','mensuel'].includes(curTab) && LAST_STATE==='loading'){   // jamais de date « du jour » par défaut : on attend la dernière saisie
@@ -469,7 +485,7 @@ function loadTx(){
       const pv={}, pt={}; (j.prevjour||[]).forEach(x=>{ const v=Number(x.ca_alim_prev), t=Number(x.ca_total_prev); if(x.ca_alim_prev!==''&&x.ca_alim_prev!=null&&isFinite(v)){ (pv[x.restaurant]=pv[x.restaurant]||{})[x.periode]=v; if(x.ca_total_prev!==''&&x.ca_total_prev!=null&&isFinite(t)) (pt[x.restaurant]=pt[x.restaurant]||{})[x.periode]=t; } });
       TX=m; CAM=caMap; ALIMM=alMap; PREVJ=pv; PREVT=pt;
     }catch(e){ TX=null; }
-    TXLoading=null; if(curTab==='prevca') renderPrevCa(); else if(curTab==='simu') renderSimu(); else if(curTab==='budget') renderBudget(); else recompute();
+    TXLoading=null; if(curTab==='prevca') renderPrevCa(); else if(curTab==='budget') renderBudget(); else recompute();
   })();
 }
 function periodDates(){
@@ -1043,6 +1059,7 @@ function renderPrevCa() {
         <select id="pvM" onchange="pvPick()">${mois.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''} ${i + 1 < minM || i + 1 > maxM ? 'disabled' : ''}>${n}</option>`).join('')}</select>
         <select id="pvY" onchange="pvPick()">${Array.from({ length: PV_YMAX - 2025 }, (_, i) => 2026 + i).map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <button class="step next" onclick="pvMonth(1)">Mois suivant ▶</button></div></div>
+    <div id="simHost"></div>
     <div id="pvDraftBar"></div>
     <div class="pv-recap" id="pvRecap"></div>
     <div class="pv-obj"><div class="field"><label>Objectif du mois (CA alimentaire)</label><div style="display:flex;gap:6px"><input type="number" step="any" id="pvObj" placeholder="ex. 450000 ou 3"><select id="pvObjU" style="max-width:90px"><option value="e">€</option><option value="p">% vs N-1</option></select></div></div>
@@ -1058,6 +1075,7 @@ function renderPrevCa() {
     <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne comptent qu'après le clic sur « Enregistrer » ; en attendant, tes saisies sont gardées si tu changes de mois ou de restaurant.</div>`;
   for (const iso of days) pvRefresh(iso);
   pvRecap();
+  if (typeof simMount === 'function') simMount();
 }
 function pvClamp(ym) { return ym < PV_MIN ? PV_MIN : (ym > PV_MAX ? PV_MAX : ym); }
 function pvPick() { PV.ym = pvClamp(document.getElementById('pvY').value + '-' + pad2(document.getElementById('pvM').value)); renderPrevCa(); }
@@ -1297,7 +1315,7 @@ const SIM_KEY = 'mj_simu';
 const SIM = (() => { try { const d = JSON.parse(localStorage.getItem(SIM_KEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
 SIM.byResto = SIM.byResto || {};
 SIM.ty = SIM.ty || (new Date().getFullYear() + 1);
-const SIMV = { month: null };                               // état d'affichage (mois du calendrier détaillé)
+const SIMV = { month: null, open: false };                  // état d'affichage (mois du détail jour par jour ; encart ouvert ou non)
 const SIMM = {};                                            // mémos (tendances, coefficients fériés)
 const MN = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase());
 function simSave() { try { localStorage.setItem(SIM_KEY, JSON.stringify(SIM)); } catch (e) {} }
@@ -1320,6 +1338,23 @@ function simTrend(r, Y) {
   }
   return SIMM[k] = (n >= 30 && t0 && c0) ? { jt: t1 / t0 - 1, lp: (c1 / t1) / (c0 / t0) - 1, n, t1, t0 } : null;
 }
+// Réel d'une année Y, mois par mois (mois civils) : CA alimentaire et TAC'S des jours saisis, + évolution vs jours équivalents de Y-1 (−364 j) calculée uniquement sur les jours connus des deux années
+function simHist(r, Y) {
+  const k = 'HM|' + r + '|' + Y; if (SIMM[k]) return SIMM[k];
+  const out = [];
+  for (let m = 1; m <= 12; m++) {
+    const days = pvDays(Y + '-' + pad2(m)), o = { A: 0, T: 0, n: 0, nd: days.length, cA: 0, cT: 0, cA0: 0, cT0: 0, cn: 0 };
+    for (const iso of days) {
+      const a = simA(r, iso), t = simT(r, iso); if (!(a > 0 && t > 0)) continue;
+      o.A += a; o.T += t; o.n++;
+      const b = pvShift(iso, -364), a0 = simA(r, b), t0 = simT(r, b);
+      if (a0 > 0 && t0 > 0) { o.cA += a; o.cT += t; o.cA0 += a0; o.cT0 += t0; o.cn++; }
+    }
+    out.push(o);
+  }
+  return SIMM[k] = out;
+}
+const simEvo = (o, f) => { if (!o || !o.cn) return null; if (f === 'ca') return o.cA0 ? o.cA / o.cA0 - 1 : null; if (f === 'tx') return o.cT0 ? o.cT / o.cT0 - 1 : null; return (o.cT && o.cT0 && o.cA0) ? (o.cA / o.cT) / (o.cA0 / o.cT0) - 1 : null; };
 // Effet « jour férié » appris : TAC'S du jour férié ÷ TAC'S moyen des mêmes jours de semaine non fériés (±1 à 3 semaines)
 function simHol(r, Y) {
   const k = 'H|' + r + '|' + Y; if (SIMM[k]) return SIMM[k];
@@ -1357,7 +1392,7 @@ function simYear(r) {
       const T2 = simT(r, b2), A2 = simA(r, b2);
       if (T2 > 0 && A2 > 0) { T1 = T2 * (1 + (trB ? trB.jt : 0)); A1 = T1 * (A2 / T2) * (1 + (trB ? trB.lp : 0)); src = 'N-2'; bU = b2; nFall++; } else { src = null; nNone++; }
     } else nBase++;
-    const d = { iso, m, dow: (new Date(_pvT(iso)).getUTCDay() + 6) % 7, b1: bU, fer: pvFerie(iso), ferB: pvFerie(bU), src };
+    const d = { iso, m, dow: (new Date(_pvT(iso)).getUTCDay() + 6) % 7, b1: bU, fer: pvFerie(iso), ferB: pvFerie(bU), src, b2, A2: simA(r, b2), T2: simT(r, b2) };
     if (src) {
       const P1 = A1 / T1, mo = c.months[m] || {}, rg = (c.ranges || []).find(x => iso >= x.from && iso <= x.to), ov = c.ov[iso], au = simAuto(iso, bU, F, c);
       let jt = mo.j != null ? mo.j : D.jt, lp = mo.l != null ? mo.l : D.lp, kind = '';
@@ -1419,7 +1454,7 @@ function simApply(all) {
   pvStash(); PV.resto = null; PV.loadedYm = null;           // le mois affiché ne doit pas écraser les brouillons créés
   for (const p of plan) { if (pvDiffDays(p.vals, pvSavedVals(p.r, p.ym))) PV.drafts[pvKey(p.r, p.ym)] = p.vals; else delete PV.drafts[pvKey(p.r, p.ym)]; }
   pvDraftPersist(); PV.ym = pvClamp(SIM.ty + '-' + pad2(Math.max(1, +(SIMV.month || 1))));
-  setTab('prevca');
+  renderPrevCa();
   setTimeout(() => pvMsg('ok', `✓ Simulation ${SIM.ty} déposée dans le calendrier (${nDays} jours, ${new Set(plan.map(p => p.r)).size} restaurant(s))${skipped ? `, ${skipped} restaurant(s) sans base suffisante` : ''} — vérifie puis « Enregistrer ».`), 80);
 }
 
@@ -1445,28 +1480,40 @@ table.sim input{ width:70px; padding:4px 6px; border:1.5px solid var(--border); 
 table.sim input.ov{ border-color:#7c3aed; background:rgba(124,58,237,.07); }
 .sim-pos{ color:var(--green); font-weight:700; } .sim-neg{ color:var(--red); font-weight:700; } .sim-src{ font-size:.62rem; color:#b45309; font-weight:800; margin-left:4px; }
 .sim-form{ display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-top:10px; } .sim-form label{ font-size:.66rem; font-weight:800; color:var(--muted); display:block; margin-bottom:3px; } .sim-form input{ padding:7px 9px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; width:130px; }
+.sim-obs{ display:block; font-size:.6rem; color:var(--muted); margin-top:2px; white-space:nowrap; }
+.sim-chart{ display:flex; gap:6px; align-items:flex-end; height:120px; padding:6px 8px 0; background:var(--card); border:1.5px solid var(--border); border-radius:12px; }
+.sim-chart .g{ flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; min-width:0; } .sim-chart .bs{ display:flex; align-items:flex-end; gap:2px; width:100%; height:100px; justify-content:center; }
+.sim-chart .bs i{ display:block; flex:1; max-width:14px; border-radius:3px 3px 0 0; min-height:0; } .sim-chart .g span{ font-size:.58rem; color:var(--muted); padding:2px 0 3px; }
+.sim-chart .c2{ background:#cbd5e1; } .sim-chart .c1{ background:#60a5fa; } .sim-chart .c0{ background:#7c3aed; }
+.sim-leg{ font-size:.66rem; color:var(--muted); margin:6px 2px 0; } .sim-leg b{ display:inline-block; width:10px; height:10px; border-radius:3px; margin:0 4px 0 10px; vertical-align:-1px; } .sim-leg b:first-child{ margin-left:0; }
 details.sim-d{ margin-top:12px; } details.sim-d summary{ cursor:pointer; font-size:.7rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); padding:5px 2px; }`;
   document.head.appendChild(st);
 })();
 const simSign = v => v == null ? '' : (v >= 0 ? 'sim-pos' : 'sim-neg');
+// Encart « Simulation » de l'onglet Prévision CA (calendrier) : réservé aux accès « simulation » (franchisé, équipe) ; le résultat est déposé dans le calendrier juste en dessous
+function simMount() {
+  const h = document.getElementById('simHost'); if (!h) return;
+  if (!accCan('sim')) { h.innerHTML = `<details class="sim-d sim-box"><summary>🔒 Simulation du prévisionnel · accès sur mot de passe</summary>${accLock('sim', 'simPwd')}</details>`; return; }
+  h.innerHTML = `<details class="sim-d sim-box" id="simDet" ${SIMV.open ? 'open' : ''} ontoggle="simToggle(this)"><summary>🧮 Simulation du prévisionnel <small style="text-transform:none;letter-spacing:0;font-weight:600">· part du réel des années précédentes, ajuste, puis dépose dans le calendrier ci-dessous${accLabel() ? ' · accès ' + escH(accLabel()) : ''}</small></summary><div id="simBox"></div></details>`;
+  if (SIMV.open) renderSimu();
+}
+function simToggle(d) { SIMV.open = d.open; const b = document.getElementById('simBox'); if (d.open && b && !b.innerHTML) renderSimu(); }
 function renderSimu() {
-  const p = document.getElementById('panel');
-  if (!pwdHash()) {
-    p.innerHTML = `<div class="panel-head"><div class="panel-title">Simulateur de prévision</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie pour utiliser le simulateur.</div>
-      <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
-  }
-  if (!ALIMM || !PREVJ || !TX) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Simulateur de prévision</div></div><div class="hint">⏳ Chargement du CA et des TAC'S des années précédentes…</div>`; loadTx(); return; }
+  const p = document.getElementById('simBox'); if (!p) return;
+  if (!accCan('sim')) { simMount(); return; }
+  if (!ALIMM || !PREVJ || !TX) { p.innerHTML = `<div class="hint">⏳ Chargement du CA et des TAC'S des années précédentes…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Y = simYear(r), Ty = Y.Ty, c = Y.c, D = Y.D, rnd = c.rnd || 100;
   if (SIMV.month == null) SIMV.month = Math.min(12, Math.max(1, new Date().getFullYear() === Ty ? new Date().getMonth() + 1 : 1));
   const S = simSum(Y.days), evo = S.a ? S.ca / S.a - 1 : null, evoT = S.t0 ? S.t / S.t0 - 1 : null, pmB = S.t0 ? S.a / S.t0 : null, pmF = S.t ? S.ca / S.t : null;
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
   const tr = D.tr;
+  const h1 = simHist(r, Ty - 1), h2 = simHist(r, Ty - 2), obs = (m, f) => { const v = simEvo(h1[m - 1], f); return v == null ? '' : `<span class="sim-obs" title="Évolution réelle ${Ty - 1} vs ${Ty - 2} sur ${h1[m - 1].cn} jour(s) comparables">réel ${Ty - 1} : ${simPct(v)}</span>`; };
   // Mois
   const mrows = MN.map((mn, i) => {
     const m = i + 1, ds = Y.days.filter(d => d.m === m), s = simSum(ds), o = c.months[m] || {};
     const ev = s.a ? s.ca / s.a - 1 : null;
-    return `<tr><td>${mn}</td><td><input type="text" inputmode="decimal" class="${o.j != null ? 'ov' : ''}" value="${o.j != null ? simNum(o.j) : ''}" placeholder="${simNum(D.jt)}" onchange="simMonth(${m},'j',this.value)"></td>
-      <td><input type="text" inputmode="decimal" class="${o.l != null ? 'ov' : ''}" value="${o.l != null ? simNum(o.l) : ''}" placeholder="${simNum(D.lp)}" onchange="simMonth(${m},'l',this.value)"></td>
+    return `<tr><td>${mn}</td><td><input type="text" inputmode="decimal" class="${o.j != null ? 'ov' : ''}" value="${o.j != null ? simNum(o.j) : ''}" placeholder="${simNum(D.jt)}" onchange="simMonth(${m},'j',this.value)">${obs(m, 'tx')}</td>
+      <td><input type="text" inputmode="decimal" class="${o.l != null ? 'ov' : ''}" value="${o.l != null ? simNum(o.l) : ''}" placeholder="${simNum(D.lp)}" onchange="simMonth(${m},'l',this.value)">${obs(m, 'pm')}</td>
       <td>${s.n ? pvEur(s.a) : '—'}</td><td><b>${s.n ? pvEur(s.ca) : '—'}</b></td><td class="${simSign(ev)}">${simPct(ev)}</td><td>${s.n ? Math.round(s.t).toLocaleString('fr-FR') : '—'}</td><td>${s.t ? (s.ca / s.t).toFixed(2).replace('.', ',') + ' €' : '—'}</td><td>${s.n}/${ds.length}</td></tr>`;
   }).join('');
   // Jours fériés de l'année cible + jours saisis à la main
@@ -1482,17 +1529,29 @@ function renderSimu() {
   for (const d of Y.days) { const w = simIsoWeek(d.iso), k = w.mon; (wk[k] = wk[k] || { w: w.w, y: w.y, ds: [] }).ds.push(d); }
   const wrows = Object.keys(wk).sort().map(k => { const g = wk[k], s = simSum(g.ds), e = s.a ? s.ca / s.a - 1 : null, et = s.t0 ? s.t / s.t0 - 1 : null;
     return `<tr><td>S ${g.w}${g.ds.length < 7 ? ' <small>(partielle)</small>' : ''} <small>${k.slice(8)}/${k.slice(5, 7)}</small></td><td>${s.n ? pvEur(s.a) : '—'}</td><td><b>${s.n ? pvEur(s.ca) : '—'}</b></td><td class="${simSign(e)}">${simPct(e)}</td><td>${s.n ? Math.round(s.t).toLocaleString('fr-FR') : '—'}</td><td class="${simSign(et)}">${simPct(et)}</td></tr>`; }).join('');
+  // Historique des deux années précédentes (CA alim., TAC'S, panier moyen) + graphique CA par mois
+  const hs = x => x.n ? x : null, pmOf = x => x && x.T ? x.A / x.T : null, fr = n => Math.round(n).toLocaleString('fr-FR');
+  const part = x => x.n && x.n < x.nd ? `<span class="sim-src" title="${x.n} jour(s) saisis sur ${x.nd}">${x.n}/${x.nd} j</span>` : '';
+  const evCell = v => `<td class="${simSign(v)}">${simPct(v)}</td>`;
+  const hRow = (label, a, b, tot) => `<tr class="${tot ? 'tot' : ''}"><td>${label}</td><td>${a.n ? pvEur(a.A) : '—'}${part(a)}</td><td>${b.n ? pvEur(b.A) : '—'}${part(b)}</td>${evCell(simEvo(b, 'ca'))}
+      <td>${a.n ? fr(a.T) : '—'}</td><td>${b.n ? fr(b.T) : '—'}</td>${evCell(simEvo(b, 'tx'))}<td>${pmOf(a) ? pmOf(a).toFixed(2).replace('.', ',') + ' €' : '—'}</td><td>${pmOf(b) ? pmOf(b).toFixed(2).replace('.', ',') + ' €' : '—'}</td>${evCell(simEvo(b, 'pm'))}</tr>`;
+  const sumH = hh => hh.reduce((q, x) => { for (const k of ['A', 'T', 'n', 'nd', 'cA', 'cT', 'cA0', 'cT0', 'cn']) q[k] += x[k]; return q; }, { A: 0, T: 0, n: 0, nd: 0, cA: 0, cT: 0, cA0: 0, cT0: 0, cn: 0 });
+  const msum = MN.map((_, i) => simSum(Y.days.filter(d => d.m === i + 1))), mx = Math.max(1, ...h2.map(x => x.A), ...h1.map(x => x.A), ...msum.map(x => x.ca));
+  const bar = (v, cls, tip) => `<i class="${cls}" style="height:${v ? Math.max(2, v / mx * 100) : 0}%" title="${tip}"></i>`;
+  const histHtml = `<div class="sim-chart">${MN.map((mn, i) => `<div class="g"><div class="bs">${bar(h2[i].A, 'c2', `${mn} ${Ty - 2} : ${pvEur(h2[i].A)}`)}${bar(h1[i].A, 'c1', `${mn} ${Ty - 1} : ${pvEur(h1[i].A)}`)}${bar(msum[i].n ? msum[i].ca : 0, 'c0', `${mn} ${Ty} (prévu) : ${pvEur(msum[i].ca)}`)}</div><span>${mn.slice(0, 3)}</span></div>`).join('')}</div>
+    <div class="sim-leg"><b style="background:#cbd5e1"></b>${Ty - 2} réel<b style="background:#60a5fa"></b>${Ty - 1} réel<b style="background:#7c3aed"></b>${Ty} prévu</div>
+    <details class="sim-d" open><summary>Détail : CA alim., TAC'S et panier moyen</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:860px"><thead><tr><th>Mois</th><th>CA ${Ty - 2}</th><th>CA ${Ty - 1}</th><th>Évol.</th><th>TAC'S ${Ty - 2}</th><th>TAC'S ${Ty - 1}</th><th>Évol.</th><th>PM ${Ty - 2}</th><th>PM ${Ty - 1}</th><th>Évol.</th></tr></thead><tbody>${MN.map((mn, i) => hRow(mn, h2[i], h1[i], false)).join('')}${hRow('Année', sumH(h2), sumH(h1), true)}</tbody></table></div></details>`;
   // Calendrier du mois choisi
   const M = SIMV.month, cd = Y.days.filter(d => d.m === M), sM = simSum(cd);
   const crows = cd.map(d => `<tr class="${d.fer ? 'fe' : (d.dow > 4 ? 'we' : '')}"><td>${PV_JOURS[d.dow]} ${+d.iso.slice(8)}${d.fer ? ' 🎉' : ''}${d.kind && !d.fer ? ` <small>${escH(d.kind)}</small>` : ''}</td>
+      <td>${d.A2 ? pvEur(d.A2) : '—'}<br><small>${d.T2 ? Math.round(d.T2).toLocaleString('fr-FR') + ' TAC\'S · ' : ''}${d.b2.slice(8)}/${d.b2.slice(5, 7)}/${d.b2.slice(2, 4)}</small></td>
       <td>${d.src ? pvEur(d.A1) : '—'}${d.src === 'N-2' ? '<span class="sim-src">base 2 ans</span>' : ''}<br><small>${d.src ? Math.round(d.T1).toLocaleString('fr-FR') + ' TAC\'S' : ''}</small></td>
       <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].j != null ? 'ov' : ''}" value="${simNum(d.jt)}" onchange="simDay('${d.iso}','j',this.value)">` : ''}</td>
       <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].l != null ? 'ov' : ''}" value="${simNum(d.lp)}" onchange="simDay('${d.iso}','l',this.value)">` : ''}</td>
       <td><b>${d.ca != null ? pvEur(d.ca) : '—'}</b><br><small>${d.src ? Math.round(d.T).toLocaleString('fr-FR') + ' TAC\'S' : ''}</small></td><td class="${d.ca != null ? simSign(d.ca / d.A1 - 1) : ''}">${d.ca != null ? simPct(d.ca / d.A1 - 1) : '—'}</td>
       <td>${d.ca != null && sM.ca ? (d.ca / sM.ca * 100).toFixed(1).replace('.', ',') + ' %' : ''}</td></tr>`).join('');
   p.innerHTML = `
-    <div class="panel-head"><div><div class="panel-title">Simulateur de prévision ${Ty} · ${escH(name)}</div>
-      <div class="last-saisie">Part du CA et des TAC'S réels de ${Ty - 1} (jour équivalent, même jour de la semaine) et applique une évolution de TAC'S et de panier moyen : CA prévu = TAC'S × panier moyen, arrondi à ${rnd} €. Ajuste par mois, par période ou par jour, puis dépose le résultat dans le calendrier Prévision CA.</div></div>
+    <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:8px 0 6px"><div class="sim-note" style="flex:1;min-width:260px;margin:0"><b>Simulation ${Ty} · ${escH(name)}</b> — part du CA et des TAC'S réels de ${Ty - 1} (jour équivalent, même jour de la semaine) et applique une évolution de TAC'S et de panier moyen : CA prévu = TAC'S × panier moyen, arrondi à ${rnd} €. Ajuste par mois, par période ou par jour, puis dépose le résultat dans le calendrier ci-dessous.</div>
       <div class="period"><select id="simTy" onchange="simSet('ty',this.value)">${years.map(v => `<option ${v === Ty ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>
     <div class="sim-note">Base : ${Y.nBase} jour(s) réels de ${Ty - 1}${Y.nFall ? `, ${Y.nFall} jour(s) repris sur ${Ty - 2} et mis au niveau de ${Ty - 1} (CA de ${Ty - 1} pas encore complet)` : ''}${Y.nNone ? `, ${Y.nNone} jour(s) sans donnée (non simulés)` : ''}.</div>
     <div class="sim-lev">
@@ -1509,6 +1568,8 @@ function renderSimu() {
       <div class="sim-kpi"><span>TAC'S prévus</span><b>${Math.round(S.t).toLocaleString('fr-FR')}</b><i class="${simSign(evoT)}">${simPct(evoT)}</i></div>
       <div class="sim-kpi"><span>Panier moyen prévu</span><b>${pmF ? pmF.toFixed(2).replace('.', ',') + ' €' : '—'}</b><i>${pmB ? 'base ' + pmB.toFixed(2).replace('.', ',') + ' €' : ''}</i></div>
       <div class="sim-kpi"><span>CA net total prévu</span><b>${pvEur(S.ca * PV.coef)}</b><i>× ${String(PV.coef).replace('.', ',')}</i></div></div>
+    <div class="sim-h">Mois des années précédentes <small style="text-transform:none;letter-spacing:0;font-weight:600">(réel saisi, mois civils ; évolution ${Ty - 1} vs ${Ty - 2} calculée sur les jours équivalents connus des deux années)</small></div>
+    ${histHtml}
     <div class="sim-h">Évolutions par mois <small style="text-transform:none;letter-spacing:0;font-weight:600">(laisser vide = évolution globale ; violet = réglage propre au mois)</small></div>
     <div class="sim-wrap"><table class="sim"><thead><tr><th>Mois</th><th>TAC'S %</th><th>PM %</th><th>CA ${Ty - 1}</th><th>CA prévu</th><th>Évol.</th><th>TAC'S prévus</th><th>PM prévu</th><th>Jours</th></tr></thead><tbody>${mrows}
       <tr class="tot"><td>Année</td><td></td><td></td><td>${pvEur(S.a)}</td><td>${pvEur(S.ca)}</td><td class="${simSign(evo)}">${simPct(evo)}</td><td>${Math.round(S.t).toLocaleString('fr-FR')}</td><td>${pmF ? pmF.toFixed(2).replace('.', ',') + ' €' : '—'}</td><td>${S.n}</td></tr></tbody></table></div>
@@ -1519,17 +1580,17 @@ function renderSimu() {
     ${rrows ? `<div class="sim-wrap"><table class="sim" style="min-width:520px"><thead><tr><th>Période</th><th class="l">Libellé</th><th>TAC'S</th><th>PM</th><th></th></tr></thead><tbody>${rrows}</tbody></table></div>` : ''}
     <div class="sim-form"><div><label>Du</label><input type="date" id="simRf" min="${Ty}-01-01" max="${Ty}-12-31"></div><div><label>Au</label><input type="date" id="simRt" min="${Ty}-01-01" max="${Ty}-12-31"></div><div><label>TAC'S (%)</label><input type="text" id="simRj" inputmode="decimal" placeholder="ex. 5" style="width:80px"></div><div><label>PM (%)</label><input type="text" id="simRl" inputmode="decimal" placeholder="ex. 2" style="width:80px"></div><div><label>Libellé</label><input type="text" id="simRn" placeholder="ex. Vacances de Noël"></div><button class="step" onclick="simRangeAdd()">+ Ajouter la période</button></div>
     <details class="sim-d"><summary>Semaines</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:560px"><thead><tr><th>Semaine</th><th>CA ${Ty - 1}</th><th>CA prévu</th><th>Évol.</th><th>TAC'S prévus</th><th>Évol.</th></tr></thead><tbody>${wrows}</tbody></table></div></details>
-    <details class="sim-d" open><summary>Calendrier jour par jour</summary>
+    <details class="sim-d"><summary>Détail jour par jour de la simulation (ajustements à la journée)</summary>
       <div class="period" style="margin:8px 0"><select onchange="simPickMonth(this.value)">${MN.map((n, i) => `<option value="${i + 1}" ${i + 1 === M ? 'selected' : ''}>${n} ${Ty}</option>`).join('')}</select></div>
-      <div class="sim-wrap"><table class="sim" style="min-width:700px"><thead><tr><th>Jour</th><th>Base ${Ty - 1}</th><th>TAC'S %</th><th>PM %</th><th>CA prévu</th><th>Évol.</th><th>Part du mois</th></tr></thead><tbody>${crows}
-        <tr class="tot"><td>${MN[M - 1]}</td><td>${pvEur(sM.a)}</td><td></td><td></td><td>${pvEur(sM.ca)}</td><td class="${simSign(sM.a ? sM.ca / sM.a - 1 : null)}">${simPct(sM.a ? sM.ca / sM.a - 1 : null)}</td><td></td></tr></tbody></table></div></details>
+      <div class="sim-wrap"><table class="sim" style="min-width:780px"><thead><tr><th>Jour</th><th>${Ty - 2}</th><th>Base ${Ty - 1}</th><th>TAC'S %</th><th>PM %</th><th>CA prévu</th><th>Évol.</th><th>Part du mois</th></tr></thead><tbody>${crows}
+        <tr class="tot"><td>${MN[M - 1]}</td><td></td><td>${pvEur(sM.a)}</td><td></td><td></td><td>${pvEur(sM.ca)}</td><td class="${simSign(sM.a ? sM.ca / sM.a - 1 : null)}">${simPct(sM.a ? sM.ca / sM.a - 1 : null)}</td><td></td></tr></tbody></table></div></details>
     <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="simApply(false)">Appliquer au calendrier Prévision CA · ${escH(name)}</button>
       <button class="step" onclick="simApply(true)">Appliquer à tous les restaurants</button><span class="save-msg" id="simMsg"></span></div>
-    <div class="hint">« Appliquer » remplit le calendrier Prévision CA (à partir de novembre 2026) sans rien enregistrer : tu peux encore ajuster jour par jour, puis « Enregistrer tout » dans l'onglet Prévision CA. Les réglages du simulateur sont gardés sur cet appareil.</div>`;
+    <div class="hint">« Appliquer » remplit le calendrier ci-dessous (à partir de novembre 2026) sans rien enregistrer : tu peux encore ajuster jour par jour, puis « Enregistrer » dans le calendrier. Les réglages de simulation sont gardés sur cet appareil.</div>`;
 }
 
 // ── Budget & PNL prévisionnel (modèle du classeur « PREV ET BUDGET ») ──
-// CA alimentaire de chaque mois = somme de la prévision de CA JOURNALIÈRE (calendrier Prévision CA ; à défaut, le simulateur).
+// CA alimentaire de chaque mois = somme de la prévision de CA JOURNALIÈRE (calendrier Prévision CA : on y dépose aussi la simulation).
 // Le compte de résultat (lignes de l'onglet « PNL » du classeur) s'en déduit avec des hypothèses par restaurant : ratios en % du CA,
 // charges fixes mensuelles, main-d'œuvre (heures = CA ÷ VPHE × coût horaire), commissions, redevances, IS.
 // Les hypothèses se reprennent du classeur du restaurant (lecture dans le navigateur de l'onglet PNL uniquement : rien n'est envoyé nulle part).
@@ -1537,7 +1598,7 @@ function renderSimu() {
 const BD_KEY = 'mj_budget';
 const BUD = (() => { try { const d = JSON.parse(localStorage.getItem(BD_KEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
 BUD.byResto = BUD.byResto || {};
-BUD.useSim = BUD.useSim !== false;                           // compléter les jours non prévus avec le simulateur
+BUD.view = ['e', 'p', 'ep'].includes(BUD.view) ? BUD.view : 'ep';   // compte de résultat : montants, % du CA, ou les deux
 function bdSave() { try { localStorage.setItem(BD_KEY, JSON.stringify(BUD)); } catch (e) {} }
 const bdNorm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/g, 'oe').replace(/\s+/g, ' ').trim();
 
@@ -1588,8 +1649,17 @@ function bdParams(r) {
 
 // ── Calcul (mêmes formules que l'onglet PNL du classeur) ──
 function bdMode(p, k) { return (p.m && p.m[k]) || (BD_BY[k].t === 'fix' ? 'a' : 'r'); }   // r = % du CA (alimentaire ; CA net pour les commissions) · a = montant mensuel
+// Équipe de direction (EDG) saisie par poste (initiales, jamais de noms) : coût mensuel = brut + primes (prime annuelle répartie sur les mois travaillés) ; null = ligne « brut managers » saisie à la main
+const BD_POSTES = ['Directeur', 'Adjoint', 'Assistant', 'Manager'];
+function bdEdgM(p) {
+  const e = p.edg; if (!e || !e.on || !(e.rows || []).some(x => (x.sal || []).some(v => v > 0))) return null;
+  const out = Array(12).fill(0);
+  for (const x of e.rows) { const act = x.sal.filter(v => v > 0).length || 1; for (let i = 0; i < 12; i++) if (x.sal[i] > 0) out[i] += x.sal[i] + (x.prime || 0) / act; }
+  return out;
+}
 function bdCompute(p, alim) {
   const L = {}; for (const x of BD_LINES) L[x.k] = Array(12).fill(0);
+  const edgM = bdEdgM(p);
   for (let i = 0; i < 12; i++) {
     const A = alim[i] || 0, N = A * p.rn, g = k => L[k][i], s = (k, v) => { L[k][i] = v; };
     const lv = k => bdMode(p, k) === 'r' ? (BD_BY[k].t === 'pctn' ? N : A) * (p[k] || 0) : (p[k][i] || 0) * (1 + (p.infl || 0));
@@ -1597,7 +1667,7 @@ function bdCompute(p, alim) {
     for (const k of ['achat', 'repas', 'dechets', 'embal', 'vaisselle']) s(k, lv(k));
     s('marge', A - g('achat') - g('repas') - g('dechets') - g('embal') - g('vaisselle'));
     s('moeq', p.vphe[i] ? A / p.vphe[i] * p.coutH[i] : 0); s('cseq', g('moeq') * p.tEq[i]);
-    s('momg', lv('momg')); s('csmg', g('momg') * p.tMg[i]); s('aides', lv('aides')); s('divmo', lv('divmo'));
+    s('momg', edgM ? edgM[i] : lv('momg')); s('csmg', g('momg') * p.tMg[i]); s('aides', lv('aides')); s('divmo', lv('divmo'));
     s('mo', g('moeq') + g('cseq') + g('momg') + g('csmg') + g('aides') + g('divmo'));
     for (const k of ['nett', 'secu', 'banque', 'maint', 'autres']) s(k, lv(k));
     s('svc', g('nett') + g('secu') + g('banque') + g('maint') + g('autres'));
@@ -1682,19 +1752,15 @@ function bdFromBook(book) {
   return { p, ref, miss };
 }
 
-// ── CA alimentaire mensuel issu de la prévision journalière ──
+// ── CA alimentaire mensuel issu de la prévision journalière (calendrier Prévision CA : brouillon en cours, sinon enregistré) ──
 function bdCa(r, Ty) {
-  const Y = BUD.useSim ? simYear(r) : null, out = { alim: Array(12).fill(0), src: Array(12).fill(''), cov: Array(12).fill(0), sim: Array(12).fill(0), nd: Array(12).fill(0) };
+  const out = { alim: Array(12).fill(0), src: Array(12).fill(''), cov: Array(12).fill(0), nd: Array(12).fill(0) };
   for (let m = 1; m <= 12; m++) {
     const ym = Ty + '-' + pad2(m), days = pvDays(ym), dk = PV.drafts[pvKey(r, ym)], cur = (r === curResto && PV.resto === r && PV.loadedYm === ym) ? PV.vals : null;
-    let sum = 0, n = 0, ns = 0;
-    for (const iso of days) {
-      let v = cur ? cur[iso] : (dk ? dk[iso] : ((PREVJ || {})[r] || {})[iso]);
-      if (v != null) { sum += v; n++; continue; }
-      const d = Y && Y.days.find(x => x.iso === iso); if (d && d.ca != null) { sum += d.ca; ns++; }
-    }
-    out.alim[m - 1] = sum; out.cov[m - 1] = n; out.sim[m - 1] = ns; out.nd[m - 1] = days.length;
-    out.src[m - 1] = n === days.length ? 'jour' : (n + ns === days.length ? (n ? 'mixte' : 'simu') : (n + ns ? 'part' : 'aucun'));
+    let sum = 0, n = 0;
+    for (const iso of days) { const v = cur ? cur[iso] : (dk ? dk[iso] : ((PREVJ || {})[r] || {})[iso]); if (v != null) { sum += v; n++; } }
+    out.alim[m - 1] = sum; out.cov[m - 1] = n; out.nd[m - 1] = days.length;
+    out.src[m - 1] = n === days.length ? 'jour' : (n ? 'part' : 'aucun');
   }
   return out;
 }
@@ -1714,6 +1780,7 @@ table.bd td.p{ color:var(--muted); font-size:.68rem; }
 .bd-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px 14px; }
 .bd-grid .f label{ display:block; font-size:.66rem; font-weight:800; color:var(--muted); margin-bottom:3px; } .bd-grid .f input{ width:100%; padding:7px 9px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; text-align:right; }
 .bd-import{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:var(--card2); border:1.5px dashed var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; font-size:.78rem; }
+.bd-pc{ display:block; font-size:.62rem; font-weight:600; color:var(--muted); }
 .bd-src{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; } .bd-j{ background:#22a447; } .bd-s{ background:#f59e0b; } .bd-n{ background:#dc2626; }`;
   document.head.appendChild(st);
 })();
@@ -1741,7 +1808,24 @@ function bdSetLine(k, v) {                                   // valeur saisie : 
   bdSave(); renderBudget();
 }
 function bdSetM(k, i, v) { const x = bdPar(v); if (x == null) return; bdParams(curResto).p[k][i] = x; bdSave(); renderBudget(); }
-function bdToggleSim(on) { BUD.useSim = !!on; bdSave(); renderBudget(); }
+function bdView(v) { BUD.view = v; bdSave(); renderBudget(); }
+// Équipe de direction : salaires par poste
+function bdEdg() { const p = bdParams(curResto).p; return p.edg = p.edg || { on: true, rows: [] }; }
+function bdEdgAdd(poste) { bdEdg().rows.push({ poste: poste || 'Manager', ini: '', ctr: '', sal: Array(12).fill(0), prime: 0, from: 0 }); bdSave(); renderBudget(); }
+function bdEdgPreset() { const e = bdEdg(); if (e.rows.length && !confirm('Ajouter la structure type (1 directeur, 2 adjoints, 2 assistants, 4 managers) aux postes déjà saisis ?')) return; for (const po of ['Directeur', 'Adjoint', 'Adjoint', 'Assistant', 'Assistant', 'Manager', 'Manager', 'Manager', 'Manager']) e.rows.push({ poste: po, ini: '', ctr: '', sal: Array(12).fill(0), prime: 0, from: 0 }); bdSave(); renderBudget(); }
+function bdEdgDel(i) { const e = bdEdg(); if (!confirm('Supprimer ce poste (' + (e.rows[i].poste + ' ' + (e.rows[i].ini || '')).trim() + ') ?')) return; e.rows.splice(i, 1); bdSave(); renderBudget(); }
+function bdEdgOn(on) { bdEdg().on = !!on; bdSave(); renderBudget(); }
+function bdEdgSet(i, f, v) {
+  const x = bdEdg().rows[i]; if (!x) return;
+  if (f === 'poste') x.poste = BD_POSTES.includes(v) ? v : 'Manager';
+  else if (f === 'ini') x.ini = String(v).replace(/[^A-Za-zÀ-ÿ0-9]/g, '').toUpperCase().slice(0, 4);
+  else if (f === 'ctr') x.ctr = String(v).slice(0, 14);
+  else if (f === 'from') x.from = Math.max(0, Math.min(11, +v || 0));
+  else if (f === 'brut') { const n = bdPar(v); if (n == null || n < 0) return; for (let k = x.from || 0; k < 12; k++) x.sal[k] = n; }
+  else if (f === 'prime') { const n = bdPar(v); if (n == null || n < 0) return; x.prime = n; }
+  bdSave(); renderBudget();
+}
+function bdEdgMonth(i, m, v) { const n = bdPar(v); if (n == null || n < 0) return; bdEdg().rows[i].sal[m] = n; bdSave(); renderBudget(); }
 function bdMsg(c, t) { const m = document.getElementById('bdMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
 async function bdImport(inp) {
   const f = inp.files && inp.files[0]; if (!f) return;
@@ -1749,6 +1833,7 @@ async function bdImport(inp) {
     bdMsg('', 'Lecture du classeur…');
     const book = await bdBook(await f.arrayBuffer(), n => /^pnl/i.test(n.trim()));
     const res = bdFromBook(book), o = bdParams(curResto);
+    if (o.p && o.p.edg) res.p.edg = o.p.edg;
     o.p = res.p; o.ref = res.ref; o.file = f.name; o.date = new Date().toISOString().slice(0, 10); bdSave();
     renderBudget();
     bdMsg('ok', `✓ Hypothèses reprises de « ${f.name} »${res.miss.length ? ' — non trouvé : ' + res.miss.join(', ') : ''}.`);
@@ -1759,42 +1844,76 @@ async function bdImport(inp) {
 function renderBudget() {
   const pn = document.getElementById('panel');
   if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
+  if (!accCan('budget')) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd')}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel et les salaires de l'équipe de direction sont réservés au franchisé : accès par un mot de passe qui lui est propre (distinct de la saisie et de l'accès équipe).</div>`; return; }
   if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Ty = +SIM.ty, o = bdParams(r), p = o.p, ca = bdCa(r, Ty), L = bdCompute(p, ca.alim);
-  const tot = k => L[k].reduce((a, b) => a + b, 0), A = tot('alim'), ref = o.ref;
+  const tot = k => L[k].reduce((a, b) => a + b, 0), A = tot('alim'), ref = o.ref, view = BUD.view;
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
   const sum = k => k.reduce((a, b) => a + b, 0), refT = ref ? Object.fromEntries(Object.entries(ref).map(([k, v]) => [k, sum(v)])) : null;
   const ev = (a, b) => b ? a / b - 1 : null, evC = v => v == null ? '' : `<i class="${v >= 0 ? 'sim-pos' : 'sim-neg'}">${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1).replace('.', ',')} % vs 2026</i>`;
   const kp = (l, v, sub) => `<div class="sim-kpi"><span>${l}</span><b>${v}</b><i>${sub || ''}</i></div>`;
-  const nJ = ca.src.filter(s => s === 'jour').length, nS = ca.src.filter(s => s === 'simu' || s === 'mixte').length, nN = ca.src.filter(s => s === 'part' || s === 'aucun').length;
+  const nJ = ca.src.filter(s => s === 'jour').length, nP = ca.src.filter(s => s === 'part').length, nN = ca.src.filter(s => s === 'aucun').length;
+  // compte de résultat : montants, % du CA alimentaire du mois, ou les deux
+  const cellOf = (n, a) => { const pc = a ? bdP(n / a) : '—'; return view === 'e' ? bdE(n) : view === 'p' ? pc : `${bdE(n)}<span class="bd-pc">${pc}</span>`; };
+  const tail = view === 'e' ? '<td></td><td></td>' : '<td></td>';
   const lines = BD_LINES.map(x => {
     const v = L[x.k], t = sum(v), cls = x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : '';
-    return `<tr class="${cls}"><td>${x.l}</td>${v.map(n => `<td>${bdE(n)}</td>`).join('')}<td><b>${bdE(t)}</b></td><td class="p">${A ? bdP(t / A) : ''}</td></tr>`;
+    return `<tr class="${cls}"><td>${x.l}</td>${v.map((n, i) => `<td>${cellOf(n, L.alim[i])}</td>`).join('')}<td><b>${cellOf(t, A)}</b></td>${view === 'e' ? `<td class="p">${A ? bdP(t / A) : ''}</td>` : ''}</tr>`;
   }).join('');
-  const srcRow = `<tr><td>CA alim. : source de la prévision</td>${ca.src.map((s, i) => `<td title="${ca.cov[i]} jour(s) prévus + ${ca.sim[i]} simulé(s) sur ${ca.nd[i]}"><span class="bd-src ${s === 'jour' ? 'bd-j' : (s === 'simu' || s === 'mixte' ? 'bd-s' : 'bd-n')}"></span>${s === 'jour' ? 'jour' : (s === 'simu' ? 'simul.' : (s === 'mixte' ? 'mixte' : (s === 'part' ? 'partiel' : '—')))}</td>`).join('')}<td></td><td></td></tr>`;
+  const srcRow = `<tr><td>CA alim. : prévision journalière</td>${ca.src.map((s, i) => `<td title="${ca.cov[i]} jour(s) prévus sur ${ca.nd[i]}"><span class="bd-src ${s === 'jour' ? 'bd-j' : (s === 'part' ? 'bd-s' : 'bd-n')}"></span>${s === 'jour' ? 'complet' : (s === 'part' ? ca.cov[i] + '/' + ca.nd[i] + ' j' : '—')}</td>`).join('')}${tail}</tr>`;
+  // CA réel de l'année précédente (mois civils) pour situer la prévision
+  const hN = simHist(r, Ty - 1), okM = hN.map(x => x.n && x.n === x.nd), sN = hN.reduce((a, x) => a + x.A, 0);
+  const cmpA = L.alim.reduce((a, v, i) => a + (okM[i] ? v : 0), 0), cmpN = hN.reduce((a, x, i) => a + (okM[i] ? x.A : 0), 0), nOk = okM.filter(Boolean).length;
+  const n1Row = `<tr><td>CA alim. ${Ty - 1} (réel)</td>${hN.map(x => `<td>${x.n ? bdE(x.A) + (x.n < x.nd ? `<span class="sim-src" title="${x.n} jour(s) saisis sur ${x.nd}">*</span>` : '') : '—'}</td>`).join('')}<td><b>${bdE(sN)}</b></td>${view === 'e' ? '<td></td>' : ''}</tr>`;
+  const evRow = `<tr><td>Évolution du CA ${Ty} vs ${Ty - 1}</td>${L.alim.map((a, i) => { const e = okM[i] && a ? a / hN[i].A - 1 : null; return `<td class="${simSign(e)}">${e == null ? '—' : simPct(e)}</td>`; }).join('')}<td class="${simSign(cmpN && nOk ? cmpA / cmpN - 1 : null)}" title="${nOk} mois complets de ${Ty - 1}">${cmpN && nOk ? simPct(cmpA / cmpN - 1) : '—'}</td>${view === 'e' ? '<td></td>' : ''}</tr>`;
+  const edgM = bdEdgM(p), edg = bdEdg();
   const avg = a => a.reduce((x, y) => x + y, 0) / 12;
   const editable = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn' || x.t === 'fix');
   const hypRows = editable.map(x => {
+    if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de direction, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
     const md = bdMode(p, x.k), base = x.t === 'pctn' ? 'CA net' : 'CA alim.';
     const val = md === 'r' ? bdIn(p[x.k]) : String(Math.round(sum(p[x.k])));
     return `<tr><td>${x.l}</td><td style="text-align:center"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;${md === 'a' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','a')">€</button><button class="step" style="border-radius:0 8px 8px 0;${md === 'r' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','r')">% du ${base}</button></span></td>
       <td><input type="text" inputmode="decimal" style="width:110px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;text-align:right;font-family:inherit" value="${val}" onchange="bdSetLine('${x.k}',this.value)"> <small style="color:var(--muted)">${md === 'r' ? '%' : '€ / an'}</small></td>
       <td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
   }).join('');
-  const fixRows = editable.map(x => bdMode(p, x.k) === 'a' ? `<tr><td>${x.l}</td>${p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(p[x.k]))}</b></td><td></td></tr>` : '').join('');
+  const fixRows = editable.map(x => bdMode(p, x.k) === 'a' && !(x.k === 'momg' && edgM) ? `<tr><td>${x.l}</td>${p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(p[x.k]))}</b></td><td></td></tr>` : '').join('');
+  // équipe de direction : une ligne par poste (initiales pour reconnaître la personne sans la nommer)
+  const eIn = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;';
+  const eCost = x => x.sal.reduce((a, b) => a + b, 0) + (x.sal.some(v => v > 0) ? (x.prime || 0) : 0);
+  const edgRows = edg.rows.map((x, i) => { const from = x.from || 0; return `<tr><td class="l"><select style="${eIn}" onchange="bdEdgSet(${i},'poste',this.value)">${BD_POSTES.map(po => `<option ${po === x.poste ? 'selected' : ''}>${po}</option>`).join('')}</select></td>
+      <td class="l"><input type="text" maxlength="4" placeholder="Initiales" value="${escH(x.ini || '')}" style="${eIn}width:76px;text-transform:uppercase" onchange="bdEdgSet(${i},'ini',this.value)"></td>
+      <td class="l"><input type="text" placeholder="ex. 218 j ou 151,67 h" value="${escH(x.ctr || '')}" style="${eIn}width:130px" onchange="bdEdgSet(${i},'ctr',this.value)"></td>
+      <td><input type="text" inputmode="decimal" placeholder="brut / mois" value="${x.sal[from] ? Math.round(x.sal[from]) : ''}" style="${eIn}width:92px;text-align:right" onchange="bdEdgSet(${i},'brut',this.value)"></td>
+      <td class="l"><select style="${eIn}" onchange="bdEdgSet(${i},'from',this.value)" title="Le montant saisi s'applique à partir de ce mois (revalorisation, arrivée, départ = 0)">${MN.map((n, k) => `<option value="${k}" ${k === from ? 'selected' : ''}>${n}</option>`).join('')}</select></td>
+      <td><input type="text" inputmode="decimal" placeholder="€ / an" value="${x.prime ? Math.round(x.prime) : ''}" style="${eIn}width:84px;text-align:right" onchange="bdEdgSet(${i},'prime',this.value)"></td>
+      <td><b>${bdE(eCost(x))}</b></td><td><button class="step" onclick="bdEdgDel(${i})" title="Supprimer ce poste">✕</button></td></tr>`; }).join('');
+  const edgTotal = edg.rows.reduce((a, x) => a + eCost(x), 0);
+  const edgGrid = edg.rows.map((x, i) => `<tr><td>${escH(x.poste)} · ${escH(x.ini || '#' + (i + 1))}</td>${x.sal.map((v, k) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${v ? Math.round(v) : ''}" onchange="bdEdgMonth(${i},${k},this.value)"></td>`).join('')}<td><b>${bdE(x.sal.reduce((a, b) => a + b, 0))}</b></td><td></td></tr>`).join('');
+  const edgBrut = Array.from({ length: 12 }, (_, k) => edg.rows.reduce((a, x) => a + (x.sal[k] || 0), 0)), edgTotRows = edg.rows.length ? `<tr class="b"><td>Brut total</td>${edgBrut.map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(edgBrut))}</b></td><td></td></tr>
+      <tr class="k"><td>Coût équipe de direction (brut + primes)</td>${(edgM || Array(12).fill(0)).map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(edgM ? sum(edgM) : 0)}</b></td><td></td></tr>` : '';
+  const vBtn = (v, l, rd) => `<button class="step" style="border-radius:${rd};${view === v ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdView('${v}')">${l}</button>`;
   pn.innerHTML = `
     <div class="panel-head"><div><div class="panel-title">Budget & PNL ${Ty} · ${escH(name)}</div>
-      <div class="last-saisie">Le CA alimentaire de chaque mois est la somme de la prévision de CA journalière (calendrier Prévision CA ; à défaut, le simulateur). Le compte de résultat en découle avec les hypothèses du restaurant, comme dans l'onglet PNL du classeur « PREV ET BUDGET ».</div></div>
+      <div class="last-saisie">Le CA alimentaire de chaque mois est la somme de la prévision de CA journalière du calendrier « Prévision CA » (la simulation s'y dépose aussi). Le compte de résultat en découle avec les hypothèses du restaurant, comme dans l'onglet PNL du classeur « PREV ET BUDGET ».</div></div>
       <div class="period"><select onchange="simSet('ty',this.value)">${years.map(v => `<option ${v === Ty ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>
     <div class="bd-import"><div><b>Hypothèses :</b> ${o.file ? `reprises de « ${escH(o.file)} » (${o.date})` : 'valeurs réseau seulement (redevances, publicité, G&A, IS) — importe le classeur du restaurant pour reprendre les tiens'}</div>
       <label class="step" style="cursor:pointer">📂 Importer le classeur PREV ET BUDGET (.xlsx)<input type="file" accept=".xlsx,.xlsm" style="display:none" onchange="bdImport(this)"></label>
       <span class="hint" style="margin:0">Lu dans ton navigateur (onglet PNL uniquement) : rien n'est envoyé.</span><span class="save-msg" id="bdMsg"></span></div>
-    <div class="sim-note">CA ${Ty} : <span class="bd-src bd-j"></span>${nJ} mois entièrement prévus jour par jour · <span class="bd-src bd-s"></span>${nS} mois complétés par le simulateur · <span class="bd-src bd-n"></span>${nN} mois incomplets.
-      <label style="margin-left:10px"><input type="checkbox" ${BUD.useSim ? 'checked' : ''} onchange="bdToggleSim(this.checked)"> compléter les jours non prévus avec le simulateur</label></div>
+    <div class="sim-note">CA ${Ty} issu du calendrier Prévision CA : <span class="bd-src bd-j"></span>${nJ} mois complets · <span class="bd-src bd-s"></span>${nP} partiels · <span class="bd-src bd-n"></span>${nN} sans prévision.
+      <a style="cursor:pointer;text-decoration:underline;margin-left:8px" onclick="setTab('prevca')">Ouvrir la Prévision CA (calendrier et simulation) →</a></div>
     <div class="sim-kpis">${kp('CA alim. ' + Ty, pvEur(A), refT ? evC(ev(A, refT.alim)) : '')}${kp('Marge brute', bdP(A ? tot('marge') / A : null), pvEur(tot('marge')))}${kp('Main-d\'œuvre', bdP(A ? tot('mo') / A : null), pvEur(tot('mo')))}
-      ${kp('PAC', bdP(A ? tot('pac') / A : null), pvEur(tot('pac')) + ' ' + (refT ? evC(ev(tot('pac'), refT.pac)) : ''))}${kp('Cash flow', pvEur(tot('cf')), refT ? evC(ev(tot('cf'), refT.cf)) : '')}${kp('Résultat net', pvEur(tot('rn')), refT ? evC(ev(tot('rn'), refT.rn)) : '')}</div>
-    <div class="sim-h">Compte de résultat prévisionnel ${Ty}</div>
-    <div class="sim-wrap"><table class="bd"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th>% CA alim.</th></tr></thead><tbody>${srcRow}${lines}</tbody></table></div>
+      ${kp('PAC', bdP(A ? tot('pac') / A : null), pvEur(tot('pac')) + ' ' + (refT ? evC(ev(tot('pac'), refT.pac)) : ''))}${kp('Cash flow', pvEur(tot('cf')), bdP(A ? tot('cf') / A : null) + ' du CA ' + (refT ? evC(ev(tot('cf'), refT.cf)) : ''))}${kp('Résultat net', pvEur(tot('rn')), bdP(A ? tot('rn') / A : null) + ' du CA ' + (refT ? evC(ev(tot('rn'), refT.rn)) : ''))}</div>
+    <div class="sim-h" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>Compte de résultat prévisionnel ${Ty} <small style="text-transform:none;letter-spacing:0;font-weight:600">(% = part du CA alimentaire du mois)</small></span><span style="display:inline-flex">${vBtn('e', '€', '8px 0 0 8px')}${vBtn('ep', '€ + %', '0')}${vBtn('p', '% du CA', '0 8px 8px 0')}</span></div>
+    <div class="sim-wrap"><table class="bd"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th>${view === 'e' ? '<th>% CA alim.</th>' : ''}</tr></thead><tbody>${srcRow}${n1Row}${evRow}${lines}</tbody></table></div>
+    <div class="hint" style="margin-top:6px">* mois de ${Ty - 1} encore incomplet (jours saisis / jours du mois au survol) : l'évolution n'est calculée que sur les mois complets.</div>
+    <details class="sim-d" open><summary>Équipe de direction : salaires par poste</summary>
+      <div class="hint" style="margin:6px 0 8px">Saisis un poste par ligne avec les <b>initiales</b> de la personne (jamais son nom) : brut mensuel, mois d'effet (revalorisation, arrivée ; départ = 0 à partir du mois) et prime annuelle. Le total alimente la ligne « Main d'œuvre brute managers » du compte de résultat ; les charges sociales managers s'y appliquent. <b>Ces montants restent sur cet appareil</b> : ils ne sont ni envoyés au Sheet ni publiés (« Appliquer » n'enregistre que le coût de main-d'œuvre en % du CA).</div>
+      <label style="font-size:.78rem"><input type="checkbox" ${edg.on ? 'checked' : ''} onchange="bdEdgOn(this.checked)"> utiliser ces salaires pour la ligne « Main d'œuvre brute managers »${edg.on && !edgM ? ' <small style="color:var(--muted)">(aucun salaire saisi : la ligne reste celle des hypothèses)</small>' : ''}</label>
+      ${edg.rows.length ? `<div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:760px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Brut mensuel (€)</th><th class="l">À partir de</th><th>Prime annuelle (€)</th><th>Coût ${Ty} (€)</th><th></th></tr></thead><tbody>${edgRows}<tr class="tot"><td class="l">Total équipe de direction</td><td></td><td></td><td></td><td></td><td></td><td>${bdE(edgTotal)}</td><td></td></tr></tbody></table></div>` : '<div class="hint" style="margin-top:8px">Aucun poste saisi.</div>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${BD_POSTES.map(po => `<button class="step" onclick="bdEdgAdd('${po}')">+ ${po}</button>`).join('')}<button class="step" onclick="bdEdgPreset()" title="1 directeur, 2 adjoints, 2 assistants, 4 managers (comme le classeur)">Structure type du classeur</button></div>
+      ${edg.rows.length ? `<details class="sim-d"><summary>Salaires mois par mois (ajustements)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Poste · initiales</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${edgGrid}${edgTotRows}</tbody></table></div></details>` : ''}
+    </details>
     <details class="sim-d" open><summary>Hypothèses par ligne : montant (€) ou % du CA</summary>
       <div class="hint" style="margin:6px 0 8px">Pour chaque ligne, choisis de saisir un <b>montant annuel</b> (réparti sur les mois selon le profil repris du classeur) ou un <b>% du CA</b> (qui suit le CA de chaque mois). Basculer d'un mode à l'autre convertit la valeur sans changer le résultat.</div>
       <div class="sim-wrap"><table class="sim" style="min-width:640px"><thead><tr><th>Ligne</th><th style="text-align:center">Saisie en</th><th>Valeur</th><th>Année (€)</th><th>% CA alim.</th></tr></thead><tbody>${hypRows}</tbody></table></div>
@@ -1808,10 +1927,11 @@ function renderBudget() {
       <div class="f"><label>Évolution des montants fixes (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.infl || 0)}" onchange="bdSet('infl',this.value,'pct')"></div></div></details>
     <details class="sim-d"><summary>Montants mois par mois (lignes saisies en €)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne (€ / mois)</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${fixRows}</tbody></table></div></details>
     <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button><button class="step" onclick="bdExport()">⬇ Excel (PNL)</button><span class="save-msg" id="bdApplyMsg"></span></div>
-    <div class="hint">« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net. Les hypothèses sont gardées sur cet appareil.</div>`;
+    <div class="hint">« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net (ratios en % du CA alimentaire). Les hypothèses et les salaires sont gardés sur cet appareil.</div>`;
 }
 
 async function bdApply() {
+  if (!accCan('budget')) return;
   const r = curResto, Ty = +SIM.ty, o = bdParams(r), ca = bdCa(r, Ty), L = bdCompute(o.p, ca.alim), name = RESTOS.find(x => x[0] === r)[1];
   const msg = (c, t) => { const m = document.getElementById('bdApplyMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } };
   const rows = [], bad = [];
@@ -1829,11 +1949,14 @@ async function bdApply() {
 }
 
 async function bdExport() {
+  if (!accCan('budget')) return;
   const r = curResto, Ty = +SIM.ty, o = bdParams(r), ca = bdCa(r, Ty), L = bdCompute(o.p, ca.alim), name = RESTOS.find(x => x[0] === r)[1], A = L.alim.reduce((a, b) => a + b, 0);
   const rows = [[{ v: `Budget & PNL ${Ty} — ${name}`, s: 'head' }], [], [{ v: 'Ligne', s: 'gris' }, ...MN.map(m => ({ v: m, s: 'gris' })), { v: 'Année', s: 'gris' }, { v: '% CA alim.', s: 'gris' }]];
   for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); rows.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map(v => ({ v: Math.round(v * 100) / 100, s: x.b ? 'eurb' : 'eur' })), { v: Math.round(t * 100) / 100, s: 'eurb' }, A ? { v: t / A, s: 'pct' } : '']); }
+  const prow = [[{ v: `Budget & PNL ${Ty} — ${name} : % du CA alimentaire`, s: 'head' }], [], [{ v: 'Ligne', s: 'gris' }, ...MN.map(m => ({ v: m, s: 'gris' })), { v: 'Année', s: 'gris' }]];
+  for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); prow.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map((v, i) => L.alim[i] ? { v: v / L.alim[i], s: 'pct' } : ''), A ? { v: t / A, s: 'pct' } : '']); }
   try {
-    const blob = await xlsxBuild([{ name: `PNL ${Ty}`, rows, widths: [38, ...Array(12).fill(12), 14, 11], header: false, freeze: [1, 3] }]);
+    const blob = await xlsxBuild([{ name: `PNL ${Ty}`, rows, widths: [38, ...Array(12).fill(12), 14, 11], header: false, freeze: [1, 3] }, { name: `PNL ${Ty} en %`, rows: prow, widths: [38, ...Array(12).fill(10), 11], header: false, freeze: [1, 3] }]);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PNL_${Ty}_${r.replace(/\s+/g, '_')}.xlsx`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   } catch (e) { const m = document.getElementById('bdApplyMsg'); if (m) { m.className = 'save-msg err'; m.textContent = 'Export impossible : ' + e.message; } }
 }
@@ -1841,7 +1964,7 @@ async function bdExport() {
 // ── Démarrage ──
 document.getElementById('pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') checkPwd(); });
 (function(){ let ok=sessionStorage.getItem('mj_saisie')==='1';
-  if(!ok){ try{ if(localStorage.getItem('mj_remember')===PWD_HASH){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); ok=true; } }catch(e){} }
+  if(!ok){ try{ const rm=localStorage.getItem('mj_remember'), acc=rm&&ACCESS.find(a=>a.pwd_hash===rm); if(rm&&(rm===PWD_HASH||acc)){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); if(acc) accGrant(acc); ok=true; } }catch(e){} }
   if(ok) showApp(); })();
 </script>
 </body>
