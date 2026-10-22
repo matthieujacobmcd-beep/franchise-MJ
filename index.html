@@ -1193,6 +1193,7 @@ window.addEventListener('DOMContentLoaded', () => {
   <button class="espace-pill" data-esp="interventions" style="--e-color:#0d9488;--e-bg:rgba(13,148,136,.14)" onclick="switchEspace('interventions')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>Interventions</button>
   <button class="espace-pill" data-esp="formation" style="--e-color:#7c3aed;--e-bg:rgba(124,58,237,.14)" onclick="switchEspace('formation')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 2.5 9 2.5 12 0v-5"/></svg></span>Formation</button>
   <button class="espace-pill" data-esp="marketing" style="--e-color:#ea580c;--e-bg:rgba(234,88,12,.14)" onclick="switchEspace('marketing')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 15-5v12L3 13Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>Marketing</button>
+  <button class="espace-pill" data-esp="plancom" style="--e-color:#0891b2;--e-bg:rgba(8,145,178,.14)" onclick="switchEspace('plancom')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Plan de communication</button>
   <button class="espace-pill" data-esp="actualite" style="--e-color:#db2777;--e-bg:rgba(219,39,119,.14)" onclick="switchEspace('actualite')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z"/></svg></span>Actualité Restaurant</button>
 </div>
 
@@ -5743,6 +5744,8 @@ if (typeof FRANCHISE_CFG !== 'undefined' && typeof SheetAdapter !== 'undefined')
         localStorage.setItem('fmj_banners_cache', JSON.stringify(BANNERS));
       } catch (e) {}
     }
+    // Plan de communication : événements saisis dans le dashboard (onglet « PlanCom »)
+    if (Array.isArray(sheet.plancom) && typeof PLANCOM_SET === 'function') { try { PLANCOM_SET(sheet.plancom); } catch (e) { console.error('[Sheet] plan de communication', e); } }
     // Performance Restaurants : mois téléversés depuis la page de saisie (fusionnés avec ceux d'origine)
     if (sheet.performance && Array.isArray(sheet.performance.months) && typeof PERFORMANCE_DATA !== 'undefined' && PERFORMANCE_DATA) {
       try {
@@ -7660,6 +7663,206 @@ function qhInitChart(canvas) {
 }
 </script>
 
+<!-- ════════ ESPACE : PLAN DE COMMUNICATION ════════ -->
+<style>
+.pc-top { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:12px; }
+.pc-top select, .pc-mb input, .pc-mb textarea, .pc-mb select { font-family:inherit; font-size:.86rem; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); box-sizing:border-box; }
+.pc-nav { display:inline-flex; align-items:center; gap:6px; }
+.pc-nav button, .pc-btn { font-family:inherit; font-size:.82rem; font-weight:700; padding:8px 12px; border:1.5px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); cursor:pointer; }
+.pc-nav b { min-width:150px; text-align:center; font-size:1rem; text-transform:capitalize; }
+.pc-add { background:#0891b2; border-color:#0891b2; color:#fff; margin-left:auto; }
+.pc-seg { display:inline-flex; } .pc-seg button { border-radius:0; } .pc-seg button:first-child { border-radius:9px 0 0 9px; } .pc-seg button:last-child { border-radius:0 9px 9px 0; } .pc-seg button.on { background:#0891b2; border-color:#0891b2; color:#fff; }
+.pc-legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.pc-chip-f { display:inline-flex; align-items:center; gap:6px; font-size:.76rem; font-weight:700; padding:5px 10px; border-radius:999px; border:1.5px solid var(--tc); color:var(--text); background:transparent; cursor:pointer; font-family:inherit; }
+.pc-chip-f i { width:10px; height:10px; border-radius:50%; background:var(--tc); display:inline-block; } .pc-chip-f.on { background:color-mix(in srgb, var(--tc) 16%, transparent); } .pc-chip-f:not(.on) { opacity:.45; }
+.pc-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.pc-dh { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:center; padding:2px 0; } .pc-dh.we { color:#2563eb; }
+.pc-day { min-height:104px; border:1.5px solid var(--border); border-radius:10px; padding:5px 6px; background:var(--card); cursor:pointer; display:flex; flex-direction:column; gap:3px; min-width:0; }
+.pc-day:hover { border-color:#0891b2; } .pc-day.out { background:transparent; border-style:dashed; opacity:.55; cursor:default; } .pc-day.we { background:color-mix(in srgb, #3b82f6 6%, var(--card)); }
+.pc-day.today { border-color:#0891b2; border-width:2px; } .pc-dn { font-size:.78rem; font-weight:800; color:var(--text); } .pc-day.today .pc-dn { color:#0891b2; }
+.pc-ev { display:block; width:100%; text-align:left; font-family:inherit; font-size:.68rem; font-weight:700; line-height:1.25; padding:3px 6px; border:0; border-left:3px solid var(--tc); border-radius:5px; background:color-mix(in srgb, var(--tc) 14%, transparent); color:var(--text); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pc-more { font-size:.64rem; font-weight:700; color:var(--muted); padding:1px 6px; }
+.pc-list { display:flex; flex-direction:column; gap:8px; } .pc-lrow { display:grid; grid-template-columns:96px 1fr auto; gap:6px 12px; align-items:start; border:1.5px solid var(--border); border-left:4px solid var(--tc); border-radius:10px; padding:9px 12px; background:var(--card); }
+.pc-ld { font-weight:800; font-size:.82rem; } .pc-ld small { display:block; font-weight:600; color:var(--muted); font-size:.68rem; text-transform:capitalize; } .pc-lt { font-size:.84rem; font-weight:700; } .pc-lt small { display:block; font-weight:500; color:var(--muted); font-size:.74rem; margin-top:2px; line-height:1.4; }
+.pc-empty { text-align:center; color:var(--muted); padding:34px 10px; font-size:.86rem; }
+.pc-note { font-size:.72rem; color:var(--muted); margin-top:10px; line-height:1.5; } .pc-status { font-size:.78rem; font-weight:700; margin-left:6px; } .pc-status.ok { color:var(--green); } .pc-status.err { color:var(--red); }
+.pc-modal { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:9000; display:none; align-items:flex-start; justify-content:center; padding:4vh 12px; overflow:auto; }
+.pc-modal.show { display:flex; } .pc-box { background:var(--card); color:var(--text); border-radius:16px; width:min(640px,100%); box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.pc-mh { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1.5px solid var(--border); font-size:1rem; } .pc-mh button { border:0; background:transparent; font-size:1.2rem; cursor:pointer; color:var(--muted); }
+.pc-mb { padding:14px 18px; display:flex; flex-direction:column; gap:6px; } .pc-mb label { font-size:.7rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:6px; }
+.pc-mb input, .pc-mb textarea { width:100%; } .pc-mb textarea { min-height:70px; resize:vertical; }
+.pc-types { display:flex; flex-wrap:wrap; gap:8px; } .pc-types button { font-family:inherit; font-size:.8rem; font-weight:700; padding:8px 12px; border-radius:999px; border:1.5px solid var(--tc); background:transparent; color:var(--text); cursor:pointer; } .pc-types button.on { background:var(--tc); color:#fff; }
+.pc-restos { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px 10px; } .pc-restos label { display:flex; align-items:center; gap:7px; font-size:.82rem; font-weight:600; text-transform:none; letter-spacing:0; color:var(--text); margin:0; cursor:pointer; } .pc-restos input { width:auto; }
+.pc-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; } .pc-msg { font-size:.8rem; font-weight:700; min-height:1.1em; } .pc-msg.err { color:var(--red); } .pc-msg.ok { color:var(--green); }
+.pc-mf { display:flex; gap:8px; align-items:center; padding:12px 18px 16px; border-top:1.5px solid var(--border); flex-wrap:wrap; } .pc-save { background:#0891b2 !important; border-color:#0891b2 !important; color:#fff !important; } .pc-del { color:var(--red) !important; border-color:var(--red) !important; }
+@media (max-width:700px) { .pc-grid, .pc-dh { display:none !important; } .pc-nav b { min-width:0; flex:1; } .pc-add { margin-left:0; width:100%; } .pc-row { grid-template-columns:1fr; } .pc-lrow { grid-template-columns:78px 1fr; } .pc-lrow .pc-la { grid-column:1/-1; } .pc-modal { padding:0; } .pc-box { border-radius:0; min-height:100%; } .pc-top select { flex:1 1 100%; } }
+@media (min-width:701px) { .pc-onlymobile { display:none; } }
+@media (max-width:700px) { .pc-viewseg { display:none !important; } }
+</style>
+<div id="espace-plancom" style="display:none">
+  <div class="main">
+    <div class="esp-page-head">
+      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(8,145,178,.14);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#0891b2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Plan de communication</div>
+      <div style="font-size:.78rem;color:var(--muted)">Réunions, formations et événements de chaque restaurant, enregistrés dans le Google Sheet et visibles de tous.</div>
+    </div>
+    <div class="esp-card" id="pcCard"></div>
+  </div>
+</div>
+<div class="pc-modal" id="pcModal" onclick="if(event.target===this)pcClose()">
+  <div class="pc-box" role="dialog" aria-modal="true" aria-labelledby="pcMTitle">
+    <div class="pc-mh"><b id="pcMTitle">Nouvel événement</b><button type="button" onclick="pcClose()" aria-label="Fermer">✕</button></div>
+    <div class="pc-mb">
+      <label>Type d'événement</label><div class="pc-types" id="pcMType"></div>
+      <label id="pcDetL">Détail</label><input id="pcDetail" list="pcDetList" maxlength="120" autocomplete="off"><datalist id="pcDetList"></datalist>
+      <label id="pcRestoL">Restaurant(s)</label><div class="pc-restos" id="pcMRestos"></div>
+      <div class="pc-row"><div><label>Début</label><input type="date" id="pcStart"></div><div><label>Fin (facultatif)</label><input type="date" id="pcEnd"></div><div><label>Heure (facultatif)</label><input id="pcTime" maxlength="30" placeholder="ex. 09:00 – 12:00"></div></div>
+      <label>Note (champ libre)</label><textarea id="pcNote" maxlength="500" placeholder="Lieu, participants, ordre du jour, précisions…"></textarea>
+      <div class="pc-msg" id="pcMsg"></div>
+    </div>
+    <div class="pc-mf"><button type="button" class="pc-btn pc-del" id="pcDel" onclick="pcDelete()" style="display:none">Supprimer</button><span style="flex:1"></span><button type="button" class="pc-btn" onclick="pcClose()">Annuler</button><button type="button" class="pc-btn pc-save" id="pcSaveBtn" onclick="pcSave()">Enregistrer</button></div>
+  </div>
+</div>
+<script>
+// ── Plan de communication : calendrier par restaurant (réunions manager / directeur, formations, événement libre) ──
+// Données : onglet « PlanCom » du Google Sheet (lues avec le reste du dashboard, écrites par l'Apps Script avec le mot de passe du dashboard).
+const PC_TYPES = [
+  { k: 'reunion_manager', l: 'Réunion manager', c: '#2563eb', i: '👥' },
+  { k: 'formation', l: 'Formation', c: '#16a34a', i: '🎓' },
+  { k: 'reunion_directeur', l: 'Réunion directeur', c: '#7c3aed', i: '🧭' },
+  { k: 'libre', l: 'Autre (champ libre)', c: '#ea580c', i: '📌' },
+];
+const PC_FORM = ['SST', 'Atelier gestion de quart', 'Atelier culture service'];
+const PC = { rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion_manager', busy: false };
+const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const pcEsc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+const pcT = k => PC_TYPES.find(t => t.k === k) || PC_TYPES[3];
+const pcIso = d => d.toISOString().slice(0, 10);
+const pcFmt = iso => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const pcDow = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+function pcNorm(r) {
+  const p = String(r.periode || '').slice(0, 10), f = r.fin ? String(r.fin).slice(0, 10) : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p) || !pcT(r.type) || !r.restaurant) return null;
+  return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type: String(r.type), detail: String(r.detail || ''), heure: String(r.heure || ''), note: String(r.note || '') };
+}
+const pcSame = (a, b) => ['periode', 'fin', 'restaurant', 'type', 'detail', 'heure', 'note'].every(k => (a[k] || '') === (b[k] || ''));
+function PLANCOM_SET(rows) {                                  // appelé à chaque lecture du Sheet : remplace les données et allège les modifications locales déjà confirmées
+  PC.rows = (rows || []).map(pcNorm).filter(Boolean);
+  const byId = Object.fromEntries(PC.rows.map(e => [e.id, e]));
+  PC.adds = PC.adds.filter(a => !byId[a.id]);
+  for (const id of Object.keys(PC.over)) if (!byId[id] || pcSame(byId[id], PC.over[id])) delete PC.over[id];
+  for (const id of [...PC.dels]) if (!byId[id]) PC.dels.delete(id);
+  if (typeof currentEspace !== 'undefined' && currentEspace === 'plancom') pcRender();
+}
+const pcAll = () => PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds);
+const pcShown = () => pcAll().filter(e => PC.types.has(e.type) && (PC.resto === 'ALL' || e.restaurant === PC.resto));
+const pcOn = (e, iso) => e.periode <= iso && (e.fin || e.periode) >= iso;
+function pcLabel(e, showResto) {
+  const t = pcT(e.type), main = e.type === 'libre' ? (e.detail || 'Événement') : t.l + (e.detail ? ' · ' + e.detail : '');
+  return `${t.i} ${main}${showResto ? ' · ' + restoShort(e.restaurant) : ''}`;
+}
+const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' + pcFmt(e.fin) : ''}${e.heure ? ' · ' + e.heure : ''}${e.note ? '\n' + e.note : ''}`;
+function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
+function pcRender() {
+  const card = document.getElementById('pcCard'); if (!card) return;
+  const [Y, M] = PC.ym.split('-').map(Number), view = PC.view || (window.matchMedia && matchMedia('(max-width:700px)').matches ? 'list' : 'cal');
+  const monthEv = pcShown().filter(e => e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`), allMonth = pcAll().filter(e => (PC.resto === 'ALL' || e.restaurant === PC.resto) && e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`);
+  const count = k => allMonth.filter(e => e.type === k).length, showResto = PC.resto === 'ALL';
+  const top = `<div class="pc-top"><select onchange="pcSetResto(this.value)" aria-label="Restaurant"><option value="ALL">Tous les restaurants</option>${RESTOS.map(r => `<option value="${pcEsc(r)}" ${PC.resto === r ? 'selected' : ''}>${pcEsc(restoDisplay(r))}</option>`).join('')}</select>
+      <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
+      <span class="pc-seg pc-viewseg"><button type="button" class="pc-btn ${view === 'cal' ? 'on' : ''}" onclick="pcView('cal')">Calendrier</button><button type="button" class="pc-btn ${view === 'list' ? 'on' : ''}" onclick="pcView('list')">Liste</button></span>
+      <button type="button" class="pc-btn pc-add" onclick="pcNew()">+ Ajouter un événement</button></div>
+    <div class="pc-legend">${PC_TYPES.map(t => `<button type="button" class="pc-chip-f ${PC.types.has(t.k) ? 'on' : ''}" style="--tc:${t.c}" onclick="pcToggleType('${t.k}')"><i></i>${t.l} (${count(t.k)})</button>`).join('')}</div>`;
+  let body = '';
+  if (view === 'cal') {
+    const first = `${PC.ym}-01`, lead = pcDow(first), nDays = new Date(Date.UTC(Y, M, 0)).getUTCDate(), today = pcIso(new Date());
+    let cells = PC_J.map((j, i) => `<div class="pc-dh ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pc-day out"></div>'.repeat(lead);
+    for (let d = 1; d <= nDays; d++) {
+      const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
+      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
+    }
+    body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
+  }
+  // liste (toujours rendue sous 700 px ; en option sur grand écran)
+  const sorted = monthEv.slice().sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
+  const list = sorted.length ? `<div class="pc-list">${sorted.map(e => `<div class="pc-lrow" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
+  card.innerHTML = top + body + (view === 'list' ? list : `<div class="pc-onlymobile">${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
+  const g = document.getElementById('pcGrid'); if (g) g.onclick = ev => { const b = ev.target.closest('[data-id]'); if (b) return pcEdit(b.dataset.id); const d = ev.target.closest('[data-day]'); if (d) pcNew(d.dataset.day); };
+  card.querySelectorAll('.pc-lrow [data-id]').forEach(b => { b.onclick = () => pcEdit(b.dataset.id); });
+}
+function pcStatus(c, t) { const s = document.getElementById('pcStatus'); if (s) { s.className = 'pc-status ' + c; s.textContent = t; } }
+function pcSetResto(v) { PC.resto = v; pcRender(); }
+function pcMonth(d) { const [y, m] = PC.ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + d, 1)); PC.ym = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`; pcRender(); }
+function pcToday() { PC.ym = pcIso(new Date()).slice(0, 7); pcRender(); }
+function pcView(v) { PC.view = v; pcRender(); }
+function pcToggleType(k) { if (PC.types.has(k)) { if (PC.types.size > 1) PC.types.delete(k); } else PC.types.add(k); pcRender(); }
+
+// ── Fenêtre d'ajout / modification ──
+function pcDetOptions(type) {
+  const used = [...new Set(pcAll().filter(e => e.type === type && e.detail).map(e => e.detail))];
+  return [...new Set((type === 'formation' ? PC_FORM : []).concat(used))];
+}
+function pcPickType(k) {
+  PC.mType = k; const t = pcT(k);
+  document.querySelectorAll('#pcMType button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  document.getElementById('pcDetL').textContent = k === 'formation' ? 'Formation * (SST, Atelier gestion de quart, Atelier culture service… ou autre)' : (k === 'libre' ? 'Titre de l’événement *' : 'Objet / ordre du jour (facultatif)');
+  document.getElementById('pcDetList').innerHTML = pcDetOptions(k).map(x => `<option value="${pcEsc(x)}">`).join('');
+  document.getElementById('pcDetail').placeholder = k === 'formation' ? 'ex. SST' : (k === 'libre' ? 'ex. Opération locale, visite, animation…' : '');
+}
+function pcOpen(ev) {
+  PC.edit = ev && ev.id ? ev : null;
+  const e = PC.edit, d = ev || {};
+  document.getElementById('pcMTitle').textContent = e ? 'Modifier l’événement' : 'Nouvel événement';
+  document.getElementById('pcMType').innerHTML = PC_TYPES.map(t => `<button type="button" data-k="${t.k}" style="--tc:${t.c}" onclick="pcPickType('${t.k}')">${t.i} ${t.l}</button>`).join('');
+  pcPickType(d.type || PC.mType || 'reunion_manager');
+  document.getElementById('pcDetail').value = d.detail || '';
+  const one = !!e, sel = d.restaurant ? [d.restaurant] : (PC.resto !== 'ALL' ? [PC.resto] : []);
+  document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles';
+  document.getElementById('pcMRestos').innerHTML = (one ? '' : `<label><input type="checkbox" id="pcAllR" onchange="document.querySelectorAll('#pcMRestos input[name=pcr]').forEach(i=>i.checked=this.checked)"> <b>Tous les restaurants</b></label>`) +
+    RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('');
+  document.getElementById('pcStart').value = d.periode || pcIso(new Date()); document.getElementById('pcEnd').value = d.fin || '';
+  document.getElementById('pcTime').value = d.heure || ''; document.getElementById('pcNote').value = d.note || '';
+  document.getElementById('pcMsg').textContent = ''; document.getElementById('pcMsg').className = 'pc-msg';
+  document.getElementById('pcDel').style.display = e ? '' : 'none'; document.getElementById('pcSaveBtn').disabled = false;
+  document.getElementById('pcModal').classList.add('show');
+}
+function pcNew(day) { if (day && day < '1970') return; pcOpen(day ? { periode: day } : null); }
+function pcEdit(id) { const e = pcAll().find(x => x.id === id); if (e) pcOpen(e); }
+function pcClose() { document.getElementById('pcModal').classList.remove('show'); PC.edit = null; }
+function pcMsg(c, t) { const m = document.getElementById('pcMsg'); m.className = 'pc-msg ' + c; m.textContent = t; }
+async function pcPost(body) {
+  const url = (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.apps_script_url) || '';
+  const c = new AbortController(), to = setTimeout(() => c.abort(), 60000);
+  try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(Object.assign({ pwd: PWD_HASH, auteur: 'dashboard' }, body)), signal: c.signal }); return await r.json(); }
+  catch (e) { return { ok: false, error: e.name === 'AbortError' ? 'délai dépassé' : e.message }; } finally { clearTimeout(to); }
+}
+async function pcSave() {
+  if (PC.busy) return;
+  const type = PC.mType, detail = document.getElementById('pcDetail').value.trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
+  const restos = [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
+  if (!restos.length) return pcMsg('err', 'Choisis au moins un restaurant.');
+  if (!start) return pcMsg('err', 'Indique la date de début.');
+  if (end && end < start) return pcMsg('err', 'La date de fin est avant le début.');
+  if ((type === 'formation' || type === 'libre') && !detail) return pcMsg('err', type === 'formation' ? 'Précise la formation (SST, atelier…).' : 'Donne un titre à l’événement.');
+  const base = { periode: start, fin: end, type, detail, heure: document.getElementById('pcTime').value.trim(), note: document.getElementById('pcNote').value.trim() };
+  const rows = restos.map(r => Object.assign({ restaurant: r }, base, PC.edit ? { id: PC.edit.id } : {}));
+  PC.busy = true; document.getElementById('pcSaveBtn').disabled = true; pcMsg('', 'Enregistrement…');
+  const j = await pcPost({ action: 'ev_save', rows });
+  PC.busy = false; document.getElementById('pcSaveBtn').disabled = false;
+  if (!j.ok) return pcMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + (/action inconnue|mot de passe/.test(j.error || '') ? ' — l’Apps Script doit être mis à jour' + (/mot de passe/.test(j.error) ? ' / reconnecte-toi.' : '.') : ''));
+  rows.forEach((r, i) => { const e = pcNorm(Object.assign({}, r, { id: (j.ids || [])[i] || r.id })); if (!e) return; if (PC.edit) { const k = PC.adds.findIndex(a => a.id === e.id); if (k >= 0) PC.adds[k] = e; else PC.over[e.id] = e; } else PC.adds.push(e); });
+  PC.ym = start.slice(0, 7); pcClose(); pcRender(); pcStatus('ok', `✓ ${rows.length > 1 ? rows.length + ' événements enregistrés' : 'Événement enregistré'}`);
+}
+async function pcDelete() {
+  if (!PC.edit || PC.busy || !confirm('Supprimer cet événement ?\n' + pcLabel(PC.edit, true) + ' — ' + pcFmt(PC.edit.periode))) return;
+  PC.busy = true; pcMsg('', 'Suppression…');
+  const id = PC.edit.id, j = await pcPost({ action: 'ev_delete', ids: [id] }); PC.busy = false;
+  if (!j.ok) return pcMsg('err', 'Erreur : ' + (j.error || 'suppression refusée'));
+  PC.dels.add(id); PC.adds = PC.adds.filter(a => a.id !== id); pcClose(); pcRender(); pcStatus('ok', '✓ Événement supprimé');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('pcModal').classList.contains('show')) pcClose(); });
+</script>
+
 <!-- ════════ INDICES DE GESTION : extraction imprimable (A4, 2 pages) ════════ -->
 <style>
 #igModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:8vh 14px; overflow-y:auto; }
@@ -8598,7 +8801,7 @@ body.dark-mode .search-kpi-pick .skp.on { color:#fff; }
 let currentEspace = 'pilotage';
 function switchEspace(name) {
   currentEspace = name;
-  ['pilotage','interventions','formation','marketing','actualite','performance'].forEach(e => {
+  ['pilotage','interventions','formation','marketing','actualite','performance','plancom'].forEach(e => {
     const el = document.getElementById('espace-' + e);
     if (el) el.style.display = (e === name) ? '' : 'none';
   });
@@ -8608,7 +8811,7 @@ function switchEspace(name) {
   const bE = document.getElementById('btnExporter'); if (bE) bE.style.display = (name === 'pilotage' || name === 'performance') ? '' : 'none';
   const bI = document.getElementById('btnIndices'); if (bI) bI.style.display = (name === 'pilotage') ? '' : 'none';
   // Libellé de l'en-tête selon l'espace
-  const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance' };
+  const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication' };
   const lblEl = document.getElementById('espaceLabel');
   if (lblEl) lblEl.textContent = LBL[name] || '';
   // La date « Données au… » ne concerne que le Pilotage
@@ -8620,6 +8823,7 @@ function switchEspace(name) {
   if (name === 'marketing') loadMarketing();
   if (name === 'actualite') loadActu();
   if (name === 'performance') loadPerformance();
+  if (name === 'plancom') loadPlanCom();
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
 }
 </script>
@@ -8640,7 +8844,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261020-144915';
+const BUILD_VERSION = '20261022-124300';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

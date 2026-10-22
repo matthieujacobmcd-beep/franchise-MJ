@@ -52,6 +52,7 @@
   .tab{ flex-shrink:0; border:1.5px solid var(--border); border-bottom:none; background:var(--card2); color:var(--muted); font-family:inherit; font-size:.82rem; font-weight:700; padding:10px 18px; border-radius:12px 12px 0 0; cursor:pointer; }
   .tab.on{ background:#fff; color:var(--gold); border-color:var(--border); position:relative; top:1px; }
   .wrap{ max-width:1100px; margin:0 auto; padding:0 22px 60px; }
+  body.pv-wide .wrap, body.pv-wide .tab-bar{ max-width:1500px; }                  /* calendrier de prévision et budget : toute la largeur utile sur grand écran */
   .panel{ background:#fff; border:1.5px solid var(--border); border-radius:0 16px 16px 16px; padding:22px; box-shadow:0 2px 14px rgba(0,0,0,.05); }
   .panel-head{ display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
   .panel-title{ font-size:1.05rem; font-weight:800; }
@@ -98,23 +99,35 @@
   .pv-recap{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:6px 0 14px; }
   .pv-kpi{ background:var(--card2); border-radius:12px; padding:10px 12px; font-size:.72rem; color:var(--muted); } .pv-kpi b{ display:block; font-size:1.05rem; color:var(--text); margin:2px 0; } .pv-kpi i{ font-style:normal; font-size:.66rem; }
   .pv-obj{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; padding:14px; background:#fffaf0; border:1.5px solid #f0d58a; border-radius:12px; }
-  .pv-cal{ display:grid; grid-template-columns:repeat(7,minmax(128px,1fr)); gap:6px; overflow-x:auto; }
-  .pv-h{ font-size:.7rem; font-weight:800; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.5px; }
-  .pv-day{ border:1.5px solid var(--border); border-radius:10px; padding:6px 7px; font-size:.68rem; color:var(--muted); background:#fff; } .pv-day.past{ background:var(--card2); }
+  .pv-bar{ display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; margin:0 0 10px; padding:10px 12px; background:var(--card2); border:1.5px solid var(--border); border-radius:12px; font-size:.78rem; font-weight:700; }
+  .pv-bar select{ font-family:inherit; font-size:.84rem; padding:7px 9px; border:1.5px solid var(--border); border-radius:8px; margin-left:4px; background:#fff; }
+  .pv-barh{ font-size:.68rem; font-weight:500; color:var(--muted); flex:1 1 260px; line-height:1.4; }
+  .pv-cal{ display:grid; grid-template-columns:repeat(7,minmax(148px,1fr)) minmax(132px,.85fr); gap:6px; overflow-x:auto; }
+  .pv-h{ font-size:.7rem; font-weight:800; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.5px; } .pv-hw{ color:#6d28d9; }
+  .pv-day{ border:1.5px solid var(--border); border-radius:10px; padding:7px 8px; font-size:.68rem; color:var(--muted); background:#fff; display:flex; flex-direction:column; min-width:0; } .pv-day.past{ background:var(--card2); }
   .pv-dn{ font-weight:800; font-size:.85rem; color:var(--text); } .pv-ref b,.pv-real b{ color:var(--text); } .pv-real{ color:#166534; }
-  .pv-in{ display:flex; gap:3px; margin:4px 0 2px; } .pv-in input{ width:100%; min-width:0; font-family:inherit; font-size:.8rem; padding:5px 6px; border:1.5px solid var(--border); border-radius:8px; } .pv-in select{ font-family:inherit; font-size:.72rem; border:1.5px solid var(--border); border-radius:8px; padding:0 2px; }
-  .pv-delta{ min-height:14px; font-size:.64rem; }
+  .pv-in{ display:grid; gap:4px; margin:6px 0 2px; }
+  .pv-in input{ width:100%; min-width:0; box-sizing:border-box; height:36px; font-family:inherit; font-size:.95rem; font-weight:700; padding:6px 8px; border:1.5px solid var(--border); border-radius:8px; -moz-appearance:textfield; appearance:textfield; }
+  .pv-in input::-webkit-outer-spin-button, .pv-in input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .pv-in select.pv-unit{ width:100%; height:28px; font-family:inherit; font-size:.7rem; border:1.5px solid var(--border); border-radius:8px; padding:0 4px; background:#fff; color:var(--muted); }
+  .pv-tp{ display:none; grid-template-columns:1fr 1fr; gap:4px; } .pv-day[data-u="t"] .pv-i1{ display:none; } .pv-day[data-u="t"] .pv-tp{ display:grid; } .pv-tp input{ padding:6px 5px; font-size:.86rem; }
+  .pv-ca{ min-height:2rem; margin-top:5px; } .pv-ca span{ display:block; font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); } .pv-ca b{ display:block; font-size:1.25rem; line-height:1.15; color:#6d28d9; letter-spacing:-.2px; }
+  .pv-tot{ font-size:.7rem; color:var(--text); font-weight:700; min-height:.9rem; }
+  .pv-delta{ min-height:14px; font-size:.66rem; } .pv-delta b.up{ color:var(--green); } .pv-delta b.down{ color:var(--red); }
   .pv-h.we{ color:#2563eb; } .pv-day.we{ background:#eff6ff; border-color:#bfdbfe; } .pv-day.we .pv-dn{ color:#1d4ed8; } .pv-dn span{ font-size:.62rem; font-weight:700; margin-left:5px; text-transform:uppercase; }
   .pv-day.fer{ background:#fef2f2; border-color:#fca5a5; border-width:2px; } .pv-day.fer .pv-dn{ color:#b91c1c; } .pv-fer{ font-size:.62rem; font-weight:800; color:#b91c1c; margin:1px 0 2px; }
-  .pv-ref small{ display:block; font-size:.58rem; color:#94a3b8; line-height:1.1; margin-bottom:2px; }
-  .pv-tot{ font-size:.64rem; color:var(--text); font-weight:700; } .pv-ref em{ font-style:normal; font-size:.58rem; background:#fde9c8; color:#7a4a00; border-radius:4px; padding:0 4px; margin-left:3px; }
+  .pv-ref small{ display:block; font-size:.58rem; color:#94a3b8; line-height:1.15; margin-bottom:2px; }
+  .pv-ref em{ font-style:normal; font-size:.58rem; background:#fde9c8; color:#7a4a00; border-radius:4px; padding:0 4px; margin-left:3px; }
+  .pv-wk{ border:1.5px solid #c4b5fd; background:#f5f3ff; border-radius:10px; padding:9px 10px; display:flex; flex-direction:column; min-width:0; }
+  .pv-wkh{ font-size:.7rem; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:.4px; } .pv-wkv{ font-size:1.3rem; font-weight:800; color:#4c1d95; margin:4px 0; line-height:1.1; } .pv-wks{ font-size:.66rem; color:var(--muted); line-height:1.55; } .pv-wks b.up{ color:var(--green); } .pv-wks b.down{ color:var(--red); }
   .pv-wd{ display:none; }
-  @media (max-width:1000px){                       /* calendrier en liste (un jour par ligne) tant que 7 colonnes ne tiennent pas */
-    .pv-cal{ grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); overflow:visible; gap:8px; } .pv-h, .pv-empty{ display:none; }
+  @media (max-width:1320px){                       /* calendrier en cartes (une carte par jour, total de semaine en fin de semaine) tant que 8 colonnes ne tiennent pas */
+    .pv-cal{ grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); overflow:visible; gap:8px; } .pv-h, .pv-empty{ display:none; }
     .pv-day{ padding:10px 12px; font-size:.78rem; } .pv-dn{ font-size:1rem; } .pv-wd{ display:inline; }
-    .pv-in input{ font-size:1rem; padding:9px 10px; } .pv-in select{ font-size:.9rem; padding:0 6px; }
+    .pv-in{ grid-template-columns:1fr 112px; align-items:center; } .pv-in .pv-tp{ grid-column:1; } .pv-in select.pv-unit{ grid-column:2; grid-row:1; height:36px; font-size:.82rem; }
+    .pv-wk{ grid-column:1/-1; flex-direction:row; flex-wrap:wrap; align-items:center; gap:4px 18px; } .pv-wkv{ margin:0; } .pv-ref small{ font-size:.64rem; }
   }
-  @media (max-width:700px){ .pv-obj{ grid-template-columns:1fr; } .pv-recap{ grid-template-columns:1fr 1fr; } .pv-cal{ grid-template-columns:1fr; } }
+  @media (max-width:700px){ .pv-obj{ grid-template-columns:1fr; } .pv-recap{ grid-template-columns:1fr 1fr; } .pv-cal{ grid-template-columns:1fr; } .pv-in{ grid-template-columns:1fr; } .pv-in select.pv-unit{ grid-column:1; grid-row:auto; height:40px; font-size:.9rem; } .pv-in input{ font-size:1rem; height:42px; } .pv-bar select{ width:100%; margin:4px 0 0; } .pv-bar label{ flex:1 1 100%; } }
   .foot{ flex-wrap:wrap; }
   @media (max-width:700px){
     .topbar{ position:static; padding:10px 16px; gap:10px; }
@@ -386,7 +399,7 @@ function setResto(r){
   document.getElementById('restoBadge').style.display='flex';
   hidePicker(); renderPanel();
 }
-function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto) renderPanel(); }
+function setTab(t){ curTab=t; document.body.classList.toggle('pv-wide',t==='prevca'||t==='budget'); document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto) renderPanel(); }
 
 function weekOptions(year,sel){
   let o=''; for(let w=1;w<=weeksInYear(year);w++){ const mon=weekMonday(year,w), sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
@@ -962,7 +975,9 @@ let PREVJ = null, PREVT = null, ALIMM = null;              // prévisions enregi
 const PV = { ym: null, resto: null, vals: {}, objU: 'e', w: '7030', coef: 1.01 };
 const PV_MIN = '2026-11', PV_YMAX = new Date().getFullYear() + 6, PV_MAX = PV_YMAX + '-12';   // saisie à partir de novembre 2026 et jusqu'à 6 ans après l'année en cours (glisse avec le temps)
 // ── Brouillons : les prévisions saisies mais pas encore enregistrées ne se perdent plus quand on change de mois, de restaurant ou qu'on recharge la page ──
-const PV_DKEY = 'mj_pvdraft';
+const PV_DKEY = 'mj_pvdraft', PV_RKEY = 'py_pvround';
+PV.step = (() => { try { const v = +localStorage.getItem(PV_RKEY); return [1, 10, 50, 100].includes(v) ? v : 10; } catch (e) { return 10; } })();   // arrondi appliqué à chaque jour
+PV.unit = 'e';                                               // unité de saisie des cases (€, % N-1, % du mois, TAC'S × PM)
 PV.drafts = (() => { try { const d = JSON.parse(localStorage.getItem(PV_DKEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
 const pvKey = (r, ym) => r + '|' + ym;
 function pvSavedVals(r, ym) { const o = {}; for (const iso of pvDays(ym)) { const v = ((PREVJ || {})[r] || {})[iso]; if (v != null) o[iso] = v; } return o; }
@@ -1024,7 +1039,8 @@ function pvRoundTo(vals, target, step) {
 }
 function pvRefLine(lbl, r, iso, k, v) {                     // valeur du jour équivalent + sa date (même jour de la semaine) et son statut férié
   const ri = pvShift(iso, k), dow = PV_JOURS[(new Date(_pvT(ri)).getUTCDay() + 6) % 7], f = pvFerie(ri), isPrev = pvCa(r, ri) == null && v != null;
-  return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · 🎉 ${f}` : ''}</small></div>`;
+  const T = typeof simT === 'function' ? simT(r, ri) : null, A = pvCa(r, ri), tp = T > 0 && A > 0 ? ` · ${Math.round(T).toLocaleString('fr-FR')} TAC'S · PM ${(A / T).toFixed(2).replace('.', ',')} €` : '';
+  return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · 🎉 ${f}` : ''}${tp}</small></div>`;
 }
 function pvInit() {
   const now = new Date();
@@ -1050,16 +1066,24 @@ function renderPrevCa() {
   const [y, m] = PV.ym.split('-').map(Number), days = pvDays(PV.ym), name = RESTOS.find(r => r[0] === curResto)[1];
   const mois = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase()), minM = y === 2026 ? 11 : 1, maxM = 12;
   const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, today = new Date().toISOString().slice(0, 10);
-  let cells = PV_JOURS.map((j, i) => `<div class="pv-h ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pv-empty"></div>'.repeat(lead);
+  // calendrier : 7 jours + une colonne « Semaine » en bout de ligne (total prévu de la semaine)
+  let cells = PV_JOURS.map((j, i) => `<div class="pv-h ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pv-h pv-hw">Semaine</div>' + '<div class="pv-empty"></div>'.repeat(lead);
+  const wkCell = mon => { const w = simIsoWeek(mon); return `<div class="pv-wk" id="pvw_${mon}"><div class="pv-wkh">Semaine ${w.w}</div><div class="pv-wkv" id="pvwv_${mon}">—</div><div class="pv-wks" id="pvws_${mon}"></div></div>`; };
+  let inRow = lead, curMon = null;
   for (const iso of days) {
     const n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), real = pvCa(curResto, iso), v = PV.vals[iso];
-    const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, fer = pvFerie(iso);
-    cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}"><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
+    const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, fer = pvFerie(iso), mon = pvShift(iso, -dow); curMon = mon;
+    cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}" id="pvc_${iso}" data-u="${PV.unit}"><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
       ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}
       ${real != null ? `<div class="pv-real">Réel <b>${pvEur(real)}</b></div>` : ''}
-      <div class="pv-in"><input type="number" step="any" id="pvi_${iso}" value="${v != null ? Math.round(v * 100) / 100 : ''}" oninput="pvDayInput('${iso}')" placeholder="prévision"><select id="pvu_${iso}" onchange="pvUnit('${iso}')"><option value="e">€</option><option value="p">% N-1</option><option value="m">% du mois</option></select></div>
-      <div class="pv-delta" id="pvd_${iso}"></div><div class="pv-tot" id="pvt_${iso}"></div></div>`;
+      <div class="pv-in"><input type="number" step="any" inputmode="decimal" class="pv-i1" id="pvi_${iso}" value="${v != null ? Math.round(v * 100) / 100 : ''}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="CA prévu" aria-label="Prévision du ${+iso.slice(8)}">
+        <span class="pv-tp"><input type="number" step="any" inputmode="numeric" id="pvq_${iso}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="TAC'S" aria-label="TAC'S prévus"><input type="number" step="any" inputmode="decimal" id="pvp_${iso}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="PM €" aria-label="Panier moyen prévu"></span>
+        <select class="pv-unit" id="pvu_${iso}" onchange="pvUnit('${iso}')" aria-label="Unité de saisie"><option value="e">€</option><option value="p">% vs N-1</option><option value="m">% du mois</option><option value="t">TAC'S × PM</option></select></div>
+      <div class="pv-ca" id="pvk_${iso}"></div><div class="pv-tot" id="pvt_${iso}"></div><div class="pv-delta" id="pvd_${iso}"></div></div>`;
+    inRow++;
+    if (dow === 6) { cells += wkCell(mon); inRow = 0; curMon = null; }
   }
+  if (curMon) { cells += '<div class="pv-empty"></div>'.repeat(7 - inRow) + wkCell(curMon); }
   p.innerHTML = `
     <div class="panel-head"><div><div class="panel-title">Prévision CA alimentaire · ${escH(name)}</div>
       <div class="last-saisie">Saisis le CA NET ALIMENTAIRE prévu : le CA net total s'en déduit (alimentaire × coefficient, +1 % en général). Chaque jour affiche le CA alimentaire du jour équivalent N-1 et N-2 (même jour de la semaine).</div></div>
@@ -1072,16 +1096,20 @@ function renderPrevCa() {
     <div class="pv-recap" id="pvRecap"></div>
     <div class="pv-obj"><div class="field"><label>Objectif du mois (CA alimentaire)</label><div style="display:flex;gap:6px"><input type="number" step="any" id="pvObj" placeholder="ex. 450000 ou 3"><select id="pvObjU" style="max-width:90px"><option value="e">€</option><option value="p">% vs N-1</option></select></div></div>
       <div class="field"><label>Ventilation sur les jours selon</label><select id="pvW"><option value="1000">N-1 seul</option><option value="7030" selected>N-1 (70 %) + N-2 (30 %)</option><option value="5050">N-1 et N-2 à parts égales</option></select></div>
-      <div class="field"><label>Arrondi</label><div style="display:flex;gap:6px"><select id="pvRnd"><option value="1">1 €</option><option value="10" selected>10 €</option><option value="50">50 €</option><option value="100">100 €</option></select><button class="step" style="white-space:nowrap" onclick="pvArrondir()">Arrondir les jours saisis</button></div><div class="hint">Appliqué à la ventilation ; le total reste calé</div></div>
+      <div class="field"><label>Arrondi des jours déjà saisis</label><button class="step" style="white-space:nowrap" onclick="pvArrondir()">Arrondir (total calé)</button><div class="hint">Au pas choisi dans la barre au-dessus du calendrier</div></div>
       <div class="field"><label>CA net total = CA alimentaire ×</label><input type="number" step="0.001" id="pvCoef" value="${PV.coef}" oninput="pvCoefChg()"><div class="hint">1,01 = +1 % (habituel)</div></div>
       <div class="field" style="align-self:end"><button class="btn-save" style="padding:10px 18px" onclick="pvVentiler()">Ventiler sur les jours</button></div></div>
+    <div class="pv-bar"><label>Saisir en <select id="pvUAll" onchange="pvUnitAll(this.value)"><option value="e">€</option><option value="p">% vs N-1</option><option value="m">% du mois</option><option value="t">TAC'S × PM</option></select></label>
+      <label>Arrondi de chaque jour <select id="pvStep" onchange="pvStepSet(this.value)"><option value="1">1 €</option><option value="10">10 €</option><option value="50">50 €</option><option value="100">100 €</option></select></label>
+      <span class="pv-barh">Le CA prévu de chaque jour est arrondi au pas choisi dès la saisie ; en « TAC'S × PM », le CA = TAC'S × panier moyen (à défaut, ceux du jour équivalent N-1).</span></div>
     <div class="pv-cal">${cells}</div>
     <div class="foot"><button class="btn-save" id="pvSave" onclick="pvSave()">Enregistrer la prévision</button>
       <select id="pvBase" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="alim">Export : CA alimentaire</option><option value="total">Export : CA net total</option></select>
       <select id="pvScope" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="year">ce restaurant · toute l'année</option><option value="month">ce restaurant · ce mois</option><option value="all">tous les restaurants · l'année</option></select>
       <button class="step" onclick="pvExport()">⬇ Excel</button><span class="save-msg" id="pvMsg"></span></div>
     <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne comptent qu'après le clic sur « Enregistrer » ; en attendant, tes saisies sont gardées si tu changes de mois ou de restaurant.</div>`;
-  for (const iso of days) pvRefresh(iso);
+  document.getElementById('pvUAll').value = PV.unit; document.getElementById('pvStep').value = String(PV.step);
+  for (const iso of days) { document.getElementById('pvu_' + iso).value = PV.unit; pvUnit(iso); }
   pvRecap();
   if (typeof simMount === 'function') simMount();
 }
@@ -1096,27 +1124,65 @@ function pvObjEur() {                                       // objectif du mois 
   const days = pvDays(PV.ym), S1 = days.reduce((a, i) => a + (pvN1(curResto, i) || 0), 0), S2 = days.reduce((a, i) => a + (pvN2(curResto, i) || 0), 0), base = S1 || S2;
   return base ? base * (1 + (+t) / 100) : null;
 }
+// Arrondi appliqué à chaque jour (pas choisi dans la barre du calendrier) ; 1 € = centimes conservés
+const pvRnd = v => PV.step > 1 ? Math.round(v / PV.step) * PV.step : Math.round(v * 100) / 100;
+function pvTP(iso) {                                         // TAC'S et panier moyen alimentaire du jour équivalent (N-1, à défaut N-2)
+  if (typeof simT !== 'function') return null;
+  for (const k of [-364, -728]) { const b = pvShift(iso, k), T = simT(curResto, b), A = pvCa(curResto, b); if (T > 0 && A > 0) return { T, P: A / T }; }
+  return null;
+}
+const pvNum = el => { const t = String(el ? el.value : '').replace(',', '.').trim(); return t === '' || isNaN(+t) ? null : +t; };
 function pvDayInput(iso) {
   const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso).value, t = String(el.value).replace(',', '.').trim();
-  if (t === '' || isNaN(+t)) { delete PV.vals[iso]; }
+  if (u === 't') {                                           // CA = TAC'S × panier moyen ; une seule des deux saisies suffit (l'autre vient du jour équivalent N-1)
+    const T = pvNum(document.getElementById('pvq_' + iso)), P = pvNum(document.getElementById('pvp_' + iso)), tp = pvTP(iso);
+    const Tt = T != null ? T : (tp ? tp.T : null), Pp = P != null ? P : (tp ? tp.P : null);
+    if ((T == null && P == null) || Tt == null || Pp == null) delete PV.vals[iso]; else PV.vals[iso] = pvRnd(Tt * Pp);
+  }
+  else if (t === '' || isNaN(+t)) { delete PV.vals[iso]; }
   else if (u === 'e') PV.vals[iso] = +t;
-  else if (u === 'm') { const o = pvObjEur(); if (o == null) { delete PV.vals[iso]; pvMsg('err', "Renseigne d'abord l'objectif du mois (en € ou en %) pour saisir un % du mois."); } else PV.vals[iso] = Math.round(o * (+t) / 100 * 100) / 100; }
-  else { const b = pvBase(iso); if (b == null) delete PV.vals[iso]; else PV.vals[iso] = Math.round(b * (1 + (+t) / 100) * 100) / 100; }
+  else if (u === 'm') { const o = pvObjEur(); if (o == null) { delete PV.vals[iso]; pvMsg('err', "Renseigne d'abord l'objectif du mois (en € ou en %) pour saisir un % du mois."); } else PV.vals[iso] = pvRnd(o * (+t) / 100); }
+  else { const b = pvBase(iso); if (b == null) delete PV.vals[iso]; else PV.vals[iso] = pvRnd(b * (1 + (+t) / 100)); }
   pvRefresh(iso); pvRecap();
 }
-function pvUnit(iso) {                                      // changer d'unité convertit la valeur affichée
-  const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso).value, v = PV.vals[iso], b = pvBase(iso);
-  const ob = u === 'm' ? pvObjEur() : null;
-  if (v != null) el.value = u === 'e' ? Math.round(v * 100) / 100 : (u === 'm' ? (ob ? Math.round(v / ob * 10000) / 100 : '') : (b ? Math.round((v / b - 1) * 1000) / 10 : ''));
+function pvCommit(iso) {                                     // à la fin de la saisie d'un montant en € : arrondi au pas choisi
+  const u = document.getElementById('pvu_' + iso).value, el = document.getElementById('pvi_' + iso);
+  if (u !== 'e' || PV.vals[iso] == null || PV.step <= 1) return;
+  const r = pvRnd(PV.vals[iso]); if (r !== PV.vals[iso]) { PV.vals[iso] = r; el.value = r; pvRefresh(iso); pvRecap(); }
+}
+function pvUnit(iso) {                                       // changer d'unité convertit la valeur affichée
+  const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso).value, v = PV.vals[iso], b = pvBase(iso), cell = document.getElementById('pvc_' + iso);
+  if (cell) cell.dataset.u = u;
+  const ob = u === 'm' ? pvObjEur() : null, tp = pvTP(iso), q = document.getElementById('pvq_' + iso), pp = document.getElementById('pvp_' + iso);
+  if (q && pp) { q.placeholder = tp ? Math.round(tp.T) : "TAC'S"; pp.placeholder = tp ? tp.P.toFixed(2).replace('.', ',') : 'PM €'; }
+  if (u === 't') { if (q && pp) { if (v != null && tp) { pp.value = Math.round(tp.P * 100) / 100; q.value = Math.round(v / tp.P); } else { q.value = ''; pp.value = ''; } } }
+  else if (v != null) el.value = u === 'e' ? Math.round(v * 100) / 100 : (u === 'm' ? (ob ? Math.round(v / ob * 10000) / 100 : '') : (b ? Math.round((v / b - 1) * 1000) / 10 : ''));
+  else el.value = '';
   pvRefresh(iso);
 }
+function pvUnitAll(u) {                                      // même unité de saisie pour tous les jours du mois
+  PV.unit = u; for (const iso of pvDays(PV.ym)) { const s = document.getElementById('pvu_' + iso); if (s) { s.value = u; pvUnit(iso); } }
+}
+function pvStepSet(v) { PV.step = +v || 1; try { localStorage.setItem(PV_RKEY, String(PV.step)); } catch (e) {} pvMsg('ok', PV.step > 1 ? `Arrondi : chaque jour est arrondi à ${PV.step} € (clique sur « Arrondir (total calé) » pour les jours déjà saisis).` : 'Arrondi désactivé (centimes conservés).'); }
 function pvRefresh(iso) {
   const d = document.getElementById('pvd_' + iso); if (!d) return;
   const v = PV.vals[iso], n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), u = document.getElementById('pvu_' + iso).value, el = document.getElementById('pvi_' + iso);
-  const tt = document.getElementById('pvt_' + iso); if (tt) tt.textContent = v != null ? 'Total ' + pvEur(v * PV.coef) : '';
+  const k = document.getElementById('pvk_' + iso); if (k) k.innerHTML = v != null ? `<span>CA prévu</span><b>${pvEur(v)}</b>` : '';
+  const tt = document.getElementById('pvt_' + iso); if (tt) tt.textContent = v != null ? 'CA net total ' + pvEur(v * PV.coef) : '';
   if (u === 'p' && el.value !== '' && pvBase(iso) == null) { d.textContent = 'pas de N-1 / N-2'; return; }
-  d.innerHTML = v == null ? '' : (n1 ? `<b>${pvPct(v / n1 - 1)}</b> vs N-1` : '') + (n1 && n2 ? ' · ' : '') + (n2 ? `${pvPct(v / n2 - 1)} vs N-2` : '');
+  d.innerHTML = v == null ? '' : (n1 ? `<b class="${v >= n1 ? 'up' : 'down'}">${pvPct(v / n1 - 1)}</b> vs N-1` : '') + (n1 && n2 ? ' · ' : '') + (n2 ? `${pvPct(v / n2 - 1)} vs N-2` : '');
   if (v != null && u === 'e' && !n1 && !n2) d.textContent = '';
+}
+// Total prévu de chaque semaine (colonne « Semaine » en bout de ligne) : jours du mois affiché, avec l'évolution sur les mêmes jours N-1
+function pvWeeks() {
+  const W = {};
+  for (const iso of pvDays(PV.ym)) { const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, mon = pvShift(iso, -dow), w = W[mon] = W[mon] || { n: 0, set: 0, sum: 0, on1: 0, n1: 0 }, v = PV.vals[iso], a = pvN1(curResto, iso); w.n++; if (v != null) { w.set++; w.sum += v; if (a != null) { w.on1 += v; w.n1 += a; } } }
+  for (const mon of Object.keys(W)) {
+    const w = W[mon], el = document.getElementById('pvwv_' + mon), sm = document.getElementById('pvws_' + mon); if (!el) continue;
+    el.textContent = w.set ? pvEur(w.sum) : '—';
+    const ev = w.n1 ? w.on1 / w.n1 - 1 : null;
+    sm.innerHTML = `${w.set}/${w.n} jour${w.n > 1 ? 's' : ''} saisi${w.set > 1 ? 's' : ''}${w.n < 7 ? ' · semaine partielle' : ''}${w.set ? `<br>CA net total ${pvEur(w.sum * PV.coef)}` : ''}${ev != null ? `<br><b class="${ev >= 0 ? 'up' : 'down'}">${pvPct(ev)}</b> vs N-1` : ''}`;
+  }
 }
 function pvSums() {
   const days = pvDays(PV.ym); let prev = 0, prevOnN1 = 0, n1 = 0, n2 = 0, prevOnN2 = 0, real = 0, nPrev = 0;
@@ -1135,7 +1201,7 @@ function pvRecap() {
     + k('Prévision saisie', pvEur(s.prev), `${s.nPrev} jour${s.nPrev > 1 ? 's' : ''} sur ${s.nDays}`)
     + k('Prévision CA net total', pvEur(s.prev * PV.coef), `× ${String(PV.coef).replace('.', ',')}`)
     + k('vs N-1', s.n1 ? pvPct(s.prevOnN1 / s.n1 - 1) : '—', 'sur les jours saisis') + k('vs N-2', s.n2 ? pvPct(s.prevOnN2 / s.n2 - 1) : '—', 'sur les jours saisis');
-  pvStash(); pvDraftBar();                                  // les saisies sont mises à l'abri à chaque modification
+  pvWeeks(); pvStash(); pvDraftBar();                       // les saisies sont mises à l'abri à chaque modification
 }
 function pvVentiler() {
   const days = pvDays(PV.ym), t = String(document.getElementById('pvObj').value).replace(',', '.').trim(), u = document.getElementById('pvObjU').value, w = document.getElementById('pvW').value;
@@ -1154,16 +1220,16 @@ function pvVentiler() {
   wt = wt.map(x => x == null ? avg : x);
   const tot = wt.reduce((a, b) => a + b, 0);
   if (Object.keys(PV.vals).length && !confirm('Remplacer les prévisions déjà saisies sur ce mois par la ventilation ?')) return;
-  const step = +document.getElementById('pvRnd').value || 1, target = Math.round(obj / step) * step;
+  const step = PV.step || 1, target = Math.round(obj / step) * step;
   const out = pvRoundTo(wt.map(x => obj * x / tot), target, step);                                                       // arrondi au pas choisi, total calé
-  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const el = document.getElementById('pvi_' + iso), un = document.getElementById('pvu_' + iso); if (el) { un.value = 'e'; el.value = out[i]; } pvRefresh(iso); });
+  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const un = document.getElementById('pvu_' + iso); if (un) pvUnit(iso); });
   pvRecap(); pvMsg('ok', `✓ ${pvEur(target)} ventilés sur ${days.length} jours (arrondi à ${step} €${Math.abs(target - obj) > 0.5 ? ' ; objectif ' + pvEur(obj) + ' arrondi à ' + pvEur(target) : ''}) — pense à enregistrer.`);
 }
 function pvArrondir() {
-  const step = +document.getElementById('pvRnd').value || 1, days = pvDays(PV.ym).filter(i => PV.vals[i] != null);
+  const step = PV.step || 1, days = pvDays(PV.ym).filter(i => PV.vals[i] != null);
   if (!days.length) { pvMsg('err', 'Aucune prévision à arrondir.'); return; }
   const raw = days.map(i => PV.vals[i]), target = Math.round(raw.reduce((a, b) => a + b, 0) / step) * step, out = pvRoundTo(raw, target, step);
-  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const el = document.getElementById('pvi_' + iso), un = document.getElementById('pvu_' + iso); if (el) { un.value = 'e'; el.value = out[i]; } pvRefresh(iso); });
+  days.forEach((iso, i) => { PV.vals[iso] = out[i]; const un = document.getElementById('pvu_' + iso); if (un) pvUnit(iso); });
   pvRecap(); pvMsg('ok', `✓ Prévisions arrondies à ${step} € (total ${pvEur(target)}).`);
 }
 function pvMsg(c, t) { const m = document.getElementById('pvMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
