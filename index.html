@@ -1204,6 +1204,9 @@ window.addEventListener('DOMContentLoaded', () => {
 <!-- BANNIÈRES CAMPAGNES -->
 <div class="main" id="bannersWrap" style="padding-top:0;padding-bottom:0"></div>
 
+<!-- PROCHAINS RENDEZ-VOUS (plan de communication) -->
+<div class="main" id="pcUpcoming" style="padding-top:0;padding-bottom:0"></div>
+
 <!-- RÉSUMÉ AUTO -->
 <div class="main" id="autoSummary" style="padding-top:0;padding-bottom:0"></div>
 
@@ -6882,6 +6885,7 @@ function _vphePhrase(p) {
 const _NUM_FR = ['aucun','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze'];
 function _numFR(n) { return n < _NUM_FR.length ? _NUM_FR[n] : String(n); }
 function renderAutoSummary() {
+  try { if (typeof pcRenderUpcoming === 'function') pcRenderUpcoming(); } catch (e) {}
   const el = document.getElementById('autoSummary');
   if (!el) return;
   if (kpiViewMode || compareMode || prevMode || currentYear !== YEAR_CUR || !WEEK) { el.innerHTML = ''; return; }
@@ -7665,6 +7669,12 @@ function qhInitChart(canvas) {
 
 <!-- ════════ ESPACE : PLAN DE COMMUNICATION ════════ -->
 <style>
+@media (min-width:761px) { .espaces-bar { flex-wrap:wrap; overflow-x:visible; } }                     /* 8 espaces : sur ordinateur la barre passe sur deux lignes au lieu de défiler */
+@media (max-width:520px) { #topbarBrand { max-width:100%; min-width:0; } .topbar-brand-text { min-width:0; } .topbar-brand-sub { white-space:normal; flex-wrap:wrap; overflow-wrap:anywhere; line-height:1.25; } }   /* la ligne « Données au … » ne déborde plus sur téléphone */
+.pc-badge { margin-left:6px; background:#ef4444; color:#fff; border-radius:999px; font-size:.66rem; font-weight:800; padding:1px 7px; line-height:1.4; }
+.pc-up { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; background:var(--card); border:1px solid var(--border); border-left:4px solid #0891b2; border-radius:10px; padding:8px 12px; font-size:.78rem; margin:0 0 10px; }
+.pc-upc { font-weight:700; padding:3px 9px; border-radius:999px; border:1.5px solid var(--tc); background:color-mix(in srgb, var(--tc) 12%, transparent); color:var(--text); white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.pc-up .pc-btn { padding:4px 10px; font-size:.74rem; margin-left:auto; }
 .pc-top { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:12px; }
 .pc-top select, .pc-mb input, .pc-mb textarea, .pc-mb select { font-family:inherit; font-size:.86rem; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); box-sizing:border-box; }
 .pc-nav { display:inline-flex; align-items:center; gap:6px; }
@@ -7736,7 +7746,7 @@ const PC_TYPES = [                                          // catégories (coul
   { k: 'libre', l: 'Autre (champ libre)', c: '#64748b', i: '📌', subs: [] },
 ];
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
-const PC_OTHER = '__autre__';
+const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE';          // PC_FR : événement pour toute la franchise (une seule ligne)
 const PC = { rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
 const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -7750,9 +7760,37 @@ function pcNorm(r) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p) || !r.restaurant) return null;
   let type = String(r.type || 'libre'), detail = String(r.detail || ''); if (PC_ALIAS[type]) { if (!detail) detail = PC_ALIAS[type][1]; type = PC_ALIAS[type][0]; }
   if (!PC_TYPES.some(t => t.k === type)) type = 'libre';
-  return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type, detail, heure: String(r.heure || ''), note: String(r.note || '') };
+  return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type, detail, heure: String(r.heure || ''), note: String(r.note || ''), maj: String(r.maj || '') };
 }
 const pcSame = (a, b) => ['periode', 'fin', 'restaurant', 'type', 'detail', 'heure', 'note'].every(k => (a[k] || '') === (b[k] || ''));
+const PC_SEEN = 'fmj_pcseen';
+function pcBadge() {                                            // pastille rouge sur « Plan de communication » : événements ajoutés ou modifiés depuis ta dernière visite
+  const pill = document.querySelector('.espace-pill[data-esp="plancom"]'); if (!pill) return;
+  let seen = ''; try { seen = localStorage.getItem(PC_SEEN) || ''; } catch (e) {}
+  const mx = PC.rows.reduce((a, e) => e.maj > a ? e.maj : a, '');
+  if (!seen && mx) { seen = mx; try { localStorage.setItem(PC_SEEN, mx); } catch (e) {} }     // première visite : l'historique n'est pas signalé
+  const today = pcIso(new Date()), n = currentEspace === 'plancom' ? 0 : pcAll().filter(e => e.maj && e.maj > seen && (e.fin || e.periode) >= today).length;
+  let b = pill.querySelector('.pc-badge'); if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'pc-badge'; pill.appendChild(b); }
+  b.textContent = n; b.title = n + ' événement' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '') + ' ou modifié' + (n > 1 ? 's' : '') + ' depuis ta dernière visite';
+}
+function pcMarkSeen() { const mx = PC.rows.reduce((a, e) => e.maj > a ? e.maj : a, ''); if (mx) try { localStorage.setItem(PC_SEEN, mx); } catch (e) {} pcBadge(); }
+function pcRenderUpcoming() {                                   // bandeau « Prochains rendez-vous » en haut du Pilotage (restaurant affiché + événements franchise, 14 jours)
+  const box = document.getElementById('pcUpcoming'); if (!box) return;
+  const today = pcIso(new Date()), lim = pcIso(new Date(Date.now() + 14 * 86400000)), r = typeof currentResto !== 'undefined' ? currentResto : 'FRANCHISE', one = r !== 'FRANCHISE' && r !== '__SEL__';
+  const evs = pcAll().filter(e => (e.fin || e.periode) >= today && e.periode <= lim && (!one || pcForResto(e, r))).sort((a, b) => a.periode.localeCompare(b.periode) || a.type.localeCompare(b.type));
+  if (!evs.length) { box.innerHTML = ''; return; }
+  const day = e => { const d = e.periode < today ? today : e.periode; return PC_J[pcDow(d)].toLowerCase() + ' ' + pcFmt(d).slice(0, 5); };
+  box.innerHTML = `<div class="pc-up"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}</span>`).join('')}${evs.length > 5 ? `<span class="pc-more">+ ${evs.length - 5}</span>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
+}
+function pcGoPlan() { const r = typeof currentResto !== 'undefined' ? currentResto : 'ALL'; PC.resto = RESTOS.includes(r) ? r : 'ALL'; PC.ym = null; switchEspace('plancom'); }
+async function pcPull() {                                       // lecture légère de l'onglet PlanCom seul (le reste du dashboard se synchronise à son rythme)
+  const url = (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.apps_script_url) || ''; if (!url) return;
+  try { const r = await fetch(url + '?action=plancom&_=' + Date.now()), j = await r.json(); if (j && j.ok && Array.isArray(j.rows)) PLANCOM_SET(j.rows); } catch (e) {}
+}
+setInterval(() => { if (document.visibilityState === 'visible') pcPull(); }, 120000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pcPull(); });
+setTimeout(pcPull, 1500);
 function PLANCOM_SET(rows) {                                  // appelé à chaque lecture du Sheet : remplace les données et allège les modifications locales déjà confirmées
   PC.rows = (rows || []).map(pcNorm).filter(Boolean);
   const byId = Object.fromEntries(PC.rows.map(e => [e.id, e]));
@@ -7760,20 +7798,29 @@ function PLANCOM_SET(rows) {                                  // appelé à chaq
   for (const id of Object.keys(PC.over)) if (!byId[id] || pcSame(byId[id], PC.over[id])) delete PC.over[id];
   for (const id of [...PC.dels]) if (!byId[id]) PC.dels.delete(id);
   if (typeof currentEspace !== 'undefined' && currentEspace === 'plancom') pcRender();
+  pcBadge(); pcRenderUpcoming();
 }
-const pcAll = () => PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds);
-const pcShown = () => pcAll().filter(e => PC.types.has(e.type) && (PC.resto === 'ALL' || e.restaurant === PC.resto));
+function pcGroup(list) {                                        // anciennes saisies « tous les restaurants » (une ligne par restaurant, identiques) = un seul événement franchise
+  const key = e => [e.periode, e.fin, e.type, e.detail, e.heure, e.note].join('|'), g = {}, drop = new Set(), out = [];
+  for (const e of list) if (e.restaurant !== PC_FR) (g[key(e)] = g[key(e)] || []).push(e);
+  for (const k of Object.keys(g)) { const a = g[k]; if (a.length >= 2 && a.length === RESTOS.length && new Set(a.map(x => x.restaurant)).size === RESTOS.length) { a.forEach(x => drop.add(x)); out.push(Object.assign({}, a[0], { id: 'grp:' + a.map(x => x.id).join('~'), ids: a.map(x => x.id), restaurant: PC_FR })); } }
+  return out.length ? list.filter(e => !drop.has(e)).concat(out) : list;
+}
+const pcAll = () => pcGroup(PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds));
+const pcForResto = (e, r) => r === 'ALL' || e.restaurant === r || e.restaurant === PC_FR;   // un événement « franchise » concerne chaque restaurant
+const pcShown = () => pcAll().filter(e => PC.types.has(e.type) && pcForResto(e, PC.resto));
 const pcOn = (e, iso) => e.periode <= iso && (e.fin || e.periode) >= iso;
 function pcLabel(e, showResto) {
+  if (e.restaurant === PC_FR) showResto = true;
   const t = pcT(e.type), main = e.type === 'formation' ? 'Formation' + (e.detail ? ' · ' + e.detail : '') : (e.detail || t.l);
   return `${t.i} ${main}${showResto ? ' · ' + restoShort(e.restaurant) : ''}`;
 }
 const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' + pcFmt(e.fin) : ''}${e.heure ? ' · ' + e.heure : ''}${e.note ? '\n' + e.note : ''}`;
-function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
+function loadPlanCom() { pcMarkSeen(); if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
 function pcRender() {
   const card = document.getElementById('pcCard'); if (!card) return;
   const [Y, M] = PC.ym.split('-').map(Number), view = PC.view || (window.matchMedia && matchMedia('(max-width:700px)').matches ? 'list' : 'cal');
-  const monthEv = pcShown().filter(e => e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`), allMonth = pcAll().filter(e => (PC.resto === 'ALL' || e.restaurant === PC.resto) && e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`);
+  const monthEv = pcShown().filter(e => e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`), allMonth = pcAll().filter(e => pcForResto(e, PC.resto) && e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`);
   const count = k => allMonth.filter(e => e.type === k).length, showResto = PC.resto === 'ALL';
   const top = `<div class="pc-top"><select onchange="pcSetResto(this.value)" aria-label="Restaurant"><option value="ALL">Tous les restaurants</option>${RESTOS.map(r => `<option value="${pcEsc(r)}" ${PC.resto === r ? 'selected' : ''}>${pcEsc(restoDisplay(r))}</option>`).join('')}</select>
       <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
@@ -7832,7 +7879,7 @@ function pcOpen(ev) {
   pcSubChange(); document.getElementById('pcDetail').value = d.detail && (ty === 'libre' || !inList) ? d.detail : '';
   const one = !!e, sel = d.restaurant ? [d.restaurant] : (PC.resto !== 'ALL' ? [PC.resto] : []);
   document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles';
-  document.getElementById('pcMRestos').innerHTML = (one ? '' : `<label><input type="checkbox" id="pcAllR" onchange="document.querySelectorAll('#pcMRestos input[name=pcr]').forEach(i=>i.checked=this.checked)"> <b>Tous les restaurants</b></label>`) +
+  document.getElementById('pcMRestos').innerHTML = (one ? `<label><input type="radio" name="pcr" value="${PC_FR}" ${sel.includes(PC_FR) ? 'checked' : ''}> <b>Toute la franchise</b></label>` : `<label style="grid-column:1/-1"><input type="checkbox" id="pcFr" onchange="pcFrToggle(this.checked)"> <b>Toute la franchise</b> — un seul événement pour tous les restaurants</label>`) +
     RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('');
   document.getElementById('pcStart').value = d.periode || pcIso(new Date()); document.getElementById('pcEnd').value = d.fin || '';
   document.getElementById('pcTime').value = d.heure || ''; document.getElementById('pcNote').value = d.note || '';
@@ -7840,6 +7887,7 @@ function pcOpen(ev) {
   document.getElementById('pcDel').style.display = e ? '' : 'none'; document.getElementById('pcSaveBtn').disabled = false;
   document.getElementById('pcModal').classList.add('show');
 }
+function pcFrToggle(on) { document.querySelectorAll('#pcMRestos input[name=pcr]').forEach(i => { i.disabled = on; if (on) i.checked = false; }); }
 function pcNew(day) { if (day && day < '1970') return; pcOpen(day ? { periode: day } : null); }
 function pcEdit(id) { const e = pcAll().find(x => x.id === id); if (e) pcOpen(e); }
 function pcClose() { document.getElementById('pcModal').classList.remove('show'); PC.edit = null; }
@@ -7853,15 +7901,16 @@ async function pcPost(body) {
 async function pcSave() {
   if (PC.busy) return;
   const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (type === 'libre' || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
-  const restos = [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
+  const fr = document.getElementById('pcFr'), restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
   if (!restos.length) return pcMsg('err', 'Choisis au moins un restaurant.');
   if (!start) return pcMsg('err', 'Indique la date de début.');
   if (end && end < start) return pcMsg('err', 'La date de fin est avant le début.');
   if (!detail) return pcMsg('err', type === 'libre' ? 'Donne un titre à l’événement.' : 'Précise le type.');
   const base = { periode: start, fin: end, type, detail, heure: document.getElementById('pcTime').value.trim(), note: document.getElementById('pcNote').value.trim() };
-  const rows = restos.map(r => Object.assign({ restaurant: r }, base, PC.edit ? { id: PC.edit.id } : {}));
+  const baseId = PC.edit ? (PC.edit.ids ? PC.edit.ids[0] : PC.edit.id) : null, rows = restos.map(r => Object.assign({ restaurant: r }, base, baseId ? { id: baseId } : {}));
   PC.busy = true; document.getElementById('pcSaveBtn').disabled = true; pcMsg('', 'Enregistrement…');
   const j = await pcPost({ action: 'ev_save', rows });
+  if (j.ok && PC.edit && PC.edit.ids && PC.edit.ids.length > 1) { const d = await pcPost({ action: 'ev_delete', ids: PC.edit.ids.slice(1) }); if (d.ok) PC.edit.ids.slice(1).forEach(id => { PC.dels.add(id); PC.adds = PC.adds.filter(a => a.id !== id); }); }   // ancienne saisie « tous » : on ne garde qu'une ligne
   PC.busy = false; document.getElementById('pcSaveBtn').disabled = false;
   if (!j.ok) return pcMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + (/action inconnue|mot de passe/.test(j.error || '') ? ' — l’Apps Script doit être mis à jour' + (/mot de passe/.test(j.error) ? ' / reconnecte-toi.' : '.') : ''));
   rows.forEach((r, i) => { const e = pcNorm(Object.assign({}, r, { id: (j.ids || [])[i] || r.id })); if (!e) return; if (PC.edit) { const k = PC.adds.findIndex(a => a.id === e.id); if (k >= 0) PC.adds[k] = e; else PC.over[e.id] = e; } else PC.adds.push(e); });
@@ -7870,9 +7919,9 @@ async function pcSave() {
 async function pcDelete() {
   if (!PC.edit || PC.busy || !confirm('Supprimer cet événement ?\n' + pcLabel(PC.edit, true) + ' — ' + pcFmt(PC.edit.periode))) return;
   PC.busy = true; pcMsg('', 'Suppression…');
-  const id = PC.edit.id, j = await pcPost({ action: 'ev_delete', ids: [id] }); PC.busy = false;
+  const ids = PC.edit.ids || [PC.edit.id], j = await pcPost({ action: 'ev_delete', ids }); PC.busy = false;
   if (!j.ok) return pcMsg('err', 'Erreur : ' + (j.error || 'suppression refusée'));
-  PC.dels.add(id); PC.adds = PC.adds.filter(a => a.id !== id); pcClose(); pcRender(); pcStatus('ok', '✓ Événement supprimé');
+  ids.forEach(id => { PC.dels.add(id); PC.adds = PC.adds.filter(a => a.id !== id); }); pcClose(); pcRender(); pcStatus('ok', '✓ Événement supprimé');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('pcModal').classList.contains('show')) pcClose(); });
 </script>
@@ -8858,7 +8907,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261022-132719';
+const BUILD_VERSION = '20261022-152027';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

@@ -99,6 +99,8 @@
   .pv-recap{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:6px 0 14px; }
   .pv-kpi{ background:var(--card2); border-radius:12px; padding:10px 12px; font-size:.72rem; color:var(--muted); } .pv-kpi b{ display:block; font-size:1.05rem; color:var(--text); margin:2px 0; } .pv-kpi i{ font-style:normal; font-size:.66rem; }
   .pv-obj{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; padding:14px; background:#fffaf0; border:1.5px solid #f0d58a; border-radius:12px; }
+  .pcb{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; background:#ecfeff; border:1.5px solid #a5f3fc; border-left:4px solid #0891b2; border-radius:10px; padding:8px 12px; font-size:.78rem; margin:12px 0 0; color:var(--text); }
+  .pcb-c{ font-weight:700; padding:3px 9px; border-radius:999px; border:1.5px solid var(--tc); background:#fff; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pcb-m{ font-weight:700; color:var(--muted); }
   .pv-bar{ display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; margin:0 0 10px; padding:10px 12px; background:var(--card2); border:1.5px solid var(--border); border-radius:12px; font-size:.78rem; font-weight:700; }
   .pv-bar select{ font-family:inherit; font-size:.84rem; padding:7px 9px; border:1.5px solid var(--border); border-radius:8px; margin-left:4px; background:#fff; }
   .pv-barh{ font-size:.68rem; font-weight:500; color:var(--muted); flex:1 1 260px; line-height:1.4; }
@@ -188,6 +190,7 @@
       <button class="pick-cancel" id="pickCancel" onclick="hidePicker()" style="display:none">Annuler</button>
     </div>
   </div>
+  <div class="wrap" style="padding-bottom:0"><div id="pcBanner"></div></div>
   <div class="tab-bar" id="tabBar"></div>
   <div class="wrap"><div class="panel" id="panel"></div></div>
   <div class="foot-out"><a onclick="logoutSaisie()">Se déconnecter de cet appareil</a></div>
@@ -2422,6 +2425,36 @@ function wfPull() {
   if ((JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) || !sameSal) && !confirm('Remplacer tes brouillons de Prévision CA, tes hypothèses de budget, tes réglages de simulation et ta saisie de salaires (' + Y + ') par la version partagée ?')) return;
   wfApply(r, P, C.salaires); WF.sync[wfKey(r, Y)] = C.dossier.version; WF.flash = ['ok', '✓ Version partagée chargée : consulte-la dans Prévision CA et Budget & PNL.']; renderValid();
 }
+
+// ── Plan de communication : bandeau « Prochains rendez-vous » au-dessus des onglets pour le restaurant choisi (14 jours : ses événements + ceux de toute la franchise) ──
+// Lecture légère de l'onglet PlanCom (action=plancom) : à l'ouverture, au choix du restaurant, toutes les 2 minutes et au retour sur la page.
+const PCB = { rows: [], at: 0 };
+const PCB_ICO = { reunion: '👥', rap_session: '🎤', audit: '🔍', evaluation: '📝', festif: '🎉', formation: '🎓', libre: '📌', reunion_manager: '👥', reunion_directeur: '👥' };
+const PCB_COL = { reunion: '#2563eb', rap_session: '#0d9488', audit: '#d97706', evaluation: '#7c3aed', festif: '#db2777', formation: '#16a34a', libre: '#64748b', reunion_manager: '#2563eb', reunion_directeur: '#2563eb' };
+function pcbLabel(e) {
+  const t = String(e.type || 'libre'), d = String(e.detail || '');
+  return (PCB_ICO[t] || '📌') + ' ' + (t === 'formation' ? 'Formation' + (d ? ' · ' + d : '') : (d || { reunion_manager: 'Réunion MANAGERS', reunion_directeur: 'Réunion DIRECTEURS' }[t] || 'Rendez-vous'));
+}
+function pcbShow() {
+  const box = document.getElementById('pcBanner'); if (!box) return;
+  if (!curResto) { box.innerHTML = ''; return; }
+  const iso = d => d.toISOString().slice(0, 10), today = iso(new Date()), lim = iso(new Date(Date.now() + 14 * 86400000)), J = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
+  const evs = PCB.rows.map(e => ({ e, p: String(e.periode || '').slice(0, 10), f: String(e.fin || e.periode || '').slice(0, 10) })).filter(x => x.p && x.f >= today && x.p <= lim && (x.e.restaurant === curResto || x.e.restaurant === 'FRANCHISE')).sort((a, b) => a.p.localeCompare(b.p));
+  if (!evs.length) { box.innerHTML = ''; return; }
+  const day = p => { const d = p < today ? today : p; return J[new Date(d + 'T00:00:00Z').getUTCDay()] + ' ' + d.slice(8) + '/' + d.slice(5, 7); };
+  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + x.e.heure : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<span class="pcb-m">+ ${evs.length - 4}</span>` : ''}</div>`;
+}
+async function pcbPull(force) {
+  if (typeof configured === 'function' && !configured()) return;
+  if (!force && Date.now() - PCB.at < 100000) return; PCB.at = Date.now();
+  try { const r = await fetch(APPS_SCRIPT_URL + '?action=plancom&_=' + Date.now()), j = await r.json(); if (j && j.ok && Array.isArray(j.rows)) { PCB.rows = j.rows; pcbShow(); } } catch (e) {}
+}
+(function () {
+  const orig = setResto; setResto = function (r) { orig(r); pcbShow(); pcbPull(); };      // à chaque choix de restaurant
+  setInterval(() => { if (document.visibilityState === 'visible') pcbPull(true); }, 120000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pcbPull(true); });
+  setTimeout(() => pcbPull(true), 1500);
+})();
 
 // ── Démarrage ──
 document.getElementById('pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') checkPwd(); });
