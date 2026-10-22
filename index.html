@@ -7671,6 +7671,8 @@ function qhInitChart(canvas) {
 <style>
 @media (min-width:761px) { .espaces-bar { flex-wrap:wrap; overflow-x:visible; } }                     /* 8 espaces : sur ordinateur la barre passe sur deux lignes au lieu de défiler */
 @media (max-width:520px) { #topbarBrand { max-width:100%; min-width:0; } .topbar-brand-text { min-width:0; } .topbar-brand-sub { white-space:normal; flex-wrap:wrap; overflow-wrap:anywhere; line-height:1.25; } }   /* la ligne « Données au … » ne déborde plus sur téléphone */
+.pc-ev.pc-new::before { content:'● '; color:#ef4444; } .pc-ev.pc-new { box-shadow:0 0 0 1.5px #ef4444 inset; }
+.pc-lrow.pc-new { border-color:#ef4444; } .pc-newtag { display:block; font-size:.58rem; font-weight:800; letter-spacing:.5px; color:#fff; background:#ef4444; border-radius:999px; padding:1px 7px; margin-bottom:3px; width:max-content; }
 .pc-badge { margin-left:6px; background:#ef4444; color:#fff; border-radius:999px; font-size:.66rem; font-weight:800; padding:1px 7px; line-height:1.4; }
 .pc-up { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; background:var(--card); border:1px solid var(--border); border-left:4px solid #0891b2; border-radius:10px; padding:8px 12px; font-size:.78rem; margin:0 0 10px; }
 .pc-upc { font-weight:700; padding:3px 9px; border-radius:999px; border:1.5px solid var(--tc); background:color-mix(in srgb, var(--tc) 12%, transparent); color:var(--text); white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
@@ -7763,18 +7765,30 @@ function pcNorm(r) {
   return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type, detail, heure: String(r.heure || ''), note: String(r.note || ''), maj: String(r.maj || '') };
 }
 const pcSame = (a, b) => ['periode', 'fin', 'restaurant', 'type', 'detail', 'heure', 'note'].every(k => (a[k] || '') === (b[k] || ''));
-const PC_SEEN = 'fmj_pcseen';
-function pcBadge() {                                            // pastille rouge sur « Plan de communication » : événements ajoutés ou modifiés depuis ta dernière visite
+const PC_SEEN = 'fmj_pcseen2';                                  // { id d'événement : date de modification vue } : propre à l'appareil
+let pcSeenMem = null;
+function pcSeen() {
+  if (pcSeenMem) return pcSeenMem;
+  try { const o = JSON.parse(localStorage.getItem(PC_SEEN) || 'null'); if (o && typeof o === 'object') return pcSeenMem = o; } catch (e) {}
+  if (!PC.loaded) return null;                                  // données pas encore lues : on attend (sinon tout l'historique serait « nouveau »)
+  pcSeenMem = {}; PC.rows.forEach(e => { pcSeenMem[e.id] = e.maj || '*'; }); pcSeenSave(); return pcSeenMem;   // première visite sur cet appareil : l'historique n'est pas signalé
+}
+function pcSeenSave() {
+  if (!pcSeenMem) return; const ids = new Set(pcAll().flatMap(e => e.ids || [e.id]));
+  for (const k of Object.keys(pcSeenMem)) if (!ids.has(k) && PC.loaded) delete pcSeenMem[k];                 // on ne garde pas les événements supprimés
+  try { localStorage.setItem(PC_SEEN, JSON.stringify(pcSeenMem)); } catch (e) {}
+}
+const pcKeyOf = e => (e.ids || [e.id])[0];
+function pcUnseen(e) { const sm = pcSeen(); if (!sm) return false; const s0 = sm[pcKeyOf(e)]; return s0 === undefined || (s0 !== '*' && !!e.maj && s0 !== e.maj); }
+function pcMarkSeen(list) { const sm = pcSeen(); if (!sm) return; let ch = false; for (const e of list) { const k = pcKeyOf(e), v = e.maj || '*'; if (sm[k] !== v) { sm[k] = v; ch = true; } } if (ch) pcSeenSave(); }
+function pcSeenAll() { pcMarkSeen(pcAll()); pcBadge(); pcRender(); }
+function pcBadge() {                                            // pastille rouge sur « Plan de communication » : nombre d'événements à venir pas encore vus (ajoutés ou modifiés)
   const pill = document.querySelector('.espace-pill[data-esp="plancom"]'); if (!pill) return;
-  let seen = ''; try { seen = localStorage.getItem(PC_SEEN) || ''; } catch (e) {}
-  const mx = PC.rows.reduce((a, e) => e.maj > a ? e.maj : a, '');
-  if (!seen && mx) { seen = mx; try { localStorage.setItem(PC_SEEN, mx); } catch (e) {} }     // première visite : l'historique n'est pas signalé
-  const today = pcIso(new Date()), n = currentEspace === 'plancom' ? 0 : pcAll().filter(e => e.maj && e.maj > seen && (e.fin || e.periode) >= today).length;
+  const today = pcIso(new Date()), n = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= today && pcUnseen(e)).length : 0;
   let b = pill.querySelector('.pc-badge'); if (!n) { if (b) b.remove(); return; }
   if (!b) { b = document.createElement('span'); b.className = 'pc-badge'; pill.appendChild(b); }
-  b.textContent = n; b.title = n + ' événement' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '') + ' ou modifié' + (n > 1 ? 's' : '') + ' depuis ta dernière visite';
+  b.textContent = n; b.title = n + ' événement' + (n > 1 ? 's' : '') + ' non vu' + (n > 1 ? 's' : '');
 }
-function pcMarkSeen() { const mx = PC.rows.reduce((a, e) => e.maj > a ? e.maj : a, ''); if (mx) try { localStorage.setItem(PC_SEEN, mx); } catch (e) {} pcBadge(); }
 function pcRenderUpcoming() {                                   // bandeau « Prochains rendez-vous » en haut du Pilotage (restaurant affiché + événements franchise, 14 jours)
   const box = document.getElementById('pcUpcoming'); if (!box) return;
   const today = pcIso(new Date()), lim = pcIso(new Date(Date.now() + 14 * 86400000)), r = typeof currentResto !== 'undefined' ? currentResto : 'FRANCHISE', one = r !== 'FRANCHISE' && r !== '__SEL__';
@@ -7792,12 +7806,13 @@ setInterval(() => { if (document.visibilityState === 'visible') pcPull(); }, 120
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pcPull(); });
 setTimeout(pcPull, 1500);
 function PLANCOM_SET(rows) {                                  // appelé à chaque lecture du Sheet : remplace les données et allège les modifications locales déjà confirmées
-  PC.rows = (rows || []).map(pcNorm).filter(Boolean);
+  PC.rows = (rows || []).map(pcNorm).filter(Boolean); PC.loaded = true;
   const byId = Object.fromEntries(PC.rows.map(e => [e.id, e]));
   PC.adds = PC.adds.filter(a => !byId[a.id]);
   for (const id of Object.keys(PC.over)) if (!byId[id] || pcSame(byId[id], PC.over[id])) delete PC.over[id];
   for (const id of [...PC.dels]) if (!byId[id]) PC.dels.delete(id);
   if (typeof currentEspace !== 'undefined' && currentEspace === 'plancom') pcRender();
+  const sm = pcSeen(); if (sm) { let ch = false; for (const e of PC.rows) if (sm[e.id] === '*' && e.maj) { sm[e.id] = e.maj; ch = true; } const live = new Set(pcAll().flatMap(e => e.ids || [e.id])); if (ch || Object.keys(sm).some(k => !live.has(k))) pcSeenSave(); }   // mes propres ajouts : on retient la date de modification confirmée par le serveur
   pcBadge(); pcRenderUpcoming();
 }
 function pcGroup(list) {                                        // anciennes saisies « tous les restaurants » (une ligne par restaurant, identiques) = un seul événement franchise
@@ -7816,12 +7831,12 @@ function pcLabel(e, showResto) {
   return `${t.i} ${main}${showResto ? ' · ' + restoShort(e.restaurant) : ''}`;
 }
 const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' + pcFmt(e.fin) : ''}${e.heure ? ' · ' + e.heure : ''}${e.note ? '\n' + e.note : ''}`;
-function loadPlanCom() { pcMarkSeen(); if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
+function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
 function pcRender() {
   const card = document.getElementById('pcCard'); if (!card) return;
   const [Y, M] = PC.ym.split('-').map(Number), view = PC.view || (window.matchMedia && matchMedia('(max-width:700px)').matches ? 'list' : 'cal');
   const monthEv = pcShown().filter(e => e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`), allMonth = pcAll().filter(e => pcForResto(e, PC.resto) && e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`);
-  const count = k => allMonth.filter(e => e.type === k).length, showResto = PC.resto === 'ALL';
+  const count = k => allMonth.filter(e => e.type === k).length, showResto = PC.resto === 'ALL', fresh = new Set(monthEv.filter(pcUnseen).map(pcKeyOf));
   const top = `<div class="pc-top"><select onchange="pcSetResto(this.value)" aria-label="Restaurant"><option value="ALL">Tous les restaurants</option>${RESTOS.map(r => `<option value="${pcEsc(r)}" ${PC.resto === r ? 'selected' : ''}>${pcEsc(restoDisplay(r))}</option>`).join('')}</select>
       <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
       <span class="pc-seg pc-viewseg"><button type="button" class="pc-btn ${view === 'cal' ? 'on' : ''}" onclick="pcView('cal')">Calendrier</button><button type="button" class="pc-btn ${view === 'list' ? 'on' : ''}" onclick="pcView('list')">Liste</button></span>
@@ -7833,14 +7848,17 @@ function pcRender() {
     let cells = PC_J.map((j, i) => `<div class="pc-dh ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pc-day out"></div>'.repeat(lead);
     for (let d = 1; d <= nDays; d++) {
       const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
-      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
+      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
     }
     body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
   }
   // liste (toujours rendue sous 700 px ; en option sur grand écran)
   const sorted = monthEv.slice().sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
-  const list = sorted.length ? `<div class="pc-list">${sorted.map(e => `<div class="pc-lrow" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
+  const list = sorted.length ? `<div class="pc-list">${sorted.map(e => `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
   card.innerHTML = top + body + (view === 'list' ? list : `<div class="pc-onlymobile">${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
+  const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
+  pcMarkSeen(monthEv); pcBadge();
+  const nt = card.querySelector('.pc-note'); if (nt && unseenLeft) nt.insertAdjacentHTML('beforeend', ` <b style="color:#ef4444">${unseenLeft} autre${unseenLeft > 1 ? 's' : ''} événement${unseenLeft > 1 ? 's' : ''} non vu${unseenLeft > 1 ? 's' : ''} (autre mois, restaurant ou catégorie)</b> — <a href="#" onclick="pcSeenAll();return false" style="color:#0891b2;font-weight:700">Tout marquer comme vu</a>`);
   const g = document.getElementById('pcGrid'); if (g) g.onclick = ev => { const b = ev.target.closest('[data-id]'); if (b) return pcEdit(b.dataset.id); const d = ev.target.closest('[data-day]'); if (d) pcNew(d.dataset.day); };
   card.querySelectorAll('.pc-lrow [data-id]').forEach(b => { b.onclick = () => pcEdit(b.dataset.id); });
 }
@@ -7914,6 +7932,7 @@ async function pcSave() {
   PC.busy = false; document.getElementById('pcSaveBtn').disabled = false;
   if (!j.ok) return pcMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + (/action inconnue|mot de passe/.test(j.error || '') ? ' — l’Apps Script doit être mis à jour' + (/mot de passe/.test(j.error) ? ' / reconnecte-toi.' : '.') : ''));
   rows.forEach((r, i) => { const e = pcNorm(Object.assign({}, r, { id: (j.ids || [])[i] || r.id })); if (!e) return; if (PC.edit) { const k = PC.adds.findIndex(a => a.id === e.id); if (k >= 0) PC.adds[k] = e; else PC.over[e.id] = e; } else PC.adds.push(e); });
+  { const sm = pcSeen(); if (sm) { rows.forEach((r, i) => { const id = (j.ids || [])[i] || r.id; if (id) sm[id] = '*'; }); pcSeenSave(); } }
   PC.ym = start.slice(0, 7); pcClose(); pcRender(); pcStatus('ok', `✓ ${rows.length > 1 ? rows.length + ' événements enregistrés' : 'Événement enregistré'}`);
 }
 async function pcDelete() {
@@ -8907,7 +8926,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261022-152027';
+const BUILD_VERSION = '20261022-211909';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
