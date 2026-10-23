@@ -5762,6 +5762,7 @@ if (typeof FRANCHISE_CFG !== 'undefined' && typeof SheetAdapter !== 'undefined')
         if (typeof currentEspace !== 'undefined' && currentEspace === 'performance' && typeof loadPerformance === 'function') loadPerformance();
       } catch (e) { console.error('[Sheet] performance', e); }
     }
+    if (typeof ESB_PERF === 'function') { try { ESB_PERF(); } catch (e) {} }          // pastille « nouveautés » de l'espace Performance
     try { renderTabs(); renderMain(); } catch (e) { console.error('[Sheet] rendu', e); }
   }
 
@@ -7945,6 +7946,76 @@ async function pcDelete() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('pcModal').classList.contains('show')) pcClose(); });
 </script>
 
+<!-- ════════ PASTILLES « NOUVEAUTÉS » SUR LES ESPACES (comme le Plan de communication) ════════ -->
+<script>
+// Pastille rouge = nombre d'éléments nouveaux (ou modifiés) que je n'ai pas encore vus dans l'espace : demandes d'intervention en attente,
+// documents Marketing / Actualité, mois de Performance, liens de Formation. Le suivi est par appareil (localStorage) : { espace : { id : repère } }.
+// Première visite sur un appareil : l'existant n'est pas signalé. Espace ouvert : tout ce qu'il affiche est marqué comme vu.
+const ESB_KEY = 'fmj_espseen';
+const ESB = { list: {} };                                       // list[espace] = [{ id, st }] : éléments actuellement connus
+const esbSoon = n => ((typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.modules) || {})[n] === 'soon';
+function esbSeen() { try { const m = JSON.parse(localStorage.getItem(ESB_KEY) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; } }
+function esbStore(m) { try { localStorage.setItem(ESB_KEY, JSON.stringify(m)); } catch (e) {} }
+function esbUnseen(name) { const m = esbSeen()[name]; if (!m) return 0; return (ESB.list[name] || []).filter(x => m[x.id] === undefined || m[x.id] !== x.st).length; }
+function esbMark(name) { const m = esbSeen(), o = {}; (ESB.list[name] || []).forEach(x => { o[x.id] = x.st; }); m[name] = o; esbStore(m); }
+function esbBadge(name) {
+  const pill = document.querySelector('.espace-pill[data-esp="' + name + '"]'); if (!pill) return;
+  const n = esbUnseen(name); let b = pill.querySelector('.pc-badge');
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'pc-badge'; pill.appendChild(b); }
+  b.textContent = n > 99 ? '99+' : String(n); b.title = n + (n > 1 ? ' nouveautés' : ' nouveauté');
+}
+function esbSet(name, list) {                                   // liste actuelle de l'espace (toujours une vraie lecture, jamais un échec réseau)
+  ESB.list[name] = list;
+  if (!esbSeen()[name] || (typeof currentEspace !== 'undefined' && currentEspace === name)) esbMark(name);
+  esbBadge(name);
+}
+const esbDocs = k => { try { const a = JSON.parse(localStorage.getItem('fmj_docs_' + k) || 'null'); return Array.isArray(a) ? a.map(d => ({ id: String(d.id || d.url || d.mois), st: String(d.t || '') })) : null; } catch (e) { return null; } };
+const esbPending = a => a.filter(i => String(i.statut) !== 'Traité').map(i => ({ id: String(i.id), st: '' }));
+const ESB_SRC = {
+  async interventions() {                                       // demandes en attente (une nouvelle demande = une nouveauté)
+    if (esbSoon('interventions') || typeof SUIVI_URL === 'undefined') return;
+    const d = await (await fetch(SUIVI_URL + '?_=' + Date.now(), { redirect: 'follow' })).json();
+    if (d && Array.isArray(d.items)) esbSet('interventions', esbPending(d.items));
+  },
+  async docs() {                                                // dossiers Drive Marketing News et Actualité Restaurant (une seule lecture)
+    if (typeof DOCS_API === 'undefined') return;
+    const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 60000);
+    try {
+      const j = await (await fetch(DOCS_API + '?action=docs&_=' + Date.now(), { signal: ctrl.signal })).json();
+      if (j && j.ok) for (const k of ['marketing', 'actualite']) {
+        const arr = Array.isArray(j[k]) ? j[k] : []; try { localStorage.setItem('fmj_docs_' + k, JSON.stringify(arr)); } catch (e) {}
+        if (!esbSoon(k)) esbSet(k, esbDocs(k) || []);
+      }
+    } finally { clearTimeout(to); }
+  },
+};
+function ESB_PERF() {                                           // appelé après chaque synchronisation du Sheet (mois de Performance versés)
+  if (esbSoon('performance')) return;
+  const P = typeof PERFORMANCE_DATA !== 'undefined' ? PERFORMANCE_DATA : null;
+  if (P && Array.isArray(P.months) && P.months.length) esbSet('performance', P.months.map(m => ({ id: String(m.label || m.key), st: '' })));
+}
+function esbForm() { if (!esbSoon('formation') && typeof FORMATION_LINKS !== 'undefined' && FORMATION_LINKS.length) esbSet('formation', FORMATION_LINKS.map(f => ({ id: String(f.url || f.platform), st: '' }))); }
+function esbOpen(name) {                                        // appelé par switchEspace : ce que l'espace affiche est vu
+  if (ESB.list[name]) { esbMark(name); esbBadge(name); }
+  const again = fn => [3000, 9000].forEach(t => setTimeout(fn, t));   // l'espace lit ses données à l'ouverture : on reprend sa lecture, sans rappel réseau
+  if (name === 'interventions') again(() => { if (typeof suiviItems !== 'undefined' && Array.isArray(suiviItems)) esbSet('interventions', esbPending(suiviItems)); });
+  if (name === 'marketing' || name === 'actualite') again(() => { const l = esbDocs(name); if (l) esbSet(name, l); });
+}
+// lecture en arrière-plan : demandes d'intervention toutes les 3 min, dossiers Drive toutes les 10 min, et au retour sur l'onglet du navigateur
+const ESB_EVERY = { interventions: 180000, docs: 600000 }, esbLast = {};
+async function esbTick() {
+  if (document.hidden) return;
+  for (const k of Object.keys(ESB_EVERY)) {
+    if (Date.now() - (esbLast[k] || 0) < ESB_EVERY[k] - 5000) continue; esbLast[k] = Date.now();
+    try { await ESB_SRC[k](); } catch (e) { console.warn('[Pastilles] ' + k, e); }
+  }
+}
+setTimeout(() => { esbForm(); esbTick(); }, 4000);          // la Performance est signalée par le chargeur du Sheet (ESB_PERF), après la synchronisation
+setInterval(esbTick, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) esbTick(); });
+</script>
+
 <!-- ════════ INDICES DE GESTION : extraction imprimable (A4, 2 pages) ════════ -->
 <style>
 #igModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:8vh 14px; overflow-y:auto; }
@@ -8906,6 +8977,7 @@ function switchEspace(name) {
   if (name === 'actualite') loadActu();
   if (name === 'performance') loadPerformance();
   if (name === 'plancom') loadPlanCom();
+  try { if (typeof esbOpen === 'function') esbOpen(name); } catch (e) {}
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
 }
 </script>
@@ -8926,7 +8998,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261023-102725';
+const BUILD_VERSION = '20261023-104020';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
