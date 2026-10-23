@@ -7692,6 +7692,8 @@ function qhInitChart(canvas) {
 .pc-dh { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:center; padding:2px 0; } .pc-dh.we { color:#2563eb; }
 .pc-day { min-height:104px; border:1.5px solid var(--border); border-radius:10px; padding:5px 6px; background:var(--card); cursor:pointer; display:flex; flex-direction:column; gap:3px; min-width:0; }
 .pc-day:hover { border-color:#0891b2; } .pc-day.out { background:transparent; border-style:dashed; opacity:.55; cursor:default; } .pc-day.we { background:color-mix(in srgb, #3b82f6 6%, var(--card)); }
+.pc-day.fer { background:color-mix(in srgb, #ef4444 8%, var(--card)); border-color:color-mix(in srgb, #ef4444 35%, var(--border)); } .pc-fn { font-size:.64rem; font-weight:800; color:#b91c1c; line-height:1.2; overflow-wrap:anywhere; }
+.pc-lfer { background:color-mix(in srgb, #ef4444 7%, var(--card)); --tc:#ef4444; cursor:default; } .pc-lfer .pc-lt { color:#b91c1c; }
 .pc-day.today { border-color:#0891b2; border-width:2px; } .pc-dn { font-size:.78rem; font-weight:800; color:var(--text); } .pc-day.today .pc-dn { color:#0891b2; }
 .pc-ev { display:block; width:100%; text-align:left; font-family:inherit; font-size:.68rem; font-weight:700; line-height:1.25; padding:3px 6px; border:0; border-left:3px solid var(--tc); border-radius:5px; background:color-mix(in srgb, var(--tc) 14%, transparent); color:var(--text); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pc-more { font-size:.64rem; font-weight:700; color:var(--muted); padding:1px 6px; }
@@ -7752,7 +7754,8 @@ const PC_TYPES = [                                          // catégories (coul
 ];
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
 const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE';          // PC_FR : événement pour toute la franchise (une seule ligne)
-const PC = { rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
+const PC_FERKEY = 'fmj_pcfer';                                  // afficher les jours fériés (préférence de l'appareil)
+const PC = { fer: (() => { try { return localStorage.getItem(PC_FERKEY) !== '0'; } catch (e) { return true; } })(), rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
 const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const pcEsc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -7760,6 +7763,18 @@ const pcT = k => PC_TYPES.find(t => t.k === k) || PC_TYPES[PC_TYPES.length - 1];
 const pcIso = d => d.toISOString().slice(0, 10);
 const pcFmt = iso => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const pcDow = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+const _pcFer = {};                                              // jours fériés français : fixes + Pâques, Ascension, Pentecôte (même règle que le calendrier de prévision CA)
+function pcFeries(y) {
+  if (_pcFer[y]) return _pcFer[y];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1, easter = Date.UTC(y, mo - 1, da), p2 = n => String(n).padStart(2, '0');
+  const at = (n, t) => [new Date(easter + n * 86400000).toISOString().slice(0, 10), t], fx = (mm, dd, t) => [`${y}-${p2(mm)}-${p2(dd)}`, t];
+  return _pcFer[y] = Object.fromEntries([fx(1, 1, "Jour de l'an"), at(1, 'Lundi de Pâques'), fx(5, 1, 'Fête du travail'), fx(5, 8, 'Victoire 1945'), at(39, 'Ascension'), at(50, 'Lundi de Pentecôte'), fx(7, 14, 'Fête nationale'), fx(8, 15, 'Assomption'), fx(11, 1, 'Toussaint'), fx(11, 11, 'Armistice'), fx(12, 25, 'Noël')]);
+}
+const pcFer = iso => pcFeries(+iso.slice(0, 4))[iso] || '';
+const pcFerMonth = ym => Object.entries(pcFeries(+ym.slice(0, 4))).filter(([d]) => d.startsWith(ym)).sort((x, y) => x[0].localeCompare(y[0]));
+function pcToggleFer() { PC.fer = !PC.fer; try { localStorage.setItem(PC_FERKEY, PC.fer ? '1' : '0'); } catch (e) {} pcRender(); }
 function pcNorm(r) {
   const p = String(r.periode || '').slice(0, 10), f = r.fin ? String(r.fin).slice(0, 10) : '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p) || !r.restaurant) return null;
@@ -7844,20 +7859,23 @@ function pcRender() {
       <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
       <span class="pc-seg pc-viewseg"><button type="button" class="pc-btn ${view === 'cal' ? 'on' : ''}" onclick="pcView('cal')">Calendrier</button><button type="button" class="pc-btn ${view === 'list' ? 'on' : ''}" onclick="pcView('list')">Liste</button></span>
       <button type="button" class="pc-btn pc-add" onclick="pcNew()">+ Ajouter un événement</button></div>
-    <div class="pc-legend">${PC_TYPES.map(t => `<button type="button" class="pc-chip-f ${PC.types.has(t.k) ? 'on' : ''}" style="--tc:${t.c}" onclick="pcToggleType('${t.k}')"><i></i>${t.l} (${count(t.k)})</button>`).join('')}</div>`;
+    <div class="pc-legend">${PC_TYPES.map(t => `<button type="button" class="pc-chip-f ${PC.types.has(t.k) ? 'on' : ''}" style="--tc:${t.c}" onclick="pcToggleType('${t.k}')"><i></i>${t.l} (${count(t.k)})</button>`).join('')}<button type="button" class="pc-chip-f ${PC.fer ? 'on' : ''}" style="--tc:#ef4444" onclick="pcToggleFer()" title="Afficher ou masquer les jours fériés"><i></i>Jours fériés (${pcFerMonth(PC.ym).length})</button></div>`;
   let body = '';
   if (view === 'cal') {
     const first = `${PC.ym}-01`, lead = pcDow(first), nDays = new Date(Date.UTC(Y, M, 0)).getUTCDate(), today = pcIso(new Date());
     let cells = PC_J.map((j, i) => `<div class="pc-dh ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pc-day out"></div>'.repeat(lead);
     for (let d = 1; d <= nDays; d++) {
       const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
-      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
+      const fer = PC.fer ? pcFer(iso) : '';
+      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
     }
     body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
   }
   // liste (toujours rendue sous 700 px ; en option sur grand écran)
   const sorted = monthEv.slice().sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
-  const list = sorted.length ? `<div class="pc-list">${sorted.map(e => `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
+  const ferRows = PC.fer ? pcFerMonth(PC.ym).map(([d, n]) => ({ fer: n, periode: d })) : [], mixed = sorted.concat(ferRows).sort((a, b) => a.periode.localeCompare(b.periode) || (b.fer ? 1 : 0) - (a.fer ? 1 : 0));
+  const ferLi = e => `<div class="pc-lrow pc-lfer"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt">${pcEsc(e.fer)}<small>Jour férié</small></div><div class="pc-la"></div></div>`;
+  const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
   card.innerHTML = top + body + (view === 'list' ? list : `<div class="pc-onlymobile">${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
   const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
   pcMarkSeen(monthEv); pcBadge();
@@ -9000,7 +9018,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261023-104839';
+const BUILD_VERSION = '20261023-121029';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
