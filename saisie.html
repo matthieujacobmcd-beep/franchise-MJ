@@ -2636,8 +2636,8 @@ function wfPull() {
 // ── Plan de communication : bandeau « Prochains rendez-vous » au-dessus des onglets pour le restaurant choisi (14 jours : ses événements + ceux de toute la franchise) ──
 // Lecture légère de l'onglet PlanCom (action=plancom) : à l'ouverture, au choix du restaurant, toutes les 2 minutes et au retour sur la page.
 const PCB = { rows: [], at: 0 };
-const PCB_ICO = { reunion: '👥', rap_session: '🎤', audit: '🔍', evaluation: '📝', festif: '🎉', formation: '🎓', libre: '📌', reunion_manager: '👥', reunion_directeur: '👥' };
-const PCB_COL = { reunion: '#2563eb', rap_session: '#0d9488', audit: '#d97706', evaluation: '#7c3aed', festif: '#db2777', formation: '#16a34a', libre: '#64748b', reunion_manager: '#2563eb', reunion_directeur: '#2563eb' };
+const PCB_ICO = { reunion: '👥', rap_session: '🎤', audit: '🔍', evaluation: '📝', election: '🗳️', festif: '🎉', formation: '🎓', libre: '📌', reunion_manager: '👥', reunion_directeur: '👥' };
+const PCB_COL = { reunion: '#2563eb', rap_session: '#0d9488', audit: '#d97706', evaluation: '#7c3aed', election: '#e11d48', festif: '#db2777', formation: '#16a34a', libre: '#64748b', reunion_manager: '#2563eb', reunion_directeur: '#2563eb' };
 function pcbLabel(e) {
   const t = String(e.type || 'libre'), d = String(e.detail || '');
   return (PCB_ICO[t] || '📌') + ' ' + (t === 'formation' ? 'Formation' + (d ? ' · ' + d : '') : (d || { reunion_manager: 'Réunion MANAGERS', reunion_directeur: 'Réunion DIRECTEURS' }[t] || 'Rendez-vous'));
@@ -2649,7 +2649,7 @@ function pcbShow() {
   const evs = PCB.rows.map(e => ({ e, p: String(e.periode || '').slice(0, 10), f: String(e.fin || e.periode || '').slice(0, 10) })).filter(x => x.p && x.f >= today && x.p <= lim && (x.e.restaurant === curResto || x.e.restaurant === 'FRANCHISE')).sort((a, b) => a.p.localeCompare(b.p));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = p => { const d = p < today ? today : p; return J[new Date(d + 'T00:00:00Z').getUTCDay()] + ' ' + d.slice(8) + '/' + d.slice(5, 7); };
-  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + x.e.heure : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<span class="pcb-m">+ ${evs.length - 4}</span>` : ''}</div>`;
+  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + x.e.heure : '') + (x.e.lieu ? '\n📍 ' + x.e.lieu : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.lieu ? ' · 📍 ' + escH(x.e.lieu) : ''}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<span class="pcb-m">+ ${evs.length - 4}</span>` : ''}</div>`;
 }
 async function pcbPull(force) {
   if (typeof configured === 'function' && !configured()) return;
