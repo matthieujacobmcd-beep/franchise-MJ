@@ -52,6 +52,11 @@
   .tab{ flex-shrink:0; border:1.5px solid var(--border); border-bottom:none; background:var(--card2); color:var(--muted); font-family:inherit; font-size:.82rem; font-weight:700; padding:10px 18px; border-radius:12px 12px 0 0; cursor:pointer; }
   .tab.on{ background:#fff; color:var(--gold); border-color:var(--border); position:relative; top:1px; }
   .wrap{ max-width:1100px; margin:0 auto; padding:0 22px 60px; }
+  /* onglets : sur une ligne tant que ça tient ; sinon ils passent à la ligne (jamais coupés, jamais de défilement caché) */
+  .tab-bar.wrapped{ flex-wrap:wrap; overflow:visible; gap:6px; padding-bottom:12px; }
+  .tab-bar.wrapped .tab{ border-bottom:1.5px solid var(--border); border-radius:10px; padding:8px 13px; font-size:.78rem; }
+  .tab-bar.wrapped .tab.on{ top:0; border-color:var(--gold); box-shadow:0 2px 8px rgba(184,134,11,.18); }
+  body.tabs-wrapped .panel{ border-radius:16px; }
   body.pv-wide .wrap, body.pv-wide .tab-bar{ max-width:1500px; }                  /* calendrier de prévision et budget : toute la largeur utile sur grand écran */
   .panel{ background:#fff; border:1.5px solid var(--border); border-radius:0 16px 16px 16px; padding:22px; box-shadow:0 2px 14px rgba(0,0,0,.05); }
   .panel-head{ display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
@@ -93,6 +98,7 @@
   .doc-row i{ color:var(--muted); font-size:.74rem; margin-left:6px; font-style:normal; }
   .doc-row button{ border:none; background:transparent; color:var(--red); font-size:1rem; cursor:pointer; }
   .field input[type=file]{ padding:7px 9px; }
+  .field{ min-width:0; } @media (max-width:640px){ .grid.doc-grid{ grid-template-columns:1fr; } }
   .period .step{ border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.8rem; font-weight:700; border-radius:10px; padding:8px 12px; cursor:pointer; white-space:nowrap; }
   .period .step.next{ background:var(--gold); border-color:var(--gold); color:#fff; }
   .period .step:hover{ filter:brightness(1.06); }
@@ -376,7 +382,10 @@ function lastLabel(tab){
   return p.charAt(0)+p.slice(1).toLowerCase();
 }
 
-function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'||k==='valid')&&!accCan(k)?'🔒 ':''}${n}</button>`).join(''); }
+function fitTabs(){ const b=document.getElementById('tabBar'); if(!b) return; b.classList.remove('wrapped'); const w=b.scrollWidth>b.clientWidth+1; b.classList.toggle('wrapped',w); document.body.classList.toggle('tabs-wrapped',w); }
+let _fitT=null; window.addEventListener('resize',()=>{ clearTimeout(_fitT); _fitT=setTimeout(fitTabs,80); });
+function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'||k==='valid')&&!accCan(k)?'🔒 ':''}${n}</button>`).join(''); fitTabs(); }
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(typeof fitTabs==='function') fitTabs(); });
 function init(){
   if(!configured()) document.getElementById('cfgWarn').style.display='block';
   document.getElementById('pickGrid').innerHTML=RESTOS.map(([k,n])=>`<button class="pick-btn" onclick="setResto('${k}')">${n}</button>`).join('');
@@ -402,7 +411,7 @@ function setResto(r){
   document.getElementById('restoBadge').style.display='flex';
   hidePicker(); renderPanel();
 }
-function setTab(t){ curTab=t; document.body.classList.toggle('pv-wide',t==='prevca'||t==='budget'); document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto) renderPanel(); }
+function setTab(t){ curTab=t; document.body.classList.toggle('pv-wide',t==='prevca'||t==='budget'); fitTabs(); document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto) renderPanel(); }
 
 function weekOptions(year,sel){
   let o=''; for(let w=1;w<=weeksInYear(year);w++){ const mon=weekMonday(year,w), sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
@@ -836,7 +845,7 @@ function renderDocuments(){
   }
   p.innerHTML=`
     <div class="panel-head"><div><div class="panel-title">Documents</div><div class="last-saisie">Téléverse un document : il apparaît tout de suite dans le dashboard.</div></div></div>
-    <div class="grid">
+    <div class="grid doc-grid">
       <div class="field"><label>Type de document</label><select id="docKind" onchange="docKindChanged()">${DOC_KINDS.map(k=>`<option value="${k[0]}">${k[1]} — ${k[2]}</option>`).join('')}</select></div>
       <div class="field"><label>Fichier</label><input type="file" id="docFile" onchange="docFileChanged()"></div>
       <div class="field field-full" id="docNameWrap"><label>Nom affiché dans le dashboard</label><input type="text" id="docName"><div class="hint" id="docNameHint"></div></div>
@@ -1273,14 +1282,16 @@ const XS = {                                                // styles nommés ; 
   pos: { nf: '0.00%', fill: 'FFC6EFCE', color: 'FF006100' }, neg: { nf: '0.00%', fill: 'FFFFC7CE', color: 'FF9C0006' }, total: { b: 1, fill: 'FFD9D9D9' }, we: { fill: 'FFEFF6FF' },
 };
 function xlsxBuild(sheets) {
-  const fonts = ['<font><sz val="10"/><name val="Avenir Next"/></font>'], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], nfs = [], xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'], seen = {};
+  const fonts = ['<font><sz val="10"/><name val="Avenir Next"/></font>'], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], nfs = [], xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'], seen = {}, borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>'];
   const sid = st => {
     if (!st) return 0; const o = typeof st === 'string' ? XS[st] : st, k = JSON.stringify(o); if (seen[k] != null) return seen[k];
-    let fi = 0, fl = 0, nf = 0;
-    if (o.b || o.color) { fonts.push(`<font>${o.b ? '<b/>' : ''}<sz val="10"/>${o.color ? `<color rgb="${o.color}"/>` : ''}<name val="Avenir Next"/></font>`); fi = fonts.length - 1; }
+    let fi = 0, fl = 0, nf = 0, bi = 0;
+    if (o.b || o.i || o.sz || o.color) { fonts.push(`<font>${o.b ? '<b/>' : ''}${o.i ? '<i/>' : ''}<sz val="${o.sz || 10}"/>${o.color ? `<color rgb="${o.color}"/>` : ''}<name val="Avenir Next"/></font>`); fi = fonts.length - 1; }
     if (o.fill) { fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${o.fill}"/><bgColor indexed="64"/></patternFill></fill>`); fl = fills.length - 1; }
     if (o.nf) { let i = nfs.indexOf(o.nf); if (i < 0) { nfs.push(o.nf); i = nfs.length - 1; } nf = 164 + i; }
-    xfs.push(`<xf numFmtId="${nf}" fontId="${fi}" fillId="${fl}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"${o.al ? ` applyAlignment="1"><alignment horizontal="${o.al}"/></xf>` : '/>'}`);
+    if (o.bd) { const e = t => `<${t} style="thin"><color rgb="${o.bd}"/></${t}>`; borders.push(`<border>${e('left')}${e('right')}${e('top')}${e('bottom')}<diagonal/></border>`); bi = borders.length - 1; }
+    const al = (o.al || o.va || o.wrap) ? `<alignment${o.al ? ` horizontal="${o.al}"` : ''}${o.va ? ` vertical="${o.va}"` : ''}${o.wrap ? ' wrapText="1"' : ''}/>` : '';
+    xfs.push(`<xf numFmtId="${nf}" fontId="${fi}" fillId="${fl}" borderId="${bi}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1"${al ? ` applyAlignment="1">${al}</xf>` : '/>'}`);
     return seen[k] = xfs.length - 1;
   };
   const sheetXml = sh => {
@@ -1288,16 +1299,17 @@ function xlsxBuild(sheets) {
       + (sh.freeze ? `<pane xSplit="${sh.freeze[0]}" ySplit="${sh.freeze[1]}" topLeftCell="${_col(sh.freeze[0])}${sh.freeze[1] + 1}" activePane="bottomRight" state="frozen"/>` : '') + '</sheetView></sheetViews>'
       + '<cols>' + sh.widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols><sheetData>';
     sh.rows.forEach((r, ri) => {
-      if (!r) return; x += `<row r="${ri + 1}">`;
+      if (!r) return; x += `<row r="${ri + 1}"${sh.heights && sh.heights[ri] ? ` ht="${sh.heights[ri]}" customHeight="1"` : ''}>`;
       r.forEach((c, ci) => {
         if (c == null) return;
         const o = (typeof c === 'object') ? c : { v: c }, ref = _col(ci) + (ri + 1), st = sid(o.s || (sh.header && ri === 0 ? 'head' : null));
-        if (o.v == null || o.v === '') x += `<c r="${ref}" s="${st}"/>`;
+        if (o.f != null) { const fx = `<f>${_xe(String(o.f).replace(/^=/, ''))}</f>`; x += typeof o.v === 'number' && isFinite(o.v) ? `<c r="${ref}" s="${st}">${fx}<v>${o.v}</v></c>` : (typeof o.v === 'string' && o.v !== '' ? `<c r="${ref}" s="${st}" t="str">${fx}<v>${_xe(o.v)}</v></c>` : `<c r="${ref}" s="${st}">${fx}</c>`); }
+        else if (o.v == null || o.v === '') x += `<c r="${ref}" s="${st}"/>`;
         else x += typeof o.v === 'number' ? `<c r="${ref}" s="${st}"><v>${o.v}</v></c>` : `<c r="${ref}" s="${st}" t="inlineStr"><is><t>${_xe(o.v)}</t></is></c>`;
       });
       x += '</row>';
     });
-    return x + '</sheetData></worksheet>';
+    return x + '</sheetData>' + (sh.merges && sh.merges.length ? `<mergeCells count="${sh.merges.length}">${sh.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '') + '</worksheet>';
   };
   const sx = sheets.map(sheetXml);                          // les styles se remplissent en construisant les feuilles
   return (async () => {
@@ -1307,13 +1319,13 @@ function xlsxBuild(sheets) {
       + sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>');
     z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
     z.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
-      + sheets.map((s, i) => `<sheet name="${_xe(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>');
+      + sheets.map((s, i) => `<sheet name="${_xe(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>');
     z.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
       + sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
       + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
     z.file('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
       + (nfs.length ? `<numFmts count="${nfs.length}">${nfs.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${_xe(f)}"/>`).join('')}</numFmts>` : '')
-      + `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
+      + `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders>`
       + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs></styleSheet>`);
     sx.forEach((x, i) => z.file(`xl/worksheets/sheet${i + 1}.xml`, x));
     return z.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1359,12 +1371,17 @@ function pvModelSheet(r, Y, months, base, prevOf, prevT) {
   return { name: `PREV ${Y} ${base === 'alim' ? 'ALIM' : 'TOTAL'} - ${nm}`.slice(0, 31), rows, widths: [11, ...Array.from({ length: nb }, () => [15, 11, 10]).flat()], freeze: [1, 2], hasData: tot.pv > 0 };
 }
 const pvTotRef = (r, iso) => { const ri = pvShift(iso, -364), v = ((CAM || {})[r] || {})[ri]; if (OPEN_DATES[r] && ri < OPEN_DATES[r]) return null; return (typeof v === 'number' && v > 0) ? v : (((PREVT || {})[r] || {})[ri] ?? null); };
-async function pvExport() {
-  const scope = document.getElementById('pvScope').value, base = document.getElementById('pvBase').value, [Y, M] = PV.ym.split('-').map(Number);
-  const restos = scope === 'all' ? RESTOS.map(r => r[0]) : [curResto], months = scope === 'month' ? [M] : [...Array(12)].map((_, i) => i + 1);
+// Prévision du jour telle qu'elle est à l'écran : saisie en cours, sinon brouillon du mois, sinon valeur enregistrée
+function pvDataFns() {
   const draftOf = (r, iso) => PV.drafts[pvKey(r, iso.slice(0, 7))];                       // saisie non enregistrée (ou simulation appliquée) de ce restaurant et de ce mois
   const prevOf = (r, iso) => { if (r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) return PV.vals[iso]; const dk = draftOf(r, iso); return dk ? dk[iso] : ((PREVJ || {})[r] || {})[iso]; };   // inclut la saisie en cours à l'écran
   const prevT = (r, iso, v) => ((r === curResto && PV.resto === curResto && iso.startsWith(PV.ym)) || draftOf(r, iso)) ? v * PV.coef : (((PREVT || {})[r] || {})[iso] ?? v * 1.01);
+  return { prevOf, prevT };
+}
+async function pvExport() {
+  const scope = document.getElementById('pvScope').value, base = document.getElementById('pvBase').value, [Y, M] = PV.ym.split('-').map(Number);
+  const restos = scope === 'all' ? RESTOS.map(r => r[0]) : [curResto], months = scope === 'month' ? [M] : [...Array(12)].map((_, i) => i + 1);
+  const { prevOf, prevT } = pvDataFns();
   const sheets = restos.map(r => pvModelSheet(r, Y, months, base, prevOf, prevT)).filter(sh => sh.hasData || restos.length === 1);
   if (!sheets.length || !sheets.some(sh => sh.hasData)) { pvMsg('err', 'Aucune prévision à exporter.'); return; }
   // feuille de détail jour (données brutes)
@@ -1770,7 +1787,8 @@ function bdCompute(p, alim) {
     s('alim', A); s('net', N);
     for (const k of ['achat', 'repas', 'dechets', 'embal', 'vaisselle']) s(k, lv(k));
     s('marge', A - g('achat') - g('repas') - g('dechets') - g('embal') - g('vaisselle'));
-    s('moeq', p.vphe[i] ? A / p.vphe[i] * p.coutH[i] : 0); s('cseq', g('moeq') * p.tEq[i]);
+    const mqm = (p.m && p.m.moeq) || 'v';                       // v = CA ÷ VPHE × coût horaire (classeur) · r = % du CA alimentaire · a = montants saisis
+    s('moeq', mqm === 'r' ? A * (p.moeqR || 0) : mqm === 'a' ? ((p.moeqA && p.moeqA[i]) || 0) : (p.vphe[i] ? A / p.vphe[i] * p.coutH[i] : 0)); s('cseq', g('moeq') * p.tEq[i]);
     s('momg', edgM ? edgM[i] : lv('momg')); s('csmg', g('momg') * p.tMg[i]); s('aides', lv('aides')); s('divmo', lv('divmo'));
     s('mo', g('moeq') + g('cseq') + g('momg') + g('csmg') + g('aides') + g('divmo'));
     for (const k of ['nett', 'secu', 'banque', 'maint', 'autres']) s(k, lv(k));
@@ -1815,7 +1833,9 @@ async function bdBook(buf, wantSheet, label = 'PNL') {
   const rel = [...rels.getElementsByTagName('Relationship')].find(x => x.getAttribute('Id') === sh.rid), target = rel.getAttribute('Target').replace(/^\/?(xl\/)?/, 'xl/');
   const doc = await xml(target), cells = {}, formulas = {};
   for (const c of doc.getElementsByTagName('c')) {
-    const v = c.getElementsByTagName('v')[0]; if (!v) continue; const t = c.getAttribute('t'); let val = v.textContent;
+    const v = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
+    if (!v && is) { cells[c.getAttribute('r')] = [...is.getElementsByTagName('t')].map(t => t.textContent).join(''); continue; }   // texte « en ligne » (fichiers produits par l'export de l'application)
+    if (!v) continue; const t = c.getAttribute('t'); let val = v.textContent;
     const fe = c.getElementsByTagName('f')[0]; if (fe && fe.textContent) formulas[c.getAttribute('r')] = fe.textContent;
     if (t === 's') val = strings[+val]; else if (t === 'str' || t === 'inlineStr' || t === 'e') val = val; else val = +val;
     cells[c.getAttribute('r')] = val;
@@ -1903,6 +1923,7 @@ table.bd th{ background:var(--card2); color:var(--muted); font-size:.6rem; font-
 table.bd th:first-child,table.bd td:first-child{ text-align:left; position:sticky; left:0; background:var(--card); z-index:1; min-width:230px; }
 table.bd th:first-child{ background:var(--card2); z-index:2; }
 table.bd td{ padding:4px 6px; border-bottom:1px solid var(--border); text-align:right; white-space:nowrap; }
+table.sim tr.b td{ font-weight:800; background:rgba(59,130,246,.07); } table.sim tr.k td{ font-weight:800; background:rgba(34,197,94,.09); }
 table.bd tr.b td{ font-weight:800; background:rgba(59,130,246,.07); } table.bd tr.b td:first-child{ background:#eaf1fc; }
 table.bd tr.k td{ background:rgba(34,197,94,.09); } table.bd tr.k td:first-child{ background:#e6f6ea; }
 table.bd td.p{ color:var(--muted); font-size:.68rem; }
@@ -1921,6 +1942,7 @@ function bdSet(k, v, kind) {
   const o = bdParams(curResto), p = o.p, x = bdPar(v); if (x == null) return;
   if (kind === 'pct') p[k] = x / 100; else if (kind === 'num') p[k] = x; else if (kind === 'arr') p[k] = Array(12).fill(x);
   else if (kind === 'arrp') p[k] = Array(12).fill(x / 100);
+  else if (kind === 'scale' || kind === 'scalep') { const t = kind === 'scalep' ? x / 100 : x, av = p[k].reduce((a, b) => a + b, 0) / 12; p[k] = av ? p[k].map(m => m * t / av) : Array(12).fill(t); }   // moyenne visée, profil mensuel conservé
   else if (kind === 'annual') { const old = p[k].reduce((a, b) => a + b, 0); p[k] = old ? p[k].map(m => m * x / old) : Array(12).fill(x / 12); }
   bdSave(); renderBudget();
 }
@@ -1937,6 +1959,19 @@ function bdSetLine(k, v) {                                   // valeur saisie : 
   bdSave(); renderBudget();
 }
 function bdSetM(k, i, v) { const x = bdPar(v); if (x == null) return; bdParams(curResto).p[k][i] = x; bdSave(); renderBudget(); }
+function bdMoeqMode(to) {                                    // le résultat ne change pas au moment de la bascule : la valeur est convertie
+  const o = bdParams(curResto), p = o.p, ca = bdCa(curResto, +SIM.ty), L = bdCompute(p, ca.alim), A = L.alim.reduce((a, b) => a + b, 0); p.m = p.m || {};
+  if (((p.m.moeq) || 'v') === to) return;
+  if (to === 'r') p.moeqR = A ? L.moeq.reduce((a, b) => a + b, 0) / A : 0; else if (to === 'a') p.moeqA = L.moeq.map(v => Math.round(v * 100) / 100);
+  p.m.moeq = to; bdSave(); renderBudget();
+}
+function bdMoeqSet(v) {
+  const p = bdParams(curResto).p, x = bdPar(v); if (x == null) return; const mq = (p.m && p.m.moeq) || 'v';
+  if (mq === 'r') p.moeqR = x / 100; else if (mq === 'a') { const old = (p.moeqA || []).reduce((a, b) => a + b, 0); p.moeqA = old ? p.moeqA.map(m => m * x / old) : Array(12).fill(x / 12); }
+  bdSave(); renderBudget();
+}
+function bdMoeqM(i, v) { const x = bdPar(v); if (x == null) return; const p = bdParams(curResto).p; p.moeqA = p.moeqA || Array(12).fill(0); p.moeqA[i] = x; bdSave(); renderBudget(); }
+function bdParM(k, i, v) { const x = bdPar(v); if (x == null) return; bdParams(curResto).p[k][i] = (k === 'tEq' || k === 'tMg') ? x / 100 : x; bdSave(); renderBudget(); }   // paramètre du mois (lignes 60 à 64 du PNL)
 function bdView(v) { BUD.view = v; bdSave(); renderBudget(); }
 function bdPeriod(v) { BUD.period = v; bdSave(); renderBudget(); }               // affichage du compte de résultat : m = mensuel (12 colonnes) · a = annuel
 function bdEntry(v) { BUD.entry = v; bdSave(); renderBudget(); }                 // saisie des hypothèses : a = annuelle · m = mois par mois
@@ -2041,7 +2076,7 @@ function renderBudget() {
   const canEdg = accCan('edg', r), edgM = bdEdgM(p), edg = bdEdg(), detM = bdDetM(p);
   const avg = a => a.reduce((x, y) => x + y, 0) / 12;
   const editable = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn' || x.t === 'fix');
-  const hypRows = editable.map(x => {
+  const hypEdit = x => {
     if (detM[x.k]) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= détail par société (${(p.det || []).filter(d => d.k === x.k).length} ligne(s), ci-dessus)</td><td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
     if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de direction, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
     const md = bdMode(p, x.k), base = x.t === 'pctn' ? 'CA net' : 'CA alim.';
@@ -2050,10 +2085,10 @@ function renderBudget() {
     return `<tr><td>${x.l}</td><td style="text-align:center"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;${md === 'a' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','a')">€</button><button class="step" style="border-radius:0 8px 8px 0;${md === 'r' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdSwitch('${x.k}','r')">% du ${base}</button></span></td>
       <td><input type="text" inputmode="decimal" style="width:110px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;text-align:right;font-family:inherit" value="${val}" onchange="bdSetLine('${x.k}',this.value)"> <small style="color:var(--muted)">${md === 'r' ? (varM ? '% (moyenne : varie selon les mois)' : '%') : '€ / an'}</small></td>
       <td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
-  }).join('');
+  };
   const fixRows = editable.map(x => bdMode(p, x.k) === 'a' && !detM[x.k] && !(x.k === 'momg' && edgM) ? `<tr><td>${x.l}</td>${p[x.k].map((v, i) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${Math.round(v)}" onchange="bdSetM('${x.k}',${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(p[x.k]))}</b></td><td></td></tr>` : '').join('');
   const mIn = 'width:62px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem';
-  const gridRows = editable.map(x => {
+  const gridEdit = x => {
     const ro = detM[x.k] ? ['détail par société', detM[x.k]] : (x.k === 'momg' && edgM ? ['salaires par poste', edgM] : null);
     if (ro) return `<tr><td>${x.l} <small style="color:var(--muted)">(${ro[0]})</small></td>${ro[1].map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(ro[1]))}</b></td><td></td></tr>`;
     const md = bdMode(p, x.k), pcn = x.t === 'pctn';
@@ -2061,7 +2096,42 @@ function renderBudget() {
       : MN.map((_, i) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${bdIn((p.pm && p.pm[x.k]) ? p.pm[x.k][i] : p[x.k])}" onchange="bdSetPm('${x.k}',${i},this.value)"></td>`).join('');
     const yr = md === 'a' ? bdE(sum(p[x.k])) : bdP(sum(L[x.k]) / ((pcn ? sum(L.net) : A) || 1));
     return `<tr><td>${x.l} <button class="step" style="font-size:.6rem;padding:1px 7px" title="Changer le mode de saisie de cette ligne" onclick="bdSwitch('${x.k}','${md === 'a' ? 'r' : 'a'}')">${md === 'a' ? '€ → %' : '% → €'}</button></td>${cells}<td><b>${yr}</b></td><td class="p">${md === 'a' ? (A ? bdP(sum(L[x.k]) / A) : '') : '% du CA'}</td></tr>`;
+  };
+  // même présentation que le compte de résultat : lignes saisies, lignes calculées, sous-totaux et résultats en couleur (valeurs cible)
+  const rowCls = x => x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : '';
+  const yrCells = x => { const t = sum(L[x.k]); return `<td>${bdE(t)}</td><td class="p">${A ? bdP(t / A) : ''}</td>`; };
+  const mq = (p.m && p.m.moeq) || 'v', inS = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;text-align:right;font-family:inherit;';
+  const mBtn = (v, l, rd) => `<button class="step" style="border-radius:${rd};${mq === v ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" onclick="bdMoeqMode('${v}')">${l}</button>`;
+  const mqSwitch = `<span style="display:inline-flex">${mBtn('v', 'VPHE × coût h.', '8px 0 0 8px')}${mBtn('r', '% du CA alim.', '0')}${mBtn('a', '€', '0 8px 8px 0')}</span>`;
+  const mqRate = A ? sum(L.moeq) / A : 0;
+  const hypRows = BD_LINES.map(x => {
+    const cls = rowCls(x);
+    if (x.k === 'alim' || x.k === 'net') return `<tr class="${cls}"><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted);font-weight:600">${x.k === 'alim' ? '= prévision journalière du calendrier Prévision CA' : '= CA alimentaire × ratio (voir « Autres paramètres »)'}</td>${yrCells(x)}</tr>`;
+    if (x.k === 'moeq') {
+      const val = mq === 'v' ? `VPHE <input type="text" inputmode="decimal" style="${inS}width:74px" value="${bdRaw(avg(p.vphe))}" onchange="bdSet('vphe',this.value,'scale')"> € / h · coût horaire <input type="text" inputmode="decimal" style="${inS}width:74px" value="${bdRaw(avg(p.coutH))}" onchange="bdSet('coutH',this.value,'scale')"> €`
+        : mq === 'r' ? `<input type="text" inputmode="decimal" style="${inS}width:110px" value="${bdIn(mqRate)}" onchange="bdMoeqSet(this.value)"> <small style="color:var(--muted)">%</small>`
+        : `<input type="text" inputmode="decimal" style="${inS}width:110px" value="${Math.round(sum(L.moeq))}" onchange="bdMoeqSet(this.value)"> <small style="color:var(--muted)">€ / an</small>`;
+      return `<tr><td>${x.l}</td><td style="text-align:center">${mqSwitch}</td><td>${val}</td>${yrCells(x)}</tr>`;
+    }
+    if (x.k === 'cseq' || x.k === 'csmg') { const k = x.k === 'cseq' ? 'tEq' : 'tMg'; return `<tr><td>${x.l}</td><td style="text-align:center;color:var(--muted)">taux sur la ligne au-dessus</td><td><input type="text" inputmode="decimal" style="${inS}width:110px" value="${bdIn(avg(p[k]))}" onchange="bdSet('${k}',this.value,'scalep')"> <small style="color:var(--muted)">%</small></td>${yrCells(x)}</tr>`; }
+    if (x.t === 'pct' || x.t === 'pctn' || x.t === 'fix') return hypEdit(x);
+    return `<tr class="${cls}"><td>${x.l}</td><td colspan="2"></td>${yrCells(x)}</tr>`;
   }).join('');
+  const gridRo = (x, note) => `<tr class="${rowCls(x)}"><td>${x.l}${note ? ` <small style="color:var(--muted);font-weight:500">(${note})</small>` : ''}</td>${L[x.k].map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(L[x.k]))}</b></td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
+  const gridRows = BD_LINES.map(x => {
+    if (x.k === 'moeq') {
+      const sw = `<div style="margin-top:3px">${mqSwitch}</div>`;
+      if (mq === 'a') return `<tr><td>${x.l}${sw}</td>${(p.moeqA || Array(12).fill(0)).map((v, i) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${Math.round(v)}" onchange="bdMoeqM(${i},this.value)"></td>`).join('')}<td><b>${bdE(sum(L.moeq))}</b></td><td class="p">${A ? bdP(sum(L.moeq) / A) : ''}</td></tr>`;
+      return `<tr><td>${x.l} <small style="color:var(--muted)">(${mq === 'r' ? bdP(mqRate) + ' du CA' : 'CA ÷ VPHE × coût horaire'})</small>${sw}</td>${L.moeq.map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(L.moeq))}</b></td><td class="p">${A ? bdP(sum(L.moeq) / A) : ''}</td></tr>`;
+    }
+    if (x.k === 'cseq' || x.k === 'csmg') return gridRo(x, 'taux ' + bdIn(avg(p[x.k === 'cseq' ? 'tEq' : 'tMg'])) + ' %');
+    if (x.t === 'pct' || x.t === 'pctn' || x.t === 'fix') return gridEdit(x);
+    return gridRo(x);
+  }).join('');
+  const parIn = (k, i, v, pc) => `<td><input type="text" inputmode="decimal" style="${mIn}" value="${pc ? bdIn(v) : bdRaw(v)}" onchange="bdParM('${k}',${i},this.value)"></td>`;
+  const parRow = (k, l, pc) => `<tr><td>${l}</td>${p[k].map((v, i) => parIn(k, i, v, pc)).join('')}<td><b>${pc ? bdIn(avg(p[k])) + ' %' : bdRaw(avg(p[k]))}</b></td><td class="p">moy.</td></tr>`;
+  const parRows = `<tr class="b"><td colspan="15">Paramètres mensuels <small style="font-weight:500">(lignes 60 à 64 du PNL : ils alimentent la main d'œuvre ci-dessus)</small></td></tr>`
+    + (mq === 'v' ? parRow('vphe', 'VPHE équipier (€ / h)') + parRow('coutH', 'Coût horaire équipier (€)') : '') + parRow('tEq', '% charges sociales équipiers', true) + parRow('tMg', '% charges sociales managers', true);
   // services extérieurs : détail par prestation et société, comme l'onglet « DEP CONTROLABLE » du classeur
   const dets = p.det || [], dIn = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;', refY = p.detRefY || (Ty - 1);
   const detOpts = sel => BD_DET_KEYS.map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${BD_BY[k].l}</option>`).join('');
@@ -2123,18 +2193,14 @@ function renderBudget() {
     ${detPanel}
     <details class="sim-d" open><summary>Hypothèses par ligne : montant (€) ou % du CA</summary>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0"><b style="font-size:.76rem">Saisie :</b><span style="display:inline-flex">${seg(BUD.entry, 'a', 'Annuelle', '8px 0 0 8px', 'bdEntry')}${seg(BUD.entry, 'm', 'Mensuelle', '0 8px 8px 0', 'bdEntry')}</span></div>
-      <div class="hint" style="margin:0 0 8px">${BUD.entry === 'm' ? 'Chaque ligne se saisit <b>mois par mois</b> : en € ou en % du CA du mois (bouton « € → % » à côté du nom de la ligne).' : 'Pour chaque ligne, choisis de saisir un <b>montant annuel</b> (réparti sur les mois selon le profil repris du classeur) ou un <b>% du CA</b> (qui suit le CA de chaque mois). Basculer d\'un mode à l\'autre convertit la valeur sans changer le résultat.'}</div>
-      ${BUD.entry === 'm' ? `<div class="sim-wrap"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${gridRows}</tbody></table></div>` : `<div class="sim-wrap"><table class="sim" style="min-width:640px"><thead><tr><th>Ligne</th><th style="text-align:center">Saisie en</th><th>Valeur</th><th>Année (€)</th><th>% CA alim.</th></tr></thead><tbody>${hypRows}</tbody></table></div>`}
+      <div class="hint" style="margin:0 0 8px">${BUD.entry === 'm' ? 'Chaque ligne se saisit <b>mois par mois</b> : en € ou en % du CA du mois (bouton « € → % » à côté du nom de la ligne).' : 'Pour chaque ligne, choisis de saisir un <b>montant annuel</b> (réparti sur les mois selon le profil repris du classeur) ou un <b>% du CA</b> (qui suit le CA de chaque mois). Basculer d\'un mode à l\'autre convertit la valeur sans changer le résultat. Les lignes en couleur reprennent les sous-totaux et résultats du compte de résultat : ce sont les valeurs cible.'}</div>
+      ${BUD.entry === 'm' ? `<div class="sim-wrap"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th>% CA alim.</th></tr></thead><tbody>${gridRows}${parRows}</tbody></table></div>` : `<div class="sim-wrap"><table class="sim" style="min-width:640px"><thead><tr><th>Ligne</th><th style="text-align:center">Saisie en</th><th>Valeur</th><th>Année (€)</th><th>% CA alim.</th></tr></thead><tbody>${hypRows}</tbody></table></div>`}
       <div class="sim-h">Autres paramètres</div><div class="bd-grid" style="margin-top:6px">
       <div class="f"><label>CA net ÷ CA alimentaire</label><input type="text" inputmode="decimal" value="${String(Math.round(p.rn * 10000) / 10000).replace('.', ',')}" onchange="bdSet('rn',this.value,'num')"></div>
-      <div class="f"><label>VPHE équipier (€ / h)</label><input type="text" inputmode="decimal" value="${String(Math.round(avg(p.vphe) * 100) / 100).replace('.', ',')}" onchange="bdSet('vphe',this.value,'arr')"></div>
-      <div class="f"><label>Coût horaire équipier (€)</label><input type="text" inputmode="decimal" value="${String(Math.round(avg(p.coutH) * 100) / 100).replace('.', ',')}" onchange="bdSet('coutH',this.value,'arr')"></div>
-      <div class="f"><label>Charges sociales équipiers (%)</label><input type="text" inputmode="decimal" value="${bdIn(avg(p.tEq))}" onchange="bdSet('tEq',this.value,'arrp')"></div>
-      <div class="f"><label>Charges sociales managers (%)</label><input type="text" inputmode="decimal" value="${bdIn(avg(p.tMg))}" onchange="bdSet('tMg',this.value,'arrp')"></div>
       <div class="f"><label>Impôt sur les sociétés (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.tis)}" onchange="bdSet('tis',this.value,'pct')"></div>
       <div class="f"><label>Évolution des montants fixes (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.infl || 0)}" onchange="bdSet('infl',this.value,'pct')"></div></div></details>
     ${BUD.entry === 'm' ? '' : `<details class="sim-d"><summary>Montants mois par mois (lignes saisies en €)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne (€ / mois)</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${fixRows}</tbody></table></div></details>`}
-    <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button><button class="step" onclick="bdExport()">⬇ Excel (PNL)</button><span class="save-msg" id="bdApplyMsg"></span></div>
+    <div class="foot" style="margin-top:14px"><button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button><button class="step" onclick="bdExport()" title="Classeur au modèle PREV ET BUDGET : PNL (formules vivantes), DEP CONTROLABLE, SALAIRE EDG, PREV jour par jour">⬇ Exporter en Excel (modèle PREV ET BUDGET)</button><span class="save-msg" id="bdApplyMsg"></span></div>
     <div class="hint">« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net (ratios en % du CA alimentaire). Les hypothèses et les salaires sont gardés sur cet appareil.</div>`;
   if (bdFlash) { const m = document.getElementById('bdMsg'); if (m) { m.className = 'save-msg ' + bdFlash[0]; m.textContent = bdFlash[1]; } bdFlash = null; }
 }
@@ -2162,21 +2228,162 @@ async function bdApply() {
   msg('ok', `✓ Prévisionnel mensuel ${Ty} enregistré (${rows.length} mois).`);
 }
 
+// ── Export Excel au modèle du classeur « PREV ET BUDGET » : PNL <année> (colonnes mois + %, semestres, année, formules vivantes), DEP CONTROLABLE, SALAIRE EDG (initiales) et PREV <année> (prévision jour par jour) ──
+const BDX = { teal: 'FF00A7AB', blue: 'FFBDD7EE', yel: 'FFFFF2CC', grn: 'FFE2EFDA', sem: 'FF0433FF', grey: 'FF6B7280' };
+const bdXSt = o => Object.assign({ sz: 11, bd: BDX.teal, va: 'center' }, o);
+const bdXPut = rows => (ro, co, c) => { (rows[ro - 1] = rows[ro - 1] || [])[co - 1] = c; };
+const bdXFx = t => String(t).replace(/[\s€]/g, '').replace(/^=/, '').replace(/,/g, '.');       // « 491,68*12 » → formule Excel (déjà validée par bdExpr)
+const bdXRound = v => Math.round(v * 100) / 100;
+
+// Feuille « DEP CONTROLABLE » : une section par ligne du compte de résultat, prestations × sociétés, calculs conservés en formules
+function bdXDep(p, Ty, name) {
+  const dets = (p.det || []).filter(d => BD_DET_KEYS.includes(d.k)); if (!dets.length) return { sheet: null, tot: {}, prof: {} };
+  const rows = [], put = bdXPut(rows), refY = p.detRefY || (Ty - 1), tot = {}, prof = {};
+  const H = bdXSt({ b: 1, fill: 'FFD9D9D9', al: 'center', wrap: 1 }), T = bdXSt({}), E = bdXSt({ nf: '#,##0 "€"', al: 'right' }), PC = bdXSt({ nf: '0.0%', al: 'right' });
+  const SB = bdXSt({ b: 1, fill: BDX.yel }), SE = bdXSt({ b: 1, fill: BDX.yel, nf: '#,##0 "€"', al: 'right' }), SP = bdXSt({ b: 1, fill: BDX.yel, nf: '0.0%', al: 'right' });
+  put(1, 1, { v: `Services extérieurs & contrats — ${name} ${Ty}`, s: { b: 1, sz: 16, color: BDX.teal } });
+  put(2, 1, { v: 'Montants annuels. Les calculs saisis dans l\'application (ex. 491,68*12) sont conservés en formules ; le total de chaque section alimente la ligne correspondante du PNL (÷ 12 par mois).', s: { i: 1, sz: 10, color: BDX.grey } });
+  [['Prestations', 1], [String(Ty), 4], ['Société(s)', 5], ['Info', 6], [String(refY), 7], ['Varia°', 8]].forEach(([v, c]) => put(5, c, { v, s: H })); [2, 3].forEach(c => put(5, c, { v: '', s: H }));
+  let ro = 6; const secT = [];
+  for (const k of BD_DET_KEYS) {
+    const ds = dets.filter(d => d.k === k); if (!ds.length) continue;
+    put(ro, 1, { v: BD_BY[k].l, s: SB }); for (let c = 2; c <= 8; c++) put(ro, c, { v: '', s: SB }); ro++;
+    const a = ro; let sA = 0, sR = 0; prof[k] = ds.some(d => d.m);
+    for (const d of ds) {
+      const fa = !d.m && d.amtF && bdExpr(d.amtF) != null ? bdXFx(d.amtF) : null, fr = d.refF && bdExpr(d.refF) != null ? bdXFx(d.refF) : null, am = fa ? bdExpr(fa) : (d.amt || 0), rf = fr ? bdExpr(fr) : (d.ref || 0); sA += am; sR += rf;   // valeur en cache = résultat exact de la formule (comme Excel le recalculera)
+      put(ro, 1, { v: d.pr || '', s: T }); put(ro, 2, { v: '', s: T }); put(ro, 3, { v: '', s: T });
+      put(ro, 4, fa ? { f: fa, v: am, s: E } : { v: am, s: E }); put(ro, 5, { v: d.soc || '', s: T }); put(ro, 6, { v: d.info || '', s: T });
+      put(ro, 7, fr ? { f: fr, v: rf, s: E } : { v: rf, s: E }); put(ro, 8, { f: `IF(G${ro}=0,"",(D${ro}-G${ro})/G${ro})`, v: rf ? am / rf - 1 : '', s: PC }); ro++;
+    }
+    const b = ro - 1; put(ro, 1, { v: 'Total ' + BD_BY[k].l.toLowerCase(), s: SB }); put(ro, 2, { v: '', s: SB }); put(ro, 3, { v: '', s: SB });
+    put(ro, 4, { f: `SUM(D${a}:D${b})`, v: sA, s: SE }); put(ro, 5, { v: '', s: SB }); put(ro, 6, { v: '', s: SB }); put(ro, 7, { f: `SUM(G${a}:G${b})`, v: sR, s: SE }); put(ro, 8, { f: `IF(G${ro}=0,"",(D${ro}-G${ro})/G${ro})`, v: sR ? sA / sR - 1 : '', s: SP });
+    tot[k] = ro; secT.push([ro, sA, sR]); ro += 2;
+  }
+  const gA = secT.reduce((x, y) => x + y[1], 0), gR = secT.reduce((x, y) => x + y[2], 0), KB = bdXSt({ b: 1, fill: BDX.blue }), KE = bdXSt({ b: 1, fill: BDX.blue, nf: '#,##0 "€"', al: 'right' }), KP = bdXSt({ b: 1, fill: BDX.blue, nf: '0.0%', al: 'right' });
+  put(ro, 1, { v: 'Total services extérieurs détaillés', s: KB }); put(ro, 2, { v: '', s: KB }); put(ro, 3, { v: '', s: KB });
+  put(ro, 4, { f: secT.map(x => 'D' + x[0]).join('+'), v: gA, s: KE }); put(ro, 5, { v: '', s: KB }); put(ro, 6, { v: '', s: KB }); put(ro, 7, { f: secT.map(x => 'G' + x[0]).join('+'), v: gR, s: KE }); put(ro, 8, { f: `IF(G${ro}=0,"",(D${ro}-G${ro})/G${ro})`, v: gR ? gA / gR - 1 : '', s: KP });
+  return { sheet: { name: 'DEP CONTROLABLE', rows, widths: [44, 2, 2, 16, 36, 52, 16, 11], header: false, freeze: [1, 5] }, tot, prof };
+}
+
+// Feuille « SALAIRE EDG » : un poste par ligne, initiales seulement (jamais de noms), coût mensuel = brut + prime répartie sur les mois travaillés
+function bdXEdg(p, Ty, name) {
+  const e = p.edg, rows = [], put = bdXPut(rows), n = e.rows.length, tr = Math.max(25, 3 + n + 2);
+  const H = bdXSt({ b: 1, fill: 'FFD9D9D9', al: 'center', wrap: 1 }), T = bdXSt({ b: 1 }), E = bdXSt({ nf: '#,##0', al: 'right' }), EB = bdXSt({ nf: '#,##0', al: 'right', b: 1, fill: BDX.blue });
+  put(1, 1, { v: `SALAIRE EDG — ${name} ${Ty} (par poste, initiales uniquement)`, s: { b: 1, sz: 16, color: BDX.teal } });
+  const head = (ro, lab) => { put(ro, 1, { v: '', s: H }); put(ro, 2, { v: lab, s: H }); put(ro, 3, { v: lab === 'SALAIRE' ? 'HEURES CONTR.' : '', s: H }); MONTHS.forEach((m, i) => put(ro, 4 + i, { v: m, s: H })); put(ro, 16, { v: 'TOTAL', s: H }); };
+  head(2, 'SALAIRE'); const colSum = Array(12).fill(0);
+  e.rows.forEach((x, j) => {
+    const ro = 3 + j, act = x.sal.filter(v => v > 0).length || 1; put(ro, 1, { v: String(x.poste || '').toUpperCase(), s: T }); put(ro, 2, { v: x.ini || '—', s: T }); put(ro, 3, { v: x.ctr || '', s: bdXSt({ al: 'center' }) });
+    let t = 0; for (let i = 0; i < 12; i++) { const v = x.sal[i] > 0 ? x.sal[i] + (x.prime || 0) / act : 0; put(ro, 4 + i, { v, s: E }); t += v; colSum[i] += v; }
+    put(ro, 16, { f: `SUM(D${ro}:O${ro})`, v: t, s: EB });
+  });
+  head(tr - 1, 'COUT EDG'); put(tr, 1, { v: '', s: EB }); put(tr, 2, { v: 'TOTAL', s: EB }); put(tr, 3, { v: '', s: EB });
+  for (let i = 0; i < 12; i++) put(tr, 4 + i, { f: `SUM(${bdColLetter(4 + i)}3:${bdColLetter(4 + i)}${tr - 2})`, v: colSum[i], s: EB });
+  put(tr, 16, { f: `SUM(D${tr}:O${tr})`, v: colSum.reduce((a, b) => a + b, 0), s: EB });
+  return { sheet: { name: 'SALAIRE EDG', rows, widths: [16, 12, 14, ...Array(12).fill(12), 14], header: false, freeze: [3, 2] }, totRow: tr };
+}
+
+// Feuille « PNL <année> » : mêmes lignes (6 à 58), mêmes colonnes (mois + % par groupe, 1er semestre, 2e semestre, année), paramètres lignes 60 à 66 ; les cellules sont des FORMULES comme dans le classeur
+function bdXPnl(r, Ty, p, L, name, edgRow, dep) {
+  const rows = [], put = bdXPut(rows), R = {}; BD_LINES.forEach((x, i) => { R[x.k] = 6 + i; });
+  const MC = i => i < 6 ? 2 + 3 * i : 23 + 3 * (i - 6), S1 = 20, S2 = 41, YR = 44, CL = bdColLetter, KEY = ['alim', 'marge', 'pac', 'narn', 'soi', 'cf', 'rnai', 'rn'], SUB = ['mo', 'svc', 'redeff'];
+  const detM = bdDetM(p), sum = a => a.reduce((x, y) => x + y, 0), A = L.alim, hN = simHist(r, Ty - 1), okM = hN.map(x => x.n && x.n === x.nd);
+  const tl = n => CL(n);
+  // en-têtes
+  put(1, 1, { v: `Etats des PERTES et PROFITS : Synthèse — ${name} ${Ty}`, s: { b: 1, sz: 18, color: BDX.teal } });
+  put(2, 1, { v: 'Budget calculé dans l\'application Franchise : les montants en blanc et les % sont modifiables, les totaux se recalculent (mêmes formules que le classeur PREV ET BUDGET).', s: { i: 1, sz: 10, color: BDX.grey } });
+  const hd = (c, v, extra) => put(5, c, { v, s: bdXSt(Object.assign({ b: 1, al: 'center', wrap: 1 }, extra || {})) });
+  put(3, 1, { v: `CA alimentaire ${Ty - 1} (réel)`, s: bdXSt({ b: 1 }) }); put(4, 1, { v: `Évolution ${Ty} / ${Ty - 1}`, s: bdXSt({ b: 1 }) }); put(5, 1, { v: '', s: bdXSt({ b: 1, color: BDX.teal }) });
+  const n1 = bdXSt({ nf: '#,##0', al: 'right', fill: BDX.yel }), ev = bdXSt({ nf: '0.0%', al: 'right', color: BDX.grey });
+  for (let i = 0; i < 12; i++) {
+    const c = MC(i), cl = CL(c); hd(c, `${MONTHS[i]} ${Ty}`); hd(c + 1, '%');
+    put(3, c, okM[i] ? { v: hN[i].A, s: n1 } : { v: '', s: n1 }); put(4, c, { f: `IF(AND(${cl}3>0,${cl}${R.alim}>0),${cl}${R.alim}/${cl}3-1,"")`, v: okM[i] && A[i] > 0 ? A[i] / hN[i].A - 1 : '', s: ev });
+  }
+  const semM = [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11]], semN = ['1er SEMESTRE', '2ème SEMESTRE'], semC = [S1, S2], sem = { extra: { color: BDX.sem, fill: BDX.yel } };
+  semM.forEach((ms, j) => { hd(semC[j], semN[j], sem.extra); hd(semC[j] + 1, '%', sem.extra); const all = ms.every(i => okM[i] && A[i] > 0);
+    put(3, semC[j], { f: ms.map(i => CL(MC(i)) + '3').join('+'), v: sum(ms.map(i => okM[i] ? hN[i].A : 0)), s: n1 });
+    put(4, semC[j], { f: `IF(AND(COUNT(${ms.map(i => CL(MC(i)) + '3').join(',')})=6,MIN(${ms.map(i => CL(MC(i)) + R.alim).join(',')})>0),${CL(semC[j])}${R.alim}/${CL(semC[j])}3-1,"")`, v: all ? sum(ms.map(i => A[i])) / sum(ms.map(i => hN[i].A)) - 1 : '', s: ev }); });
+  hd(YR, `ANNÉE ${Ty}`, sem.extra); hd(YR + 1, '%', sem.extra);
+  const allY = okM.every(Boolean); put(3, YR, { f: `${CL(S1)}3+${CL(S2)}3`, v: sum(hN.map((x, i) => okM[i] ? x.A : 0)), s: n1 });
+  put(4, YR, { f: `IF(AND(ISNUMBER(${CL(S1)}4),ISNUMBER(${CL(S2)}4)),${CL(YR)}${R.alim}/${CL(YR)}3-1,"")`, v: allY ? sum(A) / sum(hN.map(x => x.A)) - 1 : '', s: ev });
+  // lignes
+  const rateOf = (k, i) => (p.pm && p.pm[k]) ? (p.pm[k][i] || 0) : (p[k] || 0);
+  BD_LINES.forEach(x => {
+    const ro = R[x.k], key = KEY.includes(x.k), sub = SUB.includes(x.k), fill = key ? BDX.blue : sub ? BDX.yel : undefined, bold = key ? 1 : 0;
+    put(ro, 1, { v: x.l, s: bdXSt(key ? { b: 1, fill } : sub ? { b: 1, fill } : { b: 1, color: BDX.teal }) });
+    const vS = (extra) => bdXSt(Object.assign({ nf: '#,##0', al: 'right', fill, b: bold }, extra || {})), pS = (extra) => bdXSt(Object.assign({ nf: '0.00%', al: 'right', fill, b: bold }, extra || {}));
+    for (let i = 0; i < 12; i++) {
+      const c = MC(i), cl = CL(c), pl = CL(c + 1), V = L[x.k][i], a = A[i], cc = k => cl + R[k], mode = bdMode(p, x.k);
+      let vf = null, vHard = null, pHard = null;
+      switch (x.k) {
+        case 'net': vf = `${cl}${R.alim}*${pl}${ro}`; pHard = p.rn; break;
+        case 'alim': vHard = V; pHard = 1; break;
+        case 'marge': vf = `${cc('alim')}-${cc('achat')}-${cc('repas')}-${cc('dechets')}-${cc('embal')}-${cc('vaisselle')}`; break;
+        case 'moeq': { const mq = (p.m && p.m.moeq) || 'v'; if (mq === 'v') vf = `${pl}60*${cl}62`; else if (mq === 'r') { vf = `${cl}$${R.alim}*${pl}${ro}`; pHard = p.moeqR || 0; } else vHard = V; break; }
+        case 'cseq': vf = `${cc('moeq')}*${cl}63`; break;
+        case 'csmg': vf = `${cc('momg')}*${cl}64`; break;
+        case 'mo': vf = `SUM(${cc('moeq')}:${cc('divmo')})`; break;
+        case 'svc': vf = `SUM(${cc('nett')}:${cc('autres')})`; break;
+        case 'pac': vf = [cc('alim'), ...['achat', 'repas', 'dechets', 'embal', 'vaisselle', 'mo', 'svc', 'foodtech', 'pub', 'promo', 'energie', 'fourn', 'depl', 'divers'].map(k => '-' + cc(k))].join(''); break;
+        case 'redeff': vf = `${cc('redev')}+${cc('index')}+${cc('incent')}`; break;
+        case 'navente': vf = `${cc('net')}-${cc('alim')}`; break;
+        case 'nacout': vf = `${cc('navente')}*${cl}65`; break;
+        case 'narn': vf = `${cc('navente')}-${cc('nacout')}`; break;
+        case 'soi': vf = `${cc('pac')}-${cc('redeff')}-SUM(${cc('locatif')}:${cc('diversrev')})+${cc('narn')}-${cc('fin')}`; break;
+        case 'cf': vf = `${cc('soi')}+${cc('amort')}+${cc('credit')}+${cc('nacout')}`; break;
+        case 'rnai': vf = `${cc('soi')}-${cc('except')}-${cc('ga')}`; break;
+        case 'is': vf = `IF(${cc('rnai')}-${cc('partic')}>0,(${cc('rnai')}-${cc('partic')})*${cl}66,0)`; break;
+        case 'rn': vf = `${cc('rnai')}-${cc('partic')}-${cc('is')}`; break;
+        default:
+          if (x.k === 'momg' && edgRow) vf = `'SALAIRE EDG'!${CL(4 + i)}${edgRow}`;
+          else if (detM[x.k]) { if (dep.tot[x.k] && !dep.prof[x.k]) vf = `'DEP CONTROLABLE'!$D$${dep.tot[x.k]}/12`; else vHard = V; }
+          else if (mode === 'r') { vf = `${cl}$${R.alim}*${pl}${ro}`; pHard = (x.t === 'pctn' ? p.rn : 1) * rateOf(x.k, i); }
+          else vHard = V;
+      }
+      put(ro, c, vf ? { f: vf, v: V, s: vS() } : { v: vHard, s: vS() });
+      put(ro, c + 1, pHard != null ? { v: pHard, s: pS() } : { f: `IF(${cl}$${R.alim}=0,0,${cl}${ro}/${cl}$${R.alim})`, v: a ? V / a : 0, s: pS() });
+    }
+    // 1er semestre, 2e semestre, année
+    [[S1, 0, 6], [S2, 6, 12]].forEach(([sc, i0, i1]) => { const cl = CL(sc), V = sum(L[x.k].slice(i0, i1)), a = sum(A.slice(i0, i1)); const ms = []; for (let i = i0; i < i1; i++) ms.push(CL(MC(i)) + ro);
+      put(ro, sc, { f: ms.join('+'), v: V, s: vS({ color: BDX.sem }) }); put(ro, sc + 1, { f: `IF(${cl}$${R.alim}=0,0,${cl}${ro}/${cl}$${R.alim})`, v: a ? V / a : 0, s: pS({ color: BDX.sem }) }); });
+    const Vy = sum(L[x.k]), ay = sum(A), cy = CL(YR);
+    put(ro, YR, { f: `${CL(S1)}${ro}+${CL(S2)}${ro}`, v: Vy, s: vS({ color: BDX.sem }) }); put(ro, YR + 1, { f: `IF(${cy}$${R.alim}=0,0,${cy}${ro}/${cy}$${R.alim})`, v: ay ? Vy / ay : 0, s: pS({ color: BDX.sem }) });
+  });
+  // paramètres (lignes 60 à 66) : VPHE, coût horaire, charges sociales, coût non alimentaire, impôt
+  const PL = bdXSt({ fill: BDX.grn }), pv = (nf) => bdXSt({ fill: BDX.grn, nf, al: 'right' });
+  [[60, 'VPHE EQUIPIER (€ de CA / heure) — colonne % : heures équipiers'], [61, 'VPHG (non calculé : heures des managers non saisies)'], [62, 'COUT HORAIRE EQUIPIER'], [63, '% CHARGES SOCIALES EQUIPIER'], [64, '% CHARGES SOCIALES MANAGER'], [65, 'COUT NON ALIMENTAIRE (en % des ventes non alimentaires)'], [66, 'TAUX D\'IMPÔT SUR LES SOCIÉTÉS']].forEach(([ro, l]) => put(ro, 1, { v: l, s: bdXSt({ fill: BDX.grn, b: 1 }) }));
+  for (let i = 0; i < 12; i++) {
+    const c = MC(i), cl = CL(c);
+    put(60, c, { v: p.vphe[i], s: pv('#,##0.00') }); put(60, c + 1, { f: `IF(${cl}60=0,0,${cl}${R.alim}/${cl}60)`, v: p.vphe[i] ? A[i] / p.vphe[i] : 0, s: pv('#,##0') });
+    put(61, c, { v: '', s: PL }); put(61, c + 1, { v: '', s: PL });
+    put(62, c, { v: p.coutH[i], s: pv('#,##0.00 "€"') }); put(63, c, { v: p.tEq[i], s: pv('0.00%') }); put(64, c, { v: p.tMg[i], s: pv('0.00%') });
+    put(65, c, { v: p.naCost, s: pv('0%') }); put(66, c, { v: p.tis, s: pv('0%') });
+    [62, 63, 64, 65, 66].forEach(ro => put(ro, c + 1, { v: '', s: PL }));
+  }
+  const widths = Array(YR + 1).fill(2); widths[0] = 60;
+  for (let i = 0; i < 12; i++) { const c = MC(i); widths[c - 1] = 16; widths[c] = 12; }
+  [S1, S2, YR].forEach(c => { widths[c - 1] = 16; widths[c] = 12; });
+  return { name: `PNL ${Ty}`, rows, widths, header: false, freeze: [1, 5], heights: { 4: 36 }, merges: [] };
+}
+
+async function bdExportBlob() {
+  const r = curResto, Ty = +SIM.ty, o = bdParams(r), p = o.p, ca = bdCa(r, Ty), L = bdCompute(p, ca.alim), name = RESTOS.find(x => x[0] === r)[1];
+  const edg = bdEdgM(p) ? bdXEdg(p, Ty, name) : null, dep = bdXDep(p, Ty, name), pnl = bdXPnl(r, Ty, p, L, name, edg ? edg.totRow : 0, dep), sheets = [pnl];
+  if (dep.sheet) sheets.push(dep.sheet);
+  if (edg) sheets.push(edg.sheet);
+  const { prevOf, prevT } = pvDataFns(), pv = pvModelSheet(r, Ty, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'alim', prevOf, prevT);
+  if (pv.hasData) { pv.name = `PREV ${Ty}`; sheets.push(pv); }
+  return { blob: await xlsxBuild(sheets), name: `PREV ET BUDGET ${Ty} - ${name}.xlsx`, sheets: sheets.map(s => s.name) };
+}
 async function bdExport() {
   if (!accCan('budget', curResto)) return;
-  const r = curResto, Ty = +SIM.ty, o = bdParams(r), ca = bdCa(r, Ty), L = bdCompute(o.p, ca.alim), name = RESTOS.find(x => x[0] === r)[1], A = L.alim.reduce((a, b) => a + b, 0);
-  const rows = [[{ v: `Budget & PNL ${Ty} — ${name}`, s: 'head' }], [], [{ v: 'Ligne', s: 'gris' }, ...MN.map(m => ({ v: m, s: 'gris' })), { v: 'Année', s: 'gris' }, { v: '% CA alim.', s: 'gris' }]];
-  for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); rows.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map(v => ({ v: Math.round(v * 100) / 100, s: x.b ? 'eurb' : 'eur' })), { v: Math.round(t * 100) / 100, s: 'eurb' }, A ? { v: t / A, s: 'pct' } : '']); }
-  const prow = [[{ v: `Budget & PNL ${Ty} — ${name} : % du CA alimentaire`, s: 'head' }], [], [{ v: 'Ligne', s: 'gris' }, ...MN.map(m => ({ v: m, s: 'gris' })), { v: 'Année', s: 'gris' }]];
-  for (const x of BD_LINES) { const t = L[x.k].reduce((a, b) => a + b, 0); prow.push([{ v: x.l, s: x.b ? 'total' : null }, ...L[x.k].map((v, i) => L.alim[i] ? { v: v / L.alim[i], s: 'pct' } : ''), A ? { v: t / A, s: 'pct' } : '']); }
-  const dets = o.p.det || [], drows = [[{ v: `Services extérieurs ${Ty} — ${name}`, s: 'head' }], [], ['Ligne du compte de résultat', 'Prestation', 'Société(s)', `Réf. ${o.p.detRefY || Ty - 1}`, `Budget ${Ty}`, 'Variation', 'Info'].map(v => ({ v, s: 'gris' }))];
-  for (const x of dets) drows.push([BD_BY[x.k].l, x.pr || '', x.soc || '', { v: Math.round((x.ref || 0) * 100) / 100, s: 'eur' }, { v: Math.round((x.amt || 0) * 100) / 100, s: 'eur' }, x.ref ? { v: x.amt / x.ref - 1, s: 'pct' } : '', x.info || '']);
-  const sheetsOut = [{ name: `PNL ${Ty}`, rows, widths: [38, ...Array(12).fill(12), 14, 11], header: false, freeze: [1, 3] }, { name: `PNL ${Ty} en %`, rows: prow, widths: [38, ...Array(12).fill(10), 11], header: false, freeze: [1, 3] }];
-  if (dets.length) sheetsOut.push({ name: `Services ext. ${Ty}`, rows: drows, widths: [34, 34, 34, 14, 14, 11, 30], header: false, freeze: [1, 3] });
+  const m = document.getElementById('bdApplyMsg'), say = (c, t) => { if (m) { m.className = 'save-msg ' + c; m.textContent = t; } };
+  say('', 'Génération du fichier Excel…');
   try {
-    const blob = await xlsxBuild(sheetsOut);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PNL_${Ty}_${r.replace(/\s+/g, '_')}.xlsx`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-  } catch (e) { const m = document.getElementById('bdApplyMsg'); if (m) { m.className = 'save-msg err'; m.textContent = 'Export impossible : ' + e.message; } }
+    const { blob, name, sheets } = await bdExportBlob();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    say('ok', '✓ Fichier Excel généré (' + sheets.join(', ') + ').');
+  } catch (e) { say('err', 'Export impossible : ' + e.message); }
 }
 
 // ── Circuit de validation du prévisionnel : directeur → superviseur → franchisé ──
@@ -2199,7 +2406,7 @@ const wfCm = () => { const e = document.getElementById('wfCm'); return e ? e.val
 .wf-st{ flex:1; min-width:150px; border:1.5px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--card); }
 .wf-st b{ display:block; font-size:.86rem; } .wf-st small{ display:block; color:var(--muted); font-size:.7rem; margin-top:2px; line-height:1.4; }
 .wf-st.done{ border-color:#22a447; background:rgba(34,164,71,.08); } .wf-st.cur{ border-color:#7c3aed; background:rgba(124,58,237,.09); } .wf-st.fin{ border-color:#16a34a; background:rgba(22,163,74,.14); }
-.wf-box{ background:var(--card2); border:1.5px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+.wf-box{ background:var(--card2); border:1.5px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; font-size:.86rem; line-height:1.45; }
 .wf-box textarea{ width:100%; min-height:54px; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; font-size:.82rem; box-sizing:border-box; }
 .wf-act{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
 .wf-log{ list-style:none; margin:0; padding:0; font-size:.78rem; } .wf-log li{ padding:7px 2px; border-bottom:1px solid var(--border); line-height:1.5; } .wf-log li:last-child{ border-bottom:0; }
