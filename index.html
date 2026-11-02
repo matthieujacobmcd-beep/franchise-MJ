@@ -167,7 +167,7 @@
 </style>
 
 <script>
-const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "soon"}, "superviseurs": {}, "formation_links": [], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "indices": {"oepe": 300, "r2p": 300, "analyses": 0.97, "hello": 0.9, "reseaux": 3.3, "oph": 50, "turnover": 1.0}};
+const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "soon"}, "superviseurs": {}, "formation_links": [], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "indices": {"oepe": 300, "r2p": 300, "analyses": 0.97, "hello": 0.9, "reseaux": 3.3, "oph": 50, "turnover": 1.0}, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}};
 // Hash SHA-256 du mot de passe (mot de passe jamais stocké en clair)
 const PWD_HASH = '69297568920297b5aef347d6db5e549c79e50e7bf880c4a8203eeff3a53c5c58';
 const SESSION_KEY = 'fmj_auth';
@@ -189,7 +189,7 @@ async function checkPassword() {
   await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
   const hash = await sha256(input);
   if (hash === PWD_HASH) {
-    sessionStorage.setItem(SESSION_KEY, '1');
+    sessionStorage.setItem(SESSION_KEY, '1'); if (SBA.enabled()) SBA.release();
     try { if (document.getElementById('rem-me').checked) localStorage.setItem('fmj_remember', hash); else localStorage.removeItem('fmj_remember'); } catch (e) {}
     document.getElementById('app').style.display = 'block';        // l'application se prépare derrière l'écran de connexion
     await new Promise(r => setTimeout(r, 350));
@@ -206,8 +206,248 @@ async function checkPassword() {
     setTimeout(() => err.textContent = '', 3000);
   }
 }
+// ══ COMPTES INDIVIDUELS (Supabase) — côté page : connexion e-mail + mot de passe, session commune dashboard / saisie ══
+// Totalement INACTIF tant que la configuration « auth.mode » vaut 'legacy' : ni écran, ni interception des appels.
+//   'both'     : l'écran propose le compte personnel ET (lien discret) l'ancien mot de passe partagé
+//   'accounts' : compte personnel obligatoire ; le serveur (Apps Script) refuse tout ce qui n'a pas de jeton valide
+// La session (jeton + jeton de renouvellement) est gardée sous la clé f<id>_sb : une seule connexion pour le dashboard ET la saisie.
+// Les droits (modules, restaurants, niveau) ne viennent JAMAIS de la page : ils sont relus dans la base (fonction mes_droits) et revérifiés par le serveur.
+const SBA = (() => {
+  const CF = () => (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {}));
+  const AU = () => CF().auth || {};
+  const mode = () => AU().mode || 'legacy';
+  const enabled = () => mode() !== 'legacy' && !!(AU().supabase_url && AU().supabase_key);
+  const strict = () => enabled() && mode() === 'accounts';
+  const MODULE = typeof FRANCHISE_CFG !== 'undefined' ? 'dashboard' : 'saisie';
+  const SKEY = () => 'f' + CF().id + '_sb';
+  let gateRes, refreshing = null, rightsC = null, legacyOk = false;
+  const gate = new Promise(r => { gateRes = r; });
+  const now = () => Math.floor(Date.now() / 1000);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+  // ── session ──
+  function load() { try { const r = localStorage.getItem(SKEY()) || sessionStorage.getItem(SKEY()); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+  function save(s, remember) {
+    try {
+      const keep = remember === undefined ? !!localStorage.getItem(SKEY()) : !!remember;
+      const t = JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at || (now() + (s.expires_in || 3600)), email: (s.user && s.user.email) || s.email || '' });
+      localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY());
+      (keep ? localStorage : sessionStorage).setItem(SKEY(), t);
+    } catch (e) {}
+  }
+  function clear() { try { localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY()); } catch (e) {} rightsC = null; }
+  async function api(path, opt) {                                                // appel à Supabase (Auth ou REST) avec la clé publique
+    opt = opt || {};
+    const h = Object.assign({ apikey: AU().supabase_key, 'Content-Type': 'application/json' }, opt.headers || {});
+    if (opt.tok) h.Authorization = 'Bearer ' + opt.tok;
+    let r, j = null;
+    try { r = await realFetch(AU().supabase_url.replace(/\/+$/, '') + path, { method: opt.method || 'GET', headers: h, body: opt.body == null ? undefined : JSON.stringify(opt.body) }); }
+    catch (e) { return { ok: false, status: 0, j: { msg: 'connexion impossible' } }; }
+    try { const t = await r.text(); j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
+    return { ok: r.ok, status: r.status, j };
+  }
+  async function refresh(s) {
+    if (!s || !s.refresh_token) { clear(); return ''; }
+    if (!refreshing) refreshing = (async () => {
+      const r = await api('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: s.refresh_token } });
+      refreshing = null;
+      if (r.ok && r.j && r.j.access_token) { save(r.j); return r.j.access_token; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) clear();        // refusé : session terminée (déconnecté, désactivé ou jeton révoqué)
+      return '';
+    })();
+    return refreshing;
+  }
+  async function token() { const s = load(); if (!s) return ''; return (s.expires_at - now() > 90) ? s.access_token : refresh(s); }
+  const hasSession = () => !!load();
+
+  // ── droits ──
+  async function rights(force) {
+    if (rightsC && !force && Date.now() - rightsC.at < 60000) return rightsC.r;
+    const tok = await token(); if (!tok) return null;
+    const r = await api('/rest/v1/rpc/mes_droits', { method: 'POST', tok, body: { f: AU().franchise } });
+    if (!r.ok) return null;
+    rightsC = { r: r.j || null, at: Date.now() }; return rightsC.r;
+  }
+  const allowed = r => !r || !r.restos || r.restos.includes('*') ? null : r.restos;     // null = tous les restaurants
+
+  // ── connexion ──
+  const ERR = { invalid_credentials: 'Adresse e-mail ou mot de passe incorrect', email_not_confirmed: "Adresse e-mail pas encore confirmée : utilisez « Première connexion »", over_request_rate_limit: 'Trop de tentatives : réessayez dans quelques minutes', over_email_send_rate_limit: "Trop de liens demandés : réessayez dans quelques minutes", weak_password: 'Mot de passe trop faible : 12 caractères minimum, évitez les mots courants' };
+  const errText = r => ERR[(r.j && (r.j.error_code || r.j.code)) || ''] || (r.status === 429 ? ERR.over_request_rate_limit : (r.status === 0 ? 'Connexion impossible : vérifiez votre réseau' : ((r.j && (r.j.msg || r.j.message || r.j.error_description)) || 'Échec de la connexion')));
+  async function login(email, pwd, remember) {
+    const r = await api('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: String(email).trim().toLowerCase(), password: pwd } });
+    if (!r.ok || !r.j || !r.j.access_token) return { ok: false, error: errText(r) };
+    save(r.j, remember); rightsC = null; return { ok: true };
+  }
+  async function sendLink(email) {                                               // première connexion ou mot de passe oublié : lien envoyé par e-mail
+    const q = AU().redirect ? '?redirect_to=' + encodeURIComponent(AU().redirect) : '';
+    const r = await api('/auth/v1/otp' + q, { method: 'POST', body: { email: String(email).trim().toLowerCase(), create_user: true } });
+    return r.ok ? { ok: true } : { ok: false, error: errText(r) };
+  }
+  async function setPassword(pwd) {
+    if (String(pwd).length < 12) return { ok: false, error: '12 caractères minimum' };
+    const tok = await token(); if (!tok) return { ok: false, error: 'session expirée : redemandez un lien' };
+    const r = await api('/auth/v1/user', { method: 'PUT', tok, body: { password: pwd } });
+    return r.ok ? { ok: true } : { ok: false, error: errText(r) };
+  }
+  function consumeHash() {                                                       // retour du lien reçu par e-mail : #access_token=…&refresh_token=…&type=…
+    const h = String(location.hash || ''); if (!/access_token=|error=/.test(h)) return null;
+    const p = new URLSearchParams(h.replace(/^#/, ''));
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (p.get('error')) return { error: /expired|invalid/i.test(p.get('error_description') || p.get('error_code') || '') ? 'Ce lien a expiré ou a déjà servi : demandez-en un nouveau' : (p.get('error_description') || 'Lien invalide') };
+    save({ access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_in: +p.get('expires_in') || 3600, email: '' }, false);
+    rightsC = null; return { type: p.get('type') || 'magiclink' };
+  }
+  async function logout() {
+    const tok = (load() || {}).access_token;
+    if (tok) { try { await api('/auth/v1/logout', { method: 'POST', tok }); } catch (e) {} }
+    clear();
+  }
+
+  // ── interception des appels vers l'Apps Script (jeton joint, lectures en POST) ──
+  const realFetch = window.fetch.bind(window);
+  let reloading = 0;
+  function expired() {                                                           // le serveur dit « session expirée ou accès retiré »
+    clear(); try { sessionStorage.setItem('sba_msg', 'Votre session a expiré ou votre accès a été modifié. Reconnectez-vous.'); } catch (e) {}
+    if (Date.now() - reloading > 8000) { reloading = Date.now(); location.reload(); }
+  }
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : ((input && input.url) || ''), base = CF().apps_script_url;
+    if (!enabled() || !base || !String(url).startsWith(base)) return realFetch(input, init);
+    await gate;                                                                  // rien ne part tant que personne n'est connecté
+    const tok = await token(); if (!tok) return realFetch(input, init);          // connexion par l'ancien mot de passe partagé (mode « both ») : appel inchangé
+    const method = String((init && init.method) || 'GET').toUpperCase();
+    let res;
+    if (method === 'GET') {
+      const q = {}; new URL(url).searchParams.forEach((v, k) => { if (k !== '_') q[k] = v; });
+      res = await realFetch(base, Object.assign({}, init, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'read', q, tok }) }));
+    } else {
+      let body = init && init.body;
+      if (typeof body === 'string') { try { const o = JSON.parse(body); o.tok = tok; body = JSON.stringify(o); } catch (e) {} }
+      res = await realFetch(input, Object.assign({}, init, { body }));
+    }
+    try { res.clone().text().then(t => { if (t.length < 700 && /"code":\s*"AUTH"/.test(t) && /session|accès retiré|connexion requise/.test(t)) expired(); }); } catch (e) {}
+    return res;
+  };
+
+  // ── écran de connexion (inséré dans la boîte de connexion existante de la page) ──
+  const CSS = '.sba-who{font-size:.8rem;font-weight:700;color:var(--muted,#6b7280);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}.sba-who:empty{display:none}#sba-box{text-align:left;margin:0 0 6px}#sba-box input[type=email],#sba-box input[type=password],#sba-box input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border,#d6dae4);border-radius:11px;font-size:1rem;font-family:inherit;margin:0 0 10px;box-sizing:border-box;background:#fff;color:#111}#sba-box button{width:100%;padding:11px;border:none;border-radius:11px;background:var(--gold,#27ae60);color:#fff;font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit}#sba-box button.sba-sec{background:transparent;color:inherit;border:1.5px solid var(--border,#d6dae4);font-weight:700;margin-top:8px}#sba-box button:disabled{opacity:.6;cursor:wait}#sba-box .sba-rem{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 12px;cursor:pointer}#sba-box .sba-rem input{width:auto;margin:0}#sba-box .sba-a{display:block;text-align:center;font-size:.8rem;color:var(--muted,#6b7280);margin-top:12px;cursor:pointer;text-decoration:underline}#sba-box .sba-msg{min-height:1.2em;font-size:.82rem;margin:2px 0 8px;text-align:center}#sba-box .sba-msg.err{color:var(--red,#c0392b)}#sba-box .sba-msg.ok{color:var(--green,#1e8449)}#sba-box h2{font-size:1rem;margin:0 0 8px;text-align:center}#sba-box p{font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 10px;text-align:center}';
+  function msg(t, kind) { const m = $('sba-msg'); if (m) { m.className = 'sba-msg ' + (kind || ''); m.textContent = t || ''; } }
+  function busy(on, label) { const b = $('sba-go'); if (b) { b.disabled = on; if (label) b.textContent = on ? label.on : label.off; } }
+  let ui = { view: 'login', onOk: null, scope: null, legacy: [] };
+  function view(v) {
+    ui.view = v; const L = v === 'login', K = v === 'link', P = v === 'pwd';
+    const sh = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
+    sh('sba-pwd', L); sh('sba-rem', L); sh('sba-email', L || K); sh('sba-new', P); sh('sba-new2', P); sh('sba-skip', P);
+    sh('sba-leg', L && mode() === 'both'); sh('sba-lnk', L); sh('sba-back', K);
+    const go = $('sba-go'); if (go) go.textContent = L ? 'Connexion' : (K ? 'Envoyer le lien' : 'Enregistrer mon mot de passe');
+    const t = $('sba-title'), p = $('sba-help');
+    if (t) t.textContent = L ? '' : (K ? 'Première connexion ou mot de passe oublié' : 'Choisissez votre mot de passe');
+    if (p) p.textContent = K ? "Saisissez votre adresse e-mail professionnelle : vous recevez un lien (valable 1 heure) pour définir votre mot de passe." : (P ? '12 caractères minimum. Vous l\'utiliserez ensuite avec votre e-mail.' : '');
+    msg('');
+  }
+  const ROLE = { owner: 'Propriétaire', franchise: 'Franchisé', collab: 'Collaboratrice', superviseur: 'Superviseur', directeur: 'Directeur' };
+  function showWho(r) {                                                          // « 👤 Camille D. » dans l'en-tête de la page
+    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '👤 ' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
+  }
+  async function enter() {                                                       // connexion réussie : droits relus dans la base, puis ouverture de la page
+    const r = await rights(true);
+    if (!r) { await logout(); return { ok: false, error: "Ce compte n'a aucun accès actif. Demandez à votre responsable de vous ajouter." }; }
+    if (!(r.modules || []).includes(MODULE)) { await logout(); return { ok: false, error: MODULE === 'dashboard' ? "Ce compte n'a pas accès au dashboard." : "Ce compte n'a pas accès à la saisie." }; }
+    showWho(r);
+    try { if (ui.scope) ui.scope(r); } catch (e) {}                              // périmètre de la personne appliqué AVANT que le moindre appel de données ne parte
+    gateRes(); return { ok: true, rights: r };
+  }
+  async function submit() {
+    const email = ($('sba-email') || {}).value || '';
+    if (ui.view === 'link') {
+      if (!/.+@.+\..+/.test(email)) return msg('Saisissez votre adresse e-mail', 'err');
+      busy(true, { on: 'Envoi…', off: 'Envoyer le lien' });
+      const r = await sendLink(email); busy(false, { on: '', off: 'Envoyer le lien' });
+      return r.ok ? msg('Lien envoyé à ' + email.trim() + '. Pensez à vérifier les courriers indésirables.', 'ok') : msg(r.error, 'err');
+    }
+    if (ui.view === 'pwd') {
+      const a = ($('sba-new') || {}).value || '', b = ($('sba-new2') || {}).value || '';
+      if (a !== b) return msg('Les deux mots de passe sont différents', 'err');
+      busy(true, { on: 'Enregistrement…', off: 'Enregistrer mon mot de passe' });
+      const r = await setPassword(a); busy(false, { on: '', off: 'Enregistrer mon mot de passe' });
+      if (!r.ok) return msg(r.error, 'err');
+      return finish();
+    }
+    const pwd = ($('sba-pwd') || {}).value || '';
+    if (!email || !pwd) return msg('Saisissez votre adresse e-mail et votre mot de passe', 'err');
+    busy(true, { on: 'Connexion en cours…', off: 'Connexion' });
+    const r = await login(email, pwd, !!($('sba-rem-chk') || {}).checked);
+    if (!r.ok) { busy(false, { on: '', off: 'Connexion' }); return msg(r.error, 'err'); }
+    await finish(); busy(false, { on: '', off: 'Connexion' });
+  }
+  async function finish() {
+    const e = await enter();
+    if (!e.ok) { view('login'); return msg(e.error, 'err'); }
+    if (ui.onOk) ui.onOk(e.rights);
+  }
+  function mount(opts) {                                                         // opts : { box (boîte de connexion), legacy:[éléments de l'ancien formulaire], onOk(droits) }
+    if (!enabled() || !opts || !opts.box) return false;
+    ui = { view: 'login', onOk: opts.onOk, scope: opts.scope, legacy: opts.legacy || [] };
+    if (!$('sba-css')) { const st = document.createElement('style'); st.id = 'sba-css'; st.textContent = CSS; document.head.appendChild(st); }
+    const d = document.createElement('div'); d.id = 'sba-box';
+    d.innerHTML = '<h2 id="sba-title"></h2><p id="sba-help"></p>'
+      + '<input type="email" id="sba-email" placeholder="Adresse e-mail" autocomplete="username">'
+      + '<input type="password" id="sba-pwd" placeholder="Mot de passe" autocomplete="current-password">'
+      + '<input type="password" id="sba-new" placeholder="Nouveau mot de passe (12 caractères minimum)" autocomplete="new-password">'
+      + '<input type="password" id="sba-new2" placeholder="Répétez le mot de passe" autocomplete="new-password">'
+      + '<label class="sba-rem" id="sba-rem"><input type="checkbox" checked> Se souvenir de moi</label>'
+      + '<div class="sba-msg" id="sba-msg" role="alert"></div>'
+      + '<button type="button" id="sba-go">Connexion</button>'
+      + '<button type="button" class="sba-sec" id="sba-skip">Plus tard</button>'
+      + '<a class="sba-a" id="sba-lnk">Première connexion ou mot de passe oublié ?</a>'
+      + '<a class="sba-a" id="sba-back">← Retour à la connexion</a>'
+      + '<a class="sba-a" id="sba-leg">Utiliser le mot de passe partagé (temporaire)</a>';
+    const first = opts.legacy && opts.legacy[0]; if (first && first.parentNode === opts.box) opts.box.insertBefore(d, first); else opts.box.appendChild(d);
+    (opts.legacy || []).forEach(e => { if (e) e.style.display = 'none'; });       // l'ancien formulaire reste caché (« both » : réaffiché par le lien discret)
+    $('sba-rem').querySelector('input').id = 'sba-rem-chk';
+    $('sba-go').onclick = submit; $('sba-lnk').onclick = () => view('link'); $('sba-back').onclick = () => view('login');
+    $('sba-skip').onclick = () => finish();
+    $('sba-leg').onclick = () => { d.style.display = 'none'; (opts.legacy || []).forEach(e => { if (e) e.style.display = ''; }); };
+    d.addEventListener('keydown', ev => { if (ev.key === 'Enter') submit(); });
+    view('login');
+    try { const m = sessionStorage.getItem('sba_msg'); if (m) { msg(m, 'err'); sessionStorage.removeItem('sba_msg'); } } catch (e) {}
+    return true;
+  }
+  // appelé au démarrage de la page : session existante (reprise silencieuse), ou retour d'un lien e-mail
+  async function start() {
+    if (!enabled()) return { state: 'off' };
+    const h = consumeHash();
+    if (h && h.error) { view('login'); msg(h.error, 'err'); return { state: 'login' }; }
+    if (h && h.type) { const e = await enter(); if (!e.ok) { msg(e.error, 'err'); return { state: 'login' }; } view('pwd'); return { state: 'pwd' }; }
+    if (hasSession()) { const e = await enter(); if (e.ok) return { state: 'ok', rights: e.rights }; msg(e.error || 'Session expirée : reconnectez-vous', 'err'); }
+    return { state: 'login' };
+  }
+  const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
+  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
+})();
+
+let SB_SCOPE = false, SB_DASH = null;
+function dashScope(r) {                                              // personne limitée à certains restaurants : onglets, adaptateur de données et vue de départ
+  const al = SBA.allowed(r); if (!al) return;
+  const keep = RESTOS.filter(k => al.includes(k)); RESTOS.splice(0, RESTOS.length, ...keep); SB_SCOPE = true;
+  if (typeof SheetAdapter !== 'undefined') SheetAdapter.configure({ stores: keep });
+  if (keep.length === 1) currentResto = keep[0];
+}
+function dashEnter(r) {
+  SB_DASH = r; try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
+  if (typeof plgOnLogin === 'function') plgOnLogin(r);
+  document.getElementById('app').style.display = 'block';
+  renderTabs(); renderMain();
+  document.getElementById('login-screen').style.display = 'none';
+}
+function dashMountLogin() {
+  const box = document.querySelector('#login-screen .login-box');
+  return SBA.mount({ box, legacy: [document.getElementById('pwd-input'), box.querySelector('.login-remember'), box.querySelector('.login-btn'), document.getElementById('login-error')], onOk: dashEnter, scope: dashScope });
+}
 // Oublier cet appareil (déconnexion)
-function logoutDevice() {
+async function logoutDevice() {
+  try { if (typeof SBA !== 'undefined' && SBA.hasSession()) await SBA.logout(); } catch (e) {}
   try { localStorage.removeItem('fmj_remember'); } catch (e) {}
   try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem('fmj_rv'); } catch (e) {}
   location.reload();
@@ -217,6 +457,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // Déjà authentifié dans cette session, ou appareil mémorisé ?
   let _ok = sessionStorage.getItem(SESSION_KEY) === '1';
   if (!_ok) { try { if (localStorage.getItem('fmj_remember') === PWD_HASH) { _ok = true; sessionStorage.setItem(SESSION_KEY, '1'); } } catch (e) {} }
+  if (SBA.enabled()) {                                                // comptes individuels : l'ancien mot de passe n'ouvre rien en mode « accounts »
+    _ok = !SBA.strict() && localStorage.getItem('fmj_remember') === PWD_HASH;
+    dashMountLogin(); SBA.start().then(st => { if (st.state === 'ok') dashEnter(st.rights); });
+    if (_ok) SBA.release();
+  }
   if (_ok) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -1182,6 +1427,7 @@ window.addEventListener('DOMContentLoaded', () => {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       <span>Aide</span>
     </a>
+    <span class="sba-who" id="sbaWho"></span>
     <a id="btnLogout" onclick="logoutDevice()" class="topbar-intervention" title="Se déconnecter : le mot de passe sera redemandé" style="cursor:pointer;border-color:#64748b;color:#475569">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       <span>Se déconnecter</span>
@@ -1199,6 +1445,7 @@ window.addEventListener('DOMContentLoaded', () => {
   <button class="espace-pill" data-esp="marketing" style="--e-color:#ea580c;--e-bg:rgba(234,88,12,.14)" onclick="switchEspace('marketing')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 15-5v12L3 13Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>Marketing</button>
   <button class="espace-pill" data-esp="plancom" style="--e-color:#0891b2;--e-bg:rgba(8,145,178,.14)" onclick="switchEspace('plancom')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Plan de communication</button>
   <button class="espace-pill" data-esp="actualite" style="--e-color:#db2777;--e-bg:rgba(219,39,119,.14)" onclick="switchEspace('actualite')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z"/></svg></span>Actualité Restaurant</button>
+  <button class="espace-pill" id="pillPlanning" data-esp="planning" style="display:none;--e-color:#0e7490;--e-bg:rgba(14,116,144,.14)" onclick="switchEspace('planning')" title="Planning de l'équipe de gestion (EDG)"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h3M13 14h3M8 18h3"/></svg></span>Planning EDG</button>
 </div>
 
 <!-- ESPACE : PILOTAGE OPÉRATIONNEL -->
@@ -3221,7 +3468,7 @@ function renderTabs() {
   el.style.display = 'flex';
 
 
-  const tabs = ['FRANCHISE', ...RESTOS];
+  const tabs = (typeof SB_SCOPE !== 'undefined' && SB_SCOPE && RESTOS.length === 1) ? [...RESTOS] : ['FRANCHISE', ...RESTOS];
   const selIco = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`;
 
   let html = '';
@@ -3236,13 +3483,13 @@ function renderTabs() {
     const cls = (!restoSelection && r === currentResto) ? 'active' : '';
     const fr  = r === 'FRANCHISE' ? 'franchise' : '';
     const cfg = RESTO_CFG[r] || { bg:'#f0f0f0', color:'#666' };
-    const lbl = r === 'FRANCHISE' ? 'Vue Franchise' : _rtab(r);
+    const lbl = r === 'FRANCHISE' ? ((typeof SB_SCOPE !== 'undefined' && SB_SCOPE) ? 'Mes restaurants' : 'Vue Franchise') : _rtab(r);
     return `<div class="tab ${cls} ${fr}" onclick="setResto('${r}')" style="--tab-bg:${cfg.bg};--tab-color:${cfg.color}">
       <span class="tab-avatar" data-color="${cfg.color}" style="background:${cfg.bg};--ac:${cfg.color}">${archSvg(cfg.color)}</span>
       ${lbl}
     </div>`;
   }).join('');
-  html += `<button class="tab tab-seltrigger" onclick="openSelModal()" title="Combiner plusieurs restaurants (marchés)">
+  if (!(typeof SB_SCOPE !== 'undefined' && SB_SCOPE && RESTOS.length < 2)) html += `<button class="tab tab-seltrigger" onclick="openSelModal()" title="Combiner plusieurs restaurants (marchés)">
     ${selIco}<span>Marchés</span>
   </button>`;
   el.innerHTML = html;
@@ -8822,6 +9069,376 @@ function igGo() {
 }
 </script>
 
+<!-- PLANNING_EDG:START -->
+<style>
+#espace-planning .plg-bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:10px}
+#espace-planning .plg-chip{font-family:inherit;font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer}
+#espace-planning .plg-chip.on{background:var(--card2);color:var(--text);border-color:var(--gold)}
+#espace-planning .plg-btn{font-family:inherit;font-size:.78rem;font-weight:700;padding:7px 13px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+#espace-planning .plg-btn.pri{background:var(--gold);border-color:var(--gold);color:#fff}
+#espace-planning .plg-btn:disabled{opacity:.5;cursor:default}
+#espace-planning .plg-wrap{overflow-x:auto}
+#espace-planning .plg-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:100%}
+#espace-planning .plg-nav b{flex:1 1 190px;min-width:0;text-align:center;font-size:.9rem}
+#espace-planning table.plg{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.78rem;min-width:760px}
+#espace-planning table.plg th{font-weight:700;color:var(--muted);font-size:.7rem;padding:6px 2px;text-align:center}
+#espace-planning table.plg td{padding:3px 2px;border-top:1px solid var(--border);vertical-align:middle;text-align:center}
+#espace-planning table.plg td.n{text-align:left;padding-left:6px}
+#espace-planning table.plg tr>:first-child{position:sticky;left:0;z-index:2;background:var(--card)}
+#espace-planning .plg-c{width:100%;box-sizing:border-box;height:30px;font-family:inherit;font-size:.78rem;font-weight:700;text-align:center;padding:0 2px;border:1px solid transparent;border-radius:6px;background:var(--card);color:var(--text)}
+#espace-planning .plg-c:focus{outline:2px solid var(--gold)}
+#espace-planning .plg-c.bad{border-color:#c0392b;background:#fdecea;color:#c0392b}
+#espace-planning .plg-tag{display:inline-block;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--card2);color:var(--muted)}
+#espace-planning .plg-bal{display:inline-block;font-size:.62rem;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:4px}
+#espace-planning .plg-sw{display:inline-block;min-width:34px;text-align:center;font-size:.72rem;font-weight:800;padding:2px 6px;border-radius:5px;border:1px solid var(--border)}
+#espace-planning .plg-ev{display:block;font-size:.62rem;line-height:1.25;padding:2px 4px;border-radius:4px;margin:2px 0;text-align:left;background:rgba(8,145,178,.14);color:#0e7490;font-weight:700}
+#espace-planning .plg-camp{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:800;padding:4px 10px;border-radius:8px;background:color-mix(in srgb,#ea580c 11%,transparent);color:#9a3412;border-left:4px solid #ea580c;margin:0 6px 6px 0}
+#espace-planning .plg-box{border-radius:10px;padding:8px 12px;font-size:.78rem;margin-top:8px}
+#espace-planning .plg-alert{background:#fdecea;border:1px solid #f1b0a8;color:#a93226}
+#espace-planning .plg-ok{background:#e8f6ee;border:1px solid #b6e2c8;color:#1e8449}
+#espace-planning .plg-rem{background:var(--card2);border:1px solid var(--border);color:var(--muted)}
+#espace-planning .plg-sec{border:1.5px solid var(--border);border-radius:12px;background:var(--card);margin-top:12px}
+#espace-planning .plg-sec>summary{cursor:pointer;font-weight:800;font-size:.84rem;padding:10px 14px;list-style:none}
+#espace-planning .plg-sec>summary::-webkit-details-marker{display:none}
+#espace-planning .plg-sec>div{padding:0 14px 12px}
+#espace-planning .plg-in{font-family:inherit;font-size:.78rem;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)}
+#espace-planning .plg-sum td,#espace-planning .plg-sum th{font-size:.72rem}
+#espace-planning .plg-now{background:rgba(184,134,11,.12)}
+</style>
+<div id="espace-planning" style="display:none">
+  <div class="main">
+    <div class="esp-page-head">
+      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(14,116,144,.14);display:inline-flex;align-items:center;justify-content:center;font-size:16px">🗓️</span>Planning EDG</div>
+      <div style="font-size:.78rem;color:var(--muted)">Planning de l'équipe de gestion de chaque restaurant : 35 h par semaine, ou modulation par cycles de 13 semaines.</div>
+    </div>
+    <div class="esp-card" id="plgCard"><div style="color:var(--muted);font-size:.84rem">Chargement…</div></div>
+  </div>
+</div>
+<script>
+// ══ PLANNING EDG : équipe, horaires des lettres par restaurant, grille hebdomadaire, résumés (mois / cycle de 13 semaines) ══
+// Données dans Supabase (tables equipe, planning_*) lues et écrites avec le jeton de la personne ; campagnes lues dans le Plan de communication.
+const PLG = { editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null };
+const PLG_FN = { directeur: 'Directeur', directeur_adjoint: 'Directeur adjoint', assistant_direction: 'Assistant de direction', manager: 'Manager', responsable_zone: 'Responsable de zone' };
+const PLG_SEUILS = { jour_max: 10, semaine_max: 48, moyenne12: 44, repos_jour: 11, repos_hebdo: 35, jours_max: 6, assistant_direction_shifts: 2, directeur_adjoint_shifts_min: 1 };
+const PLG_JL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], PLG_J = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const PLG_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const plgE = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+// ── dates (UTC : pas de décalage d'heure d'été) ──
+const plgD = s => new Date(s + 'T00:00:00Z'), plgIso = d => d.toISOString().slice(0, 10), plgAdd = (s, n) => { const d = plgD(s); d.setUTCDate(d.getUTCDate() + n); return plgIso(d); };
+const plgSun = s => plgAdd(s, -plgD(s).getUTCDay()), plgFr = s => s.slice(8, 10) + '/' + s.slice(5, 7), plgWk = (a, b) => Math.round((plgD(b) - plgD(a)) / 6048e5);
+function plgCycleStart(ws) {                                                  // dimanche qui ouvre le cycle de 13 semaines contenant la semaine ws
+  const base0 = PLG.cfg.debut_cycle || plgSun(plgAdd(plgAdd(ws, 4).slice(0, 4) + '-01-01', 0));
+  const n = Math.floor(plgWk(base0, ws) / 13); return { start: plgAdd(base0, n * 13 * 7), n: ((n % 4) + 4) % 4 + 1, base: base0 };
+}
+const plgCan = () => !!PLG.rights && ['directeur', 'franchise', 'owner'].includes(PLG.rights.role);
+const plgSeuil = k => { const v = (PLG.cfg.seuils || {})[k]; return typeof v === 'number' ? v : PLG_SEUILS[k]; };
+async function plgApi(path, method, body, headers) {
+  const tok = await SBA.token(); if (!tok) return { ok: false, status: 401, j: { message: 'session expirée' } };
+  return SBA.api(path, { method: method || 'GET', tok, body, headers });
+}
+const plgQ = o => Object.entries(o).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+// ── connexion : la pastille n'apparaît que pour les personnes qui ont le droit « Planning » ──
+function plgOnLogin(r) {
+  PLG.rights = r; PLG.FR = (FRANCHISE_CFG.auth && FRANCHISE_CFG.auth.franchise) || '';
+  const ok = !!r && (r.modules || []).includes('planning');
+  const pill = document.getElementById('pillPlanning'); if (pill) pill.style.display = ok ? '' : 'none';
+  const al = (r && r.restos || []).includes('*') ? RESTOS.slice() : RESTOS.filter(k => (r.restos || []).includes(k));
+  PLG.restos = al; if (!PLG.resto || !al.includes(PLG.resto)) PLG.resto = al[0] || null;
+}
+function loadPlanning() { if (!PLG.ws) PLG.ws = plgSun(plgIso(new Date())); plgLoad(); }
+// ── lecture ──
+async function plgLoad() {
+  const card = document.getElementById('plgCard'); if (!PLG.rights || !PLG.resto) { card.innerHTML = '<div style="color:var(--muted)">Aucun restaurant n\'est ouvert à votre compte pour le planning.</div>'; return; }
+  PLG.busy = true; plgRender();
+  const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto }, cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 7);
+  const rs = await Promise.all([
+    PLG.def ? null : plgApi('/rest/v1/planning_codes_defaut?' + plgQ({ franchise: 'eq.' + PLG.FR, order: 'ordre.asc' })),
+    plgApi('/rest/v1/equipe?' + plgQ(Object.assign({ actif: 'eq.true', order: 'ordre.asc,cree_le.asc' }, f))),
+    plgApi('/rest/v1/planning_resto?' + plgQ(f)),
+    plgApi('/rest/v1/planning_codes?' + plgQ(Object.assign({ order: 'ordre.asc' }, f))),
+    plgFetchWeeks(from, to)]);
+  if (rs[0]) PLG.def = rs[0].ok && Array.isArray(rs[0].j) ? rs[0].j : [];
+  if (!rs[1].ok) { PLG.busy = false; card.innerHTML = '<div class="plg-box plg-alert">Impossible de charger l\'équipe : ' + plgE((rs[1].j && rs[1].j.message) || 'le planning n\'est pas encore installé côté base.') + '</div>'; return; }
+  PLG.team = rs[1].j || []; const c0 = rs[2].ok && rs[2].j && rs[2].j[0]; PLG.cfg = c0 ? { modulation: !!c0.modulation, debut_cycle: c0.debut_cycle || null, seuils: c0.seuils || {} } : { modulation: false, debut_cycle: null, seuils: {} };
+  PLG.over = rs[3].ok && Array.isArray(rs[3].j) ? rs[3].j : [];
+  PLG.busy = false; PLG.dirty = false; PLG.conflict = null; if (!PLG.month) PLG.month = PLG.ws.slice(0, 7); plgRender();
+}
+async function plgFetchWeeks(from, to) {
+  const r = await plgApi('/rest/v1/planning_semaine?select=semaine,cellules,version&franchise=eq.' + PLG.FR + '&restaurant=eq.' + encodeURIComponent(PLG.resto) + '&semaine=gte.' + from + '&semaine=lte.' + to);
+  if (r.ok && Array.isArray(r.j)) r.j.forEach(x => { const k = String(x.semaine).slice(0, 10); if (!(PLG.dirty && k === PLG.ws)) { PLG.weeks[PLG.resto + '|' + k] = JSON.parse(JSON.stringify(x.cellules || {})); PLG.ver[PLG.resto + '|' + k] = x.version; } });
+  return r;
+}
+const plgW = ws => PLG.weeks[PLG.resto + '|' + ws] || (PLG.weeks[PLG.resto + '|' + ws] = {});
+// ── codes d'horaires : valeurs par défaut de la franchise, recouvertes par celles du restaurant ──
+function plgCodes() {
+  const m = new Map(), put = (r, ov) => { const t = x => x ? String(x).slice(0, 5) : null; m.set(String(r.code).toUpperCase(), { code: r.code, libelle: r.libelle, heures: +r.heures || 0, debut: t(r.debut), fin: t(r.fin), fond: r.fond || null, texte: r.texte || null, shift: r.shift || null, ordre: r.ordre || 0, ov }); };
+  (PLG.def || []).forEach(r => put(r, false)); (PLG.over || []).forEach(r => put(r, true)); return m;
+}
+const plgTm = s => { const a = String(s).split(':'); return +a[0] + (+a[1] || 0) / 60; };
+const plgDur = c => c.debut && c.fin ? (plgTm(c.fin) <= plgTm(c.debut) ? plgTm(c.fin) + 24 - plgTm(c.debut) : plgTm(c.fin) - plgTm(c.debut)) : c.heures;
+const plgH = h => { const m = Math.round(h * 60), H = Math.floor(m / 60), M = m % 60; return H + ' h' + (M ? ' ' + String(M).padStart(2, '0') : ''); };
+const PLG_ABS = /^(CP|AM|CSS|NT|OFF)$/i;
+const plgFj = p => p.fonction === 'directeur' || p.fonction === 'directeur_adjoint';       // forfait 218 jours : pas de cible hebdomadaire, ni plafonds d'heures (les repos de 11 h et de 35 h restent contrôlés)
+const plgJ = x => x.h > 0 && !x.abs ? 1 : 0;
+function plgShiftOf(d, f, codes) {                                           // plage tapée à la main : ouverture si elle commence à l'heure de O, fermeture si elle finit à l'heure de F, sinon autre shift
+  const o = codes.get('O'), c = codes.get('F'), fin = c && c.debut && c.fin ? (plgTm(c.fin) <= plgTm(c.debut) ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null;
+  if (o && o.debut && d <= plgTm(o.debut) + .01) return 'ouverture';
+  if (fin != null && f >= fin - .01) return 'fermeture';
+  return 'autre';
+}
+function plgInfo(v, codes) {                                                  // une case = une lettre du tableau des codes, ou une plage « 08:00-16:00 »
+  v = String(v || '').trim(); if (!v) return { t: '', h: 0, d: null, f: null, shift: null, abs: false };
+  const c = codes.get(v.toUpperCase());
+  if (c) { const d = c.debut ? plgTm(c.debut) : null, f = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null, ab = PLG_ABS.test(c.code); return { t: 'code', code: c.code, h: plgDur(c), d: ab ? null : d, f: ab ? null : f, shift: c.shift, abs: ab, bg: c.fond, fg: c.texte }; }
+  const m = v.match(/^(\d{1,2})\s*(?:[:hH]\s*(\d{0,2}))?\s*(?:-|–|—|à|a)\s*(\d{1,2})\s*(?:[:hH]\s*(\d{0,2}))?$/);   // 8h-16h · 8h30-17h · 8-16 · 08:00-16:00 · 8h à 16h
+  if (m && +m[1] <= 24 && +m[3] <= 24 && +(m[2] || 0) < 60 && +(m[4] || 0) < 60) { const mn1 = +(m[2] || 0), mn2 = +(m[4] || 0), d = +m[1] + mn1 / 60, f0 = +m[3] + mn2 / 60, f = f0 <= d ? f0 + 24 : f0, p = x => String(x).padStart(2, '0'); return { t: 'range', h: f - d, d, f, shift: plgShiftOf(d, f, codes), abs: false, norm: p(m[1]) + ':' + p(mn1) + '-' + p(m[3]) + ':' + p(mn2) }; }
+  return { t: 'bad', h: 0, d: null, f: null, shift: null, abs: false };
+}
+const plgRow = (ws, pid) => { const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
+const plgPeek = (ws, pid) => { const r = (PLG.weeks[PLG.resto + '|' + ws] || {})[pid]; return Array.isArray(r) ? r : null; };
+// ── analyse d'une personne pour la semaine affichée ──
+function plgAnalyse(p, codes) {
+  const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], se = k => plgSeuil(k);
+  const jours = inf.filter(x => x.h > 0 && !x.abs).length, shifts = inf.filter(x => x.shift).length;
+  const fj = plgFj(p);
+  inf.forEach((x, j) => { if (x.t === 'bad') al.push('case « ' + row[j] + ' » inconnue (' + PLG_JL[j] + ')'); else if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + PLG_JL[j] + ' (' + plgH(x.h) + ')'); });
+  const iv = [], add = (ws2, j, x) => { if (x.d != null && x.f != null) iv.push([plgWk(ws, ws2) * 168 + j * 24 + x.d, plgWk(ws, ws2) * 168 + j * 24 + x.f]); };
+  const pr = plgPeek(plgAdd(ws, -7), p.id), nx = plgPeek(plgAdd(ws, 7), p.id);
+  if (pr) add(plgAdd(ws, -7), 6, plgInfo(pr[6], codes)); inf.forEach((x, j) => add(ws, j, x)); if (nx) add(plgAdd(ws, 7), 0, plgInfo(nx[0], codes));
+  iv.sort((a, b) => a[0] - b[0]); let best = 0;
+  for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + PLG_JL[Math.floor(iv[k][0] / 24) % 7] + ' (' + se('repos_jour') + ' h minimum)'); if (iv[k - 1][1] < 168 && iv[k][0] > 0) best = Math.max(best, g); }
+  if (iv.some(x => x[0] >= 0 && x[0] < 168) && best < se('repos_hebdo') && !(iv.length < 2)) al.push('repos hebdomadaire de ' + se('repos_hebdo') + ' h consécutives non repéré (plus long repos : ' + plgH(Math.max(0, best)) + ')');
+  if (!fj && tot > se('semaine_max')) al.push('plus de ' + se('semaine_max') + ' h dans la semaine (' + plgH(tot) + ')');
+  if (jours > se('jours_max')) al.push(jours + ' jours travaillés (' + se('jours_max') + ' maximum)');
+  let sum = 0, n = 0; for (let w = 0; w < 12; w++) { const r = plgPeek(plgAdd(ws, -7 * w), p.id); if (r) { n++; sum += r.reduce((a, v) => a + plgInfo(v, codes).h, 0); } }
+  if (!fj && n === 12 && sum / 12 > se('moyenne12')) al.push('moyenne de ' + plgH(sum / 12) + ' sur 12 semaines (' + se('moyenne12') + ' h maximum)');
+  const rem = [];
+  if (jours > 0) { const need = se('assistant_direction_shifts'), min = se('directeur_adjoint_shifts_min');
+    if (p.fonction === 'assistant_direction' && shifts !== need) rem.push(p.prenom + ' (assistant de direction) : ' + shifts + ' shift' + (shifts > 1 ? 's' : '') + ' cette semaine, ' + need + ' attendus');
+    if (p.fonction === 'directeur_adjoint' && shifts < min) rem.push(p.prenom + ' (directeur adjoint) : ' + (shifts ? shifts + ' shift' : 'aucun shift') + ' cette semaine, ' + min + ' au moins attendu'); }
+  return { inf, tot, jours, shifts, al: al.map(t => p.prenom + ' : ' + t), rem };
+}
+function plgOF(p, codes) {                                                   // ouvertures et fermetures depuis le début du cycle
+  const cy = plgCycleStart(PLG.ws); let o = 0, f = 0;
+  for (let w = cy.start; w <= PLG.ws; w = plgAdd(w, 7)) { const r = plgPeek(w, p.id); if (r) r.forEach(v => { const x = plgInfo(v, codes); if (x.shift === 'ouverture') o++; if (x.shift === 'fermeture') f++; }); }
+  return [o, f];
+}
+// ── affichage ──
+function plgMsg(t, k) { PLG.msg = [t || '', k || '']; const m = document.getElementById('plgMsg'); if (m) { m.textContent = t || ''; m.style.color = k === 'err' ? '#c0392b' : (k === 'ok' ? '#1e8449' : 'var(--muted)'); } }
+function plgRender() {
+  const card = document.getElementById('plgCard'); if (!card) return;
+  if (PLG.busy) { card.innerHTML = '<div style="color:var(--muted);font-size:.84rem">Chargement…</div>'; return; }
+  const codes = plgCodes(), ws = PLG.ws, we = plgAdd(ws, 6), cy = plgCycleStart(ws), mod = PLG.cfg.modulation, can = plgCan(), T = PLG.team, list = [...codes.values()].sort((a, b) => a.ordre - b.ordre);
+  const camps = (typeof pcAll === 'function' ? pcAll() : []).filter(e => e.type === 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === 'FRANCHISE' || e.restaurant === PLG.resto));
+  const evs = (plgW(ws)._ev || []), alerts = [], rems = [];
+  let h = '<div class="plg-bar"><div style="display:flex;gap:6px;flex-wrap:wrap">' + PLG.restos.map(k => '<button class="plg-chip ' + (k === PLG.resto ? 'on' : '') + '" onclick="plgSetResto(\'' + plgE(k) + '\')">' + plgE(_rtab ? _rtab(k) : k) + '</button>').join('') + '</div>'
+    + '<label style="font-size:.8rem;display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
+  h += '<div class="plg-bar"><div class="plg-nav"><button class="plg-btn" onclick="plgGo(-1)" aria-label="Semaine précédente">‹</button><b>Semaine du ' + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgGo(1)" aria-label="Semaine suivante">›</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button></div>'
+    + '<div style="font-size:.76rem;color:var(--muted)">' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</div></div>';
+  if (camps.length) h += '<div style="margin-bottom:4px">' + camps.map(e => '<span class="plg-camp">📣 ' + plgE(e.detail || 'Campagne') + ' · ' + plgFr(e.periode) + (e.fin ? ' → ' + plgFr(e.fin) : '') + '</span>').join('') + '</div>';
+  if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
+  else {
+    h += '<div class="plg-wrap"><table class="plg"><colgroup><col style="width:150px"><col span="7"><col style="width:84px"></colgroup><thead><tr><th></th>' + PLG_J.map((j, i) => '<th>' + j + '<br><span style="font-weight:400">' + plgFr(plgAdd(ws, i)) + '</span></th>').join('') + '<th>Total</th></tr>'
+      + '<tr><th style="text-align:left;font-size:.62rem;padding-left:6px">Événements</th>' + PLG_J.map((j, i) => '<th style="vertical-align:top">' + evs.map((e, k) => e.d === i ? '<span class="plg-ev" title="' + (can ? 'Cliquer pour retirer' : '') + '" ' + (can ? 'onclick="plgDelEv(' + k + ')" style="cursor:pointer"' : '') + '>' + (e.h ? plgE(e.h) + ' ' : '') + plgE(e.x) + '</span>' : '').join('') + '</th>').join('') + '<th></th></tr></thead><tbody>';
+    T.forEach(p => {
+      const a = plgAnalyse(p, codes), cible = +p.heures_hebdo || 35, b = plgOF(p, codes), d = b[0] - b[1], bc = Math.abs(d) <= 1 ? ['#e8f6ee', '#1e8449', 'équilibré'] : (Math.abs(d) === 2 ? ['#fdf3e1', '#b9770e', d > 0 ? 'plus d\'ouvertures' : 'plus de fermetures'] : ['#fdecea', '#a93226', d > 0 ? 'trop d\'ouvertures' : 'trop de fermetures']);
+      const fj = plgFj(p), diff = a.tot - cible, cl = !fj && a.tot > plgSeuil('semaine_max') ? '#c0392b' : (fj || mod ? 'inherit' : (Math.abs(diff) < .01 ? '#1e8449' : '#b9770e'));
+      h += '<tr><td class="n"><b style="font-size:.78rem">' + plgE(p.prenom) + '</b><br><span class="plg-tag">' + plgE(PLG_FN[p.fonction] || p.fonction) + (fj ? ' · 218 j' : '') + '</span>' + (b[0] + b[1] > 0 ? '<span class="plg-bal" style="background:' + bc[0] + ';color:' + bc[1] + '" title="Depuis le début du cycle : ' + b[0] + ' ouverture(s), ' + b[1] + ' fermeture(s) — ' + bc[2] + '">O ' + b[0] + ' · F ' + b[1] + '</span>' : '') + '</td>';
+      a.inf.forEach((x, j) => { const v = plgRow(ws, p.id)[j], st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : ''; h += '<td><input class="plg-c' + (x.t === 'bad' ? ' bad' : '') + '" list="plgCodes" style="' + st + '" value="' + plgE(v) + '" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + j + ',this)" title="' + (x.t === 'bad' ? 'Lettre inconnue : choisissez dans la liste ou saisissez des horaires : 8h-16h, 8h30-17h ou 08:00-16:00' : '') + '"></td>'; });
+      h += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">' + (a.tot ? plgH(a.tot) : 'forfait 218 j') + '</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
+      a.al.forEach(t => alerts.push(t)); a.rem.forEach(t => rems.push(t));
+    });
+    h += '</tbody></table></div><datalist id="plgCodes">' + list.map(c => '<option value="' + plgE(c.code) + '">' + plgE(c.libelle) + '</option>').join('') + '</datalist>';
+  }
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExp" onclick="plgExport()" title="Classeur au format du modèle MODULATION : 4 cycles de 13 semaines et la synthèse">Exporter en Excel</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
+  if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
+  h += alerts.length ? '<div class="plg-box plg-alert"><b>À vérifier : règles sociales (' + alerts.length + ')</b><ul style="margin:4px 0 0 16px;padding:0">' + alerts.slice(0, 8).map(t => '<li>' + plgE(t) + '</li>').join('') + '</ul></div>' : (T.length ? '<div class="plg-box plg-ok">Aucune alerte sociale cette semaine.</div>' : '');
+  if (rems.length) h += '<div class="plg-box plg-rem"><b style="color:var(--text)">Remarques (non bloquantes)</b><ul style="margin:4px 0 0 16px;padding:0">' + rems.map(t => '<li>' + plgE(t) + '</li>').join('') + '</ul></div>';
+  h += '<details class="plg-sec" open><summary>' + (mod ? 'Résumé du cycle (13 semaines)' : 'Résumé du mois') + '</summary><div id="plgSum">' + plgSummary(codes) + '</div></details>';
+  h += '<details class="plg-sec"><summary>Événements de la semaine</summary><div>' + plgEvForm(can) + '</div></details>';
+  h += '<details class="plg-sec"><summary>Horaires des lettres de ce restaurant</summary><div>' + plgCodesTable(list, can) + '</div></details>';
+  h += '<details class="plg-sec"><summary>Équipe du restaurant (' + T.length + ')</summary><div>' + plgTeamBox(can) + '</div></details>';
+  const was = {}; card.querySelectorAll('details.plg-sec').forEach(d => { was[d.firstElementChild.textContent.slice(0, 10)] = d.open; });   // les sections restent ouvertes ou fermées comme l'utilisateur les a laissées
+  card.innerHTML = h; card.querySelectorAll('details.plg-sec').forEach(d => { const k = d.firstElementChild.textContent.slice(0, 10); if (k in was) d.open = was[k]; }); plgMsg(PLG.msg[0], PLG.msg[1]);
+}
+// ── résumés : mois (35 h) ou cycle de 13 semaines (modulation), comme la feuille « 35H OU MODULATION » ──
+function plgSummary(codes) {
+  const T = PLG.team; if (!T.length) return '<div style="color:var(--muted);font-size:.8rem">Rien à résumer : l\'équipe est vide.</div>';
+  const th = 'style="padding:5px 3px"', fmt = h => plgH(h);
+  if (PLG.cfg.modulation) {
+    const cy = plgCycleStart(PLG.ws), weeks = Array.from({ length: 13 }, (_, i) => plgAdd(cy.start, i * 7)), cur = Math.min(12, Math.max(0, plgWk(cy.start, PLG.ws)));
+    let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:6px">Cycle ' + cy.n + ' : du ' + plgFr(cy.start) + ' au ' + plgFr(plgAdd(cy.start, 90)) + '/' + plgAdd(cy.start, 90).slice(0, 4) + ' · objectif = 13 × heures du contrat (455 h à temps plein ; 1 820 h sur les 4 cycles)</div><div class="plg-wrap"><table class="plg plg-sum" style="min-width:900px"><thead><tr><th style="text-align:left;width:120px">Personne</th>' + weeks.map((w, i) => '<th class="' + (i === cur ? 'plg-now' : '') + '">S' + (i + 1) + '<br><span style="font-weight:400">' + plgFr(w) + '</span></th>').join('') + '<th>Total</th><th>Objectif</th><th>Écart</th></tr></thead><tbody>';
+    T.forEach(p => { let tot = 0; const fj = plgFj(p), cible = 13 * (+p.heures_hebdo || 35), asof = (+p.heures_hebdo || 35) * (cur + 1);
+      const cells = weeks.map((w, i) => { const r = plgPeek(w, p.id), hh = r ? r.reduce((a, v) => { const x = plgInfo(v, codes); return a + (fj ? plgJ(x) : x.h); }, 0) : null; if (hh != null && i <= cur) tot += hh; else if (hh != null) tot += hh; return '<td class="' + (i === cur ? 'plg-now' : '') + '" style="' + (hh == null ? 'color:var(--muted)' : '') + '">' + (hh == null ? '·' : (+hh.toFixed(2)).toString().replace('.', ',') + (fj ? ' j' : '')) + '</td>'; }).join('');
+      const ecart = tot - cible, ecAs = tot - asof;
+      h += '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td>' + cells + '<td><b>' + (fj ? tot + ' j' : fmt(tot)) + '</b></td><td>' + (fj ? '218 j/an' : fmt(cible)) + '</td>' + (fj ? '<td>—</td></tr>' : '<td style="color:' + (ecart > 0 ? '#c0392b' : '#1e8449') + '" title="Par rapport à l\'objectif attendu à ce jour (' + fmt(asof) + ') : ' + (ecAs >= 0 ? '+' : '−') + fmt(Math.abs(ecAs)) + '">' + (ecart >= 0 ? '+' : '−') + fmt(Math.abs(ecart)) + '</td></tr>'); });
+    return h + '</tbody></table></div><div style="font-size:.7rem;color:var(--muted);margin-top:6px">Directeur et directeur adjoint (forfait 218 jours) : comptés en jours travaillés. Le « · » signale une semaine pas encore planifiée. Survolez l\'écart pour le comparer à l\'objectif attendu à ce jour.</div>';
+  }
+  const [Y, M] = PLG.month.split('-').map(Number), first = PLG.month + '-01', last = plgIso(new Date(Date.UTC(Y, M, 0))), ws0 = plgSun(first), nW = plgWk(ws0, plgSun(last)) + 1, wsL = Array.from({ length: nW }, (_, i) => plgAdd(ws0, i * 7));
+  let h = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><button class="plg-btn" onclick="plgMonth(-1)">‹</button><b style="min-width:140px;text-align:center">' + PLG_MOIS[M - 1] + ' ' + Y + '</b><button class="plg-btn" onclick="plgMonth(1)">›</button></div>'
+    + '<div class="plg-wrap"><table class="plg plg-sum" style="min-width:640px"><thead><tr><th style="text-align:left;width:120px">Personne</th>' + wsL.map(w => '<th>Sem. ' + plgFr(w) + '</th>').join('') + '<th>Total du mois</th><th>Théorique</th><th>Écart</th></tr></thead><tbody>';
+  T.forEach(p => { let tot = 0, miss = false; const fj = plgFj(p), c = +p.heures_hebdo || 35, theo = c * 52 / 12;
+    const cells = wsL.map(w => { const r = plgPeek(w, p.id); let s = 0; if (!r) miss = true; else for (let j = 0; j < 7; j++) { const day = plgAdd(w, j); if (day >= first && day <= last) { const x = plgInfo(r[j], codes); s += fj ? plgJ(x) : x.h; } } tot += s; return '<td style="' + (r ? '' : 'color:var(--muted)') + '">' + (r ? (+s.toFixed(2)).toString().replace('.', ',') + (fj ? ' j' : '') : '·') + '</td>'; }).join('');
+    const ec = tot - theo; h += '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td>' + cells + '<td><b>' + (fj ? tot + ' j' : fmt(tot)) + '</b></td><td>' + (fj ? '218 j/an' : fmt(theo)) + '</td>' + (fj ? '<td>—</td>' : '<td style="color:' + (miss ? 'var(--muted)' : (ec > 0 ? '#b9770e' : '#1e8449')) + '">' + (miss ? 'à compléter' : (ec >= 0 ? '+' : '−') + fmt(Math.abs(ec))) + '</td>') + '</tr>'; });
+  return h + '</tbody></table></div><div style="font-size:.7rem;color:var(--muted);margin-top:6px">Heures des jours du mois seulement (une semaine à cheval sur deux mois est répartie jour par jour). Théorique = heures du contrat × 52 ÷ 12 (directeur et directeur adjoint, au forfait 218 jours : jours travaillés). Le « · » signale une semaine pas encore planifiée.</div>';
+}
+async function plgMonth(d) { const [Y, M] = PLG.month.split('-').map(Number), n = new Date(Date.UTC(Y, M - 1 + d, 1)); PLG.month = plgIso(n).slice(0, 7); const f = plgSun(PLG.month + '-01'), t = plgAdd(plgSun(plgIso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)))), 0); await plgFetchWeeks(plgAdd(f, -7), plgAdd(t, 7)); plgRender(); }
+// ── événements propres au planning (la lecture du Plan de communication ne reprend que les campagnes) ──
+function plgEvForm(can) {
+  const ws = PLG.ws, evs = plgW(ws)._ev || [];
+  return (evs.length ? evs.map((e, k) => '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(PLG_JL[e.d]) + ' ' + plgFr(plgAdd(ws, e.d)) + '</b> · ' + plgE(e.t) + ' · ' + plgE(e.x) + (e.h ? ' · ' + plgE(e.h) : '') + '</span>' + (can ? '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>' : '') + '</div>').join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement cette semaine.</div>')
+    + (can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><select class="plg-in" id="plgEd">' + PLG_JL.map((j, i) => '<option value="' + i + '">' + j + ' ' + plgFr(plgAdd(ws, i)) + '</option>').join('') + '</select><select class="plg-in" id="plgEt"><option>Réunion</option><option>Formation</option><option>Audit</option><option>Évaluation</option><option>Festif</option><option>Autre</option></select><input class="plg-in" id="plgEx" maxlength="60" placeholder="Titre (ex. Réunion managers)" style="width:200px"><input class="plg-in" id="plgEh" type="time"><button class="plg-btn" onclick="plgAddEv()">Ajouter</button></div>' : '');
+}
+function plgAddEv() { const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; } const w = plgW(PLG.ws); (w._ev = w._ev || []).push({ d: +document.getElementById('plgEd').value, t: document.getElementById('plgEt').value, x: x.slice(0, 60), h: document.getElementById('plgEh').value || '' }); PLG.dirty = true; plgRender(); }
+function plgDelEv(k) { const w = plgW(PLG.ws); if (!w._ev) return; w._ev.splice(k, 1); PLG.dirty = true; plgRender(); }
+// ── horaires des lettres, par restaurant ──
+function plgCodesTable(list, can) {
+  const sel = (c, v) => '<select class="plg-in" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c) + '\',\'shift\',this.value)">' + [['', 'Pas un shift'], ['ouverture', 'Ouverture'], ['fermeture', 'Fermeture'], ['autre', 'Autre shift']].map(o => '<option value="' + o[0] + '" ' + (o[0] === (v || '') ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
+  let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">Chaque restaurant règle les horaires de ses lettres. Une lettre modifiée ici ne change rien pour les autres restaurants.</div><div class="plg-wrap"><table class="plg" style="min-width:640px"><colgroup><col style="width:70px"><col><col style="width:84px"><col style="width:84px"><col style="width:62px"><col style="width:120px"><col style="width:70px"></colgroup><thead><tr><th>Lettre</th><th style="text-align:left">Libellé</th><th>Début</th><th>Fin</th><th>Durée</th><th>Shift</th><th></th></tr></thead><tbody>';
+  list.forEach(c => { const st = c.fond ? 'background:' + c.fond + ';color:' + c.texte + ';' : '', noT = !c.debut && !c.fin;
+    h += '<tr><td><span class="plg-sw" style="' + st + '">' + plgE(c.code) + '</span></td><td class="n">' + plgE(c.libelle) + (c.ov ? ' <span class="plg-tag" style="background:rgba(8,145,178,.14);color:#0e7490">propre à ce restaurant</span>' : '') + '</td>'
+      + (noT ? '<td colspan="2" style="font-size:.7rem;color:var(--muted)">sans horaire</td>' : '<td><input type="time" class="plg-in" style="width:80px" value="' + (c.debut || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'debut\',this.value)"></td><td><input type="time" class="plg-in" style="width:80px" value="' + (c.fin || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'fin\',this.value)"></td>')
+      + '<td>' + plgH(plgDur(c)) + '</td><td>' + sel(c.code, c.shift) + '</td><td>' + (c.ov && can ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" onclick="plgCodeReset(\'' + plgE(c.code) + '\')">Défaut</button>' : '') + '</td></tr>'; });
+  h += '</tbody></table></div>';
+  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgNc" maxlength="12" placeholder="Lettre" style="width:80px"><input class="plg-in" id="plgNl" maxlength="40" placeholder="Libellé" style="width:170px"><input class="plg-in" id="plgNd" type="time"><input class="plg-in" id="plgNf" type="time"><button class="plg-btn" onclick="plgCodeAdd()">Ajouter une lettre à ce restaurant</button></div>';
+  return h;
+}
+async function plgCodeSave(code, champ, val) {
+  const c = plgCodes().get(String(code).toUpperCase()); if (!c) return;
+  const row = { franchise: PLG.FR, restaurant: PLG.resto, code: c.code, libelle: c.libelle, heures: c.heures, debut: c.debut, fin: c.fin, ordre: c.ordre, fond: c.fond, texte: c.texte, shift: c.shift }; row[champ] = val === '' ? null : val;
+  row.heures = plgDur({ debut: row.debut, fin: row.fin, heures: c.heures });
+  const r = await plgApi('/rest/v1/planning_codes?on_conflict=franchise,restaurant,code', 'POST', row, { Prefer: 'resolution=merge-duplicates,return=representation' });
+  if (!r.ok) { plgMsg('Enregistrement refusé : ' + ((r.j && r.j.message) || 'erreur'), 'err'); return; }
+  const rr = await plgApi('/rest/v1/planning_codes?' + plgQ({ franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto, order: 'ordre.asc' })); if (rr.ok) PLG.over = rr.j || []; plgRender(); plgMsg('✓ Horaire de la lettre ' + c.code + ' enregistré pour ce restaurant.', 'ok');
+}
+async function plgCodeReset(code) { const r = await plgApi('/rest/v1/planning_codes?' + plgQ({ franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto, code: 'eq.' + code }), 'DELETE'); if (!r.ok) { plgMsg('Retour au défaut refusé', 'err'); return; } PLG.over = PLG.over.filter(x => String(x.code) !== String(code)); plgRender(); plgMsg('✓ ' + code + ' : valeur par défaut rétablie.', 'ok'); }
+async function plgCodeAdd() {
+  const c = document.getElementById('plgNc').value.trim().toUpperCase(), l = document.getElementById('plgNl').value.trim(), d = document.getElementById('plgNd').value, f = document.getElementById('plgNf').value;
+  if (!c || !l) { plgMsg('Indiquez la lettre et son libellé.', 'err'); return; } if (plgCodes().has(c)) { plgMsg('Cette lettre existe déjà : modifiez ses horaires dans la liste.', 'err'); return; }
+  const r = await plgApi('/rest/v1/planning_codes', 'POST', { franchise: PLG.FR, restaurant: PLG.resto, code: c, libelle: l, heures: d && f ? plgDur({ debut: d, fin: f }) : 0, debut: d || null, fin: f || null, ordre: 100 + PLG.over.length }, { Prefer: 'return=representation' });
+  if (!r.ok) { plgMsg('Ajout refusé : ' + ((r.j && r.j.message) || 'erreur'), 'err'); return; } PLG.over.push((r.j && r.j[0]) || { franchise: PLG.FR, restaurant: PLG.resto, code: c, libelle: l, heures: 0, debut: d, fin: f, ordre: 100 }); plgRender(); plgMsg('✓ Lettre ' + c + ' ajoutée à ce restaurant.', 'ok');
+}
+// ── équipe du restaurant (le directeur ajoute lui-même ses directeurs adjoints, assistants, managers, responsables de zone) ──
+function plgTeamRow(p, can) {
+  if (can && PLG.editId === p.id) {                                          // ligne en cours de modification : prénom, fonction, contrat, heures
+    const fj = plgFj(p), cur = p.contrat === 'temps_partiel';
+    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 0;border-top:1px solid var(--border)"><input class="plg-in" id="plgMp" maxlength="40" value="' + plgE(p.prenom) + '" style="width:150px" aria-label="Prénom et initiale">'
+      + '<select class="plg-in" id="plgMf" onchange="plgEdFn()" aria-label="Fonction">' + Object.entries(PLG_FN).map(([k, n]) => '<option value="' + k + '" ' + (k === p.fonction ? 'selected' : '') + '>' + n + '</option>').join('') + '</select>'
+      + '<select class="plg-in" id="plgMk" style="' + (fj ? 'display:none' : '') + '" onchange="document.getElementById(\'plgMh\').value=this.value==\'temps_partiel\'?24:35" aria-label="Contrat"><option value="temps_plein" ' + (cur ? '' : 'selected') + '>Temps plein</option><option value="temps_partiel" ' + (cur ? 'selected' : '') + '>Temps partiel</option></select>'
+      + '<input class="plg-in" id="plgMh" type="number" min="1" max="48" step="0.5" value="' + plgE(+p.heures_hebdo || 35) + '" style="width:70px;' + (fj ? 'display:none' : '') + '" title="Heures par semaine du contrat" aria-label="Heures par semaine">'
+      + '<span id="plgMfj" style="' + (fj ? '' : 'display:none;') + 'font-size:.76rem;color:var(--muted)">Forfait 218 jours</span>'
+      + '<button class="plg-btn pri" onclick="plgTeamSave(\'' + p.id + '\')">Enregistrer</button><button class="plg-btn" onclick="plgTeamEdit(\'\')">Annuler</button></div>';
+  }
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;font-size:.78rem;padding:5px 0;border-top:1px solid var(--border)"><span><b>' + plgE(p.prenom) + '</b> · ' + plgE(PLG_FN[p.fonction] || p.fonction) + ' · ' + (plgFj(p) ? 'forfait 218 jours' : (p.contrat === 'temps_partiel' ? 'temps partiel ' : 'temps plein ') + plgE(+p.heures_hebdo) + ' h') + '</span>'
+    + (can ? '<span style="display:flex;gap:6px"><button class="plg-btn" style="padding:2px 8px" onclick="plgTeamEdit(\'' + p.id + '\')">Modifier</button><button class="plg-btn" style="padding:2px 8px" onclick="plgTeamOff(\'' + p.id + '\')">Retirer</button></span>' : '') + '</div>';
+}
+function plgTeamEdit(id) { PLG.editId = id || null; plgRender(); }
+function plgEdFn() { const fj = plgFj({ fonction: document.getElementById('plgMf').value }); ['plgMk', 'plgMh'].forEach(i => { document.getElementById(i).style.display = fj ? 'none' : ''; }); document.getElementById('plgMfj').style.display = fj ? '' : 'none'; }
+async function plgTeamSave(id) {
+  const p = PLG.team.find(x => x.id === id), n = document.getElementById('plgMp').value.trim(); if (!p) return; if (!n) { document.getElementById('plgMp').focus(); return; }
+  const f = document.getElementById('plgMf').value, fj = plgFj({ fonction: f }), body = { prenom: n, fonction: f, contrat: fj ? 'temps_plein' : document.getElementById('plgMk').value, heures_hebdo: fj ? 35 : (+document.getElementById('plgMh').value || 35) };
+  const r = await plgApi('/rest/v1/equipe?id=eq.' + id, 'PATCH', body, { Prefer: 'return=representation' });
+  if (!r.ok || (Array.isArray(r.j) && !r.j.length)) { plgMsg('Modification refusée : ' + ((r.j && r.j.message) || 'droit insuffisant').replace(/^équipe : /, ''), 'err'); return; }
+  Object.assign(p, (r.j && r.j[0]) || body); PLG.editId = null; plgRender(); plgMsg('✓ ' + p.prenom + ' modifié(e). Ses plannings déjà saisis sont conservés.', 'ok');
+}
+function plgTeamBox(can) {
+  let h = PLG.team.length ? PLG.team.map(p => plgTeamRow(p, can)).join('') : '<div style="font-size:.78rem;color:var(--muted)">Personne pour le moment.</div>';
+  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgNp" maxlength="40" placeholder="Prénom et initiale" style="width:150px"><select class="plg-in" id="plgNf2" onchange="plgFnChg()">' + Object.entries(PLG_FN).map(([k, n]) => '<option value="' + k + '" ' + (k === 'manager' ? 'selected' : '') + '>' + n + '</option>').join('') + '</select><select class="plg-in" id="plgNk" onchange="document.getElementById(\'plgNh\').value=this.value==\'temps_partiel\'?24:35"><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select><input class="plg-in" id="plgNh" type="number" min="1" max="48" step="0.5" value="35" style="width:70px" title="Heures par semaine du contrat"><span id="plgNfj" style="display:none;font-size:.76rem;color:var(--muted);align-self:center">Forfait 218 jours</span><button class="plg-btn" onclick="plgTeamAdd()">Ajouter</button></div><div style="font-size:.7rem;color:var(--muted);margin-top:4px">Prénom et initiale seulement, jamais le nom complet. Une personne retirée disparaît de la grille ; ses plannings passés restent enregistrés.</div>';
+  return h;
+}
+function plgFnChg() { const fj = plgFj({ fonction: document.getElementById('plgNf2').value }); ['plgNk', 'plgNh'].forEach(i => { const e = document.getElementById(i); if (e) e.style.display = fj ? 'none' : ''; }); const m = document.getElementById('plgNfj'); if (m) m.style.display = fj ? '' : 'none'; }
+async function plgTeamAdd() {
+  const n = document.getElementById('plgNp').value.trim(); if (!n) { document.getElementById('plgNp').focus(); return; }
+  const body = { franchise: PLG.FR, restaurant: PLG.resto, prenom: n, fonction: document.getElementById('plgNf2').value, contrat: plgFj({ fonction: document.getElementById('plgNf2').value }) ? 'temps_plein' : document.getElementById('plgNk').value, heures_hebdo: plgFj({ fonction: document.getElementById('plgNf2').value }) ? 35 : (+document.getElementById('plgNh').value || 35), ordre: PLG.team.length };
+  const r = await plgApi('/rest/v1/equipe', 'POST', body, { Prefer: 'return=representation' }); if (!r.ok) { plgMsg('Ajout refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^équipe : /, ''), 'err'); return; }
+  PLG.team.push((r.j && r.j[0]) || body); plgRender(); plgMsg('✓ ' + n + ' ajouté(e) à l\'équipe.', 'ok');
+}
+async function plgTeamOff(id) { const p = PLG.team.find(x => x.id === id); if (!p || !confirm('Retirer ' + p.prenom + ' de l\'équipe ? Ses plannings passés restent enregistrés.')) return; const r = await plgApi('/rest/v1/equipe?id=eq.' + id, 'PATCH', { actif: false }, { Prefer: 'return=representation' }); if (!r.ok || (Array.isArray(r.j) && !r.j.length)) { plgMsg('Retrait refusé', 'err'); return; } PLG.team = PLG.team.filter(x => x.id !== id); plgRender(); plgMsg('✓ ' + p.prenom + ' retiré(e) de l\'équipe.', 'ok'); }
+// ── actions ──
+function plgSet(pid, j, el) {
+  const codes = plgCodes(), x = plgInfo(el.value, codes), row = plgRow(PLG.ws, pid);
+  row[j] = x.t === 'code' ? x.code : (x.t === 'range' ? x.norm : String(el.value).trim()); PLG.dirty = true; plgRender();
+}
+function plgGo(d) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer de semaine les perdrait. Continuer ?')) return; PLG.dirty = false; PLG.ws = plgAdd(PLG.ws, 7 * d); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
+function plgToday() { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.ws = plgSun(plgIso(new Date())); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
+function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
+async function plgSetMod(v) {
+  const r = await plgApi('/rest/v1/rpc/planning_resto_save', 'POST', { f: PLG.FR, resto: PLG.resto, p_modulation: !!v, p_debut: PLG.cfg.debut_cycle, p_seuils: PLG.cfg.seuils || {} });
+  if (!r.ok) { plgMsg('Réglage refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); plgRender(); return; } PLG.cfg.modulation = !!v; plgRender(); plgMsg(v ? '✓ Ce restaurant passe en modulation (cycles de 13 semaines).' : '✓ Ce restaurant passe à 35 h par semaine.', 'ok');
+}
+async function plgSave(force) {
+  const ws = PLG.ws, k = PLG.resto + '|' + ws, base = force ? (PLG.conflict ? PLG.conflict.version : PLG.ver[k]) : (PLG.ver[k] || 0);
+  const r = await plgApi('/rest/v1/rpc/planning_save', 'POST', { f: PLG.FR, resto: PLG.resto, sem: ws, cell: plgW(ws), base_version: base });
+  if (!r.ok) { plgMsg('Enregistrement refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); return; }
+  if (r.j && r.j.conflit) { PLG.conflict = { version: r.j.version, cellules: r.j.cellules }; plgRender(); return; }
+  PLG.ver[k] = r.j.version; PLG.dirty = false; PLG.conflict = null; plgRender(); plgMsg('✓ Semaine enregistrée.', 'ok');
+}
+const plgForce = () => plgSave(true);
+function plgReload() { PLG.dirty = false; PLG.conflict = null; plgLoad(); }
+
+// ── export Excel au format du modèle MODULATION.xlsx : « 1er Cycle » … « 4ème Cycle » (13 semaines chacune, 2 semaines côte à côte, formules d'heures) + « 35H OU MODULATION » (résumés et tableau des valeurs) ──
+const plgRgb = c => String(c || '').replace('#', '').toUpperCase();
+const plgSerial = s => (Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5;
+const plgCol = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+function plgWorkbook(base) {
+  const codes = plgCodes(), list = [...codes.values()].sort((a, b) => a.ordre - b.ordre), T = PLG.team, nm = (typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto), X = XLSX.utils, wb = X.book_new();
+  const thin = { style: 'thin', color: { rgb: 'BFBFBF' } }, bd = { top: thin, bottom: thin, left: thin, right: thin }, ctr = { horizontal: 'center', vertical: 'center' };
+  const HEAD = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '44546A' } }, alignment: ctr, border: bd }, SUB = { font: { bold: true }, fill: { fgColor: { rgb: 'D9D9D9' } }, alignment: ctr, border: bd };
+  const put = (ws, r, c, v, st, o) => { o = o || {}; const a = X.encode_cell({ r: r - 1, c: c - 1 }), x = { v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' }; if (st) x.s = JSON.parse(JSON.stringify(st)); if (o.f) x.f = o.f; if (o.z) x.z = o.z; ws[a] = x; const R = ws['!ref'] ? X.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }; R.e.r = Math.max(R.e.r, r - 1); R.e.c = Math.max(R.e.c, c - 1); ws['!ref'] = X.encode_range(R); };
+  const cellStyle = x => x.bg ? { fill: { fgColor: { rgb: plgRgb(x.bg) } }, font: { bold: true, color: { rgb: plgRgb(x.fg) } }, alignment: ctr, border: bd } : { font: { bold: x.t !== '' }, alignment: ctr, border: bd };
+  const tf = h => h / 24, frac = s => s ? plgTm(s) / 24 : '';
+  const legRef = '$AC$5:$AD$' + (4 + list.length), nR = Math.max(T.length, 1), blockH = nR + 3;
+  const hoursOf = (ws0, pid) => { const r = plgPeek(ws0, pid); return r ? r.reduce((a, v) => a + plgInfo(v, codes).h, 0) : 0; };
+  for (let k = 1; k <= 4; k++) {
+    const ws = {}; ws['!merges'] = [{ s: { r: 1, c: 1 }, e: { r: 1, c: 23 } }]; ws['!cols'] = [{ wch: 2 }, { wch: 14 }, ...Array(7).fill({ wch: 12 }), { wch: 9 }, { wch: 9 }, { wch: 9 }, { wch: 3 }, { wch: 3 }, { wch: 14 }, ...Array(7).fill({ wch: 12 }), { wch: 9 }, { wch: 9 }, { wch: 9 }, { wch: 3 }, { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
+    put(ws, 2, 2, 'PLANNING EDG - CYCLE ' + k + ' - ' + nm.toUpperCase() + ' - ' + (PLG.cfg.modulation ? 'MODULATION' : '35 H'), { font: { bold: true, sz: 14 }, alignment: ctr });
+    put(ws, 4, 28, 'TABLEAU DES VALEURS', HEAD); put(ws, 4, 29, 'CODE', HEAD); put(ws, 4, 30, 'DURÉE', HEAD); put(ws, 4, 31, 'DÉBUT', HEAD); put(ws, 4, 32, 'FIN', HEAD);
+    list.forEach((c, i) => { const st = c.fond ? { fill: { fgColor: { rgb: plgRgb(c.fond) } }, font: { bold: true, color: { rgb: plgRgb(c.texte) } }, alignment: ctr, border: bd } : { alignment: ctr, border: bd }; put(ws, 5 + i, 28, c.libelle, { border: bd }); put(ws, 5 + i, 29, c.code, st); put(ws, 5 + i, 30, tf(plgDur(c)), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(ws, 5 + i, 31, frac(c.debut), { alignment: ctr, border: bd }, { z: 'hh:mm' }); put(ws, 5 + i, 32, frac(c.fin), { alignment: ctr, border: bd }, { z: 'hh:mm' }); });
+    for (let i = 0; i < 13; i++) {
+      const wsd = plgAdd(base, ((k - 1) * 13 + i) * 7), b = Math.floor(i / 2), top = 4 + b * blockH, c0 = i % 2 === 0 ? 2 : 15;
+      ['SEMAINE', 'DIMANCHE', 'LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'HEURES (plages)', 'HEURES (codes)', 'TOTAL'].forEach((t, j) => put(ws, top, c0 + j, t, HEAD));
+      put(ws, top + 1, c0, (k - 1) * 13 + i + 1, SUB); for (let j = 0; j < 7; j++) put(ws, top + 1, c0 + 1 + j, plgSerial(plgAdd(wsd, j)), SUB, { z: 'dd/mm' }); for (let j = 8; j <= 10; j++) put(ws, top + 1, c0 + j, '', SUB);
+      for (let q = 0; q < nR; q++) {
+        const p = T[q], r = top + 2 + q; put(ws, r, c0, p ? p.prenom : '', { font: { bold: true }, border: bd });
+        const row = p ? plgPeek(wsd, p.id) : null, refs = []; let hp = 0, hc = 0;
+        for (let j = 0; j < 7; j++) { const v = row ? row[j] : '', x = plgInfo(v, codes); put(ws, r, c0 + 1 + j, v || '', cellStyle(x)); refs.push(plgCol(c0 + 1 + j) + r); if (x.t === 'range') hp += x.h; else if (x.t === 'code') hc += x.h; }
+        put(ws, r, c0 + 8, tf(hp), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR((RIGHT(' + a + ',5)+0)-(LEFT(' + a + ',5)+0),0)').join('+'), z: '[h]:mm' });
+        put(ws, r, c0 + 9, tf(hc), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR(VLOOKUP(' + a + ',' + legRef + ',2,FALSE),0)').join('+'), z: '[h]:mm' });
+        put(ws, r, c0 + 10, tf(hp + hc), { font: { bold: true }, alignment: ctr, border: bd }, { f: plgCol(c0 + 8) + r + '+' + plgCol(c0 + 9) + r, z: '[h]:mm' });
+      }
+    }
+    X.book_append_sheet(wb, ws, k === 1 ? '1er Cycle' : k + 'ème Cycle');
+  }
+  // feuille de synthèse : mois (35 h) puis cycles (modulation), comme « 35H OU MODULATION »
+  const sy = {}, yr = +plgAdd(base, 4).slice(0, 4); sy['!cols'] = [{ wch: 2 }, { wch: 24 }, { wch: 18 }, ...Array(13).fill({ wch: 11 }), { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
+  put(sy, 2, 2, '35H - TEMPS PARTIEL', HEAD); put(sy, 2, 3, '', HEAD); PLG_MOIS.forEach((m, i) => put(sy, 2, 4 + i, m.toUpperCase(), HEAD)); put(sy, 2, 16, 'TOTAL', HEAD);
+  T.forEach((p, q) => { put(sy, 3 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
+    for (let m = 0; m < 12; m++) { let h = 0; const last = new Date(Date.UTC(yr, m + 1, 0)).getUTCDate(); for (let d = 1; d <= last; d++) { const day = yr + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'), w0 = plgSun(day), r = plgPeek(w0, p.id); if (r) h += plgInfo(r[plgD(day).getUTCDay()], codes).h; } tot += h; put(sy, 3 + q, 4 + m, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
+    put(sy, 3 + q, 16, tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: '[h]:mm' }); });
+  const m0 = 3 + T.length + 2; put(sy, m0, 2, 'MODULATION', HEAD); put(sy, m0, 3, '', HEAD); ['1ER CYCLE', '2e CYCLE', '3e CYCLE', '4e CYCLE', 'TOTAL', 'CIBLE', 'ÉCART'].forEach((t, i) => put(sy, m0, 5 + i, t, HEAD));
+  T.forEach((p, q) => { put(sy, m0 + 1 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
+    for (let k = 0; k < 4; k++) { let h = 0; for (let i = 0; i < 13; i++) h += hoursOf(plgAdd(base, (k * 13 + i) * 7), p.id); tot += h; put(sy, m0 + 1 + q, 5 + k, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
+    const cible = 52 * (+p.heures_hebdo || 35); put(sy, m0 + 1 + q, 9, tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: '[h]:mm' }); if (plgFj(p)) { put(sy, m0 + 1 + q, 10, 'Forfait 218 j', { alignment: ctr, border: bd }); put(sy, m0 + 1 + q, 11, '', { alignment: ctr, border: bd }); } else { put(sy, m0 + 1 + q, 10, tf(cible), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(sy, m0 + 1 + q, 11, (tot - cible) / 24, { alignment: ctr, border: bd }, { z: '[h]:mm;-[h]:mm' }); } });
+  put(sy, 2, 19, 'TABLEAU DES VALEURS', HEAD); put(sy, 2, 20, 'CODE', HEAD); put(sy, 2, 21, 'DURÉE', HEAD); put(sy, 2, 22, 'DÉBUT', HEAD); put(sy, 2, 23, 'FIN', HEAD);
+  list.forEach((c, i) => { const st = c.fond ? { fill: { fgColor: { rgb: plgRgb(c.fond) } }, font: { bold: true, color: { rgb: plgRgb(c.texte) } }, alignment: ctr, border: bd } : { alignment: ctr, border: bd }; put(sy, 3 + i, 19, c.libelle, { border: bd }); put(sy, 3 + i, 20, c.code, st); put(sy, 3 + i, 21, tf(plgDur(c)), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(sy, 3 + i, 22, frac(c.debut), { alignment: ctr, border: bd }, { z: 'hh:mm' }); put(sy, 3 + i, 23, frac(c.fin), { alignment: ctr, border: bd }, { z: 'hh:mm' }); });
+  X.book_append_sheet(wb, sy, '35H OU MODULATION');
+  return wb;
+}
+async function plgExport() {
+  const b = document.getElementById('plgExp'); if (b) { b.disabled = true; b.textContent = 'Préparation du classeur…'; }
+  try {
+    await _loadXlsx(); const base = plgCycleStart(PLG.ws).base; await plgFetchWeeks(plgAdd(base, -7), plgAdd(base, 54 * 7));
+    const nm = ((typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto) || '').replace(/[^A-Za-z0-9À-ÿ]+/g, '_'), file = 'Planning_EDG_' + nm + '_' + plgAdd(base, 4).slice(0, 4) + '.xlsx', wb = plgWorkbook(base);
+    if (window.__PLG_CAPTURE) { window.__PLG_CAPTURE(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }), file); } else XLSX.writeFile(wb, file);
+    plgMsg('✓ ' + file + ' exporté (4 cycles de 13 semaines + synthèse).', 'ok');
+  } catch (e) { plgMsg('Export impossible : ' + e.message, 'err'); }
+  finally { const b2 = document.getElementById('plgExp'); if (b2) { b2.disabled = false; b2.textContent = 'Exporter en Excel'; } }
+}
+document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 's' && typeof currentEspace !== 'undefined' && currentEspace === 'planning') { e.preventDefault(); if (PLG.dirty && plgCan()) plgSave(); } });
+window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault(); e.returnValue = ''; } });
+</script>
+
+<!-- PLANNING_EDG:END -->
 <!-- ════════ FAQ / AIDE ════════ -->
 <style>
 #faqModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:5vh 14px; overflow-y:auto; }
@@ -9267,7 +9884,7 @@ body.dark-mode .search-kpi-pick .skp.on { color:#fff; }
 let currentEspace = 'pilotage';
 function switchEspace(name) {
   currentEspace = name;
-  ['pilotage','interventions','formation','marketing','actualite','performance','plancom'].forEach(e => {
+  ['pilotage','interventions','formation','marketing','actualite','performance','plancom','planning'].forEach(e => {
     const el = document.getElementById('espace-' + e);
     if (el) el.style.display = (e === name) ? '' : 'none';
   });
@@ -9277,7 +9894,7 @@ function switchEspace(name) {
   const bE = document.getElementById('btnExporter'); if (bE) bE.style.display = (name === 'pilotage' || name === 'performance') ? '' : 'none';
   const bI = document.getElementById('btnIndices'); if (bI) bI.style.display = (name === 'pilotage') ? '' : 'none';
   // Libellé de l'en-tête selon l'espace
-  const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication' };
+  const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication', planning:'Planning EDG' };
   const lblEl = document.getElementById('espaceLabel');
   if (lblEl) lblEl.textContent = LBL[name] || '';
   // La date « Données au… » ne concerne que le Pilotage
@@ -9290,6 +9907,7 @@ function switchEspace(name) {
   if (name === 'actualite') loadActu();
   if (name === 'performance') loadPerformance();
   if (name === 'plancom') loadPlanCom();
+  if (name === 'planning') loadPlanning();
   try { if (typeof esbOpen === 'function') esbOpen(name); } catch (e) {}
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
 }
@@ -9311,7 +9929,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261102-132850';
+const BUILD_VERSION = '20261102-223628';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

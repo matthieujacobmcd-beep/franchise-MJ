@@ -186,6 +186,7 @@
     <div class="topbar-right">
       <div class="resto-badge" id="restoBadge" style="display:none">📍 <span id="restoBadgeName"></span><button onclick="showPicker()">Changer</button></div>
       <a class="dash-link" href="index.html" target="_blank" rel="noopener">Voir le dashboard →</a>
+      <span class="sba-who" id="sbaWho"></span>
       <button class="dash-link" id="btnLogout" onclick="logoutSaisie()" title="Se déconnecter : le mot de passe sera redemandé" style="cursor:pointer;font-family:inherit;background:transparent">Se déconnecter</button>
     </div>
   </div>
@@ -208,7 +209,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════
-/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "acces_dyn": null, "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
+/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "acces_dyn": null, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}, "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
 const APPS_SCRIPT_URL = CFG.apps_script_url;   // …/exec
 const PWD_HASH = CFG.pwd_hash;
 // ── Accès par rôle (directeur de restaurant, superviseur de secteur, franchisé) : mots de passe distincts de celui de la saisie ──
@@ -248,19 +249,20 @@ async function checkPwd(){
   const hv=await sha256(v), acc=hv===PWD_HASH?null:await accResolve(hv);
   if(hv===PWD_HASH || acc){                                          // un accès « simulation » ouvre aussi la saisie (les enregistrements utilisent l'empreinte de la saisie)
     sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); if(acc) accGrant(acc);
+    if(typeof SBA!=='undefined'&&SBA.enabled()) SBA.release();
     try{ if(document.getElementById('remMe').checked) localStorage.setItem('mj_remember',hv); else localStorage.removeItem('mj_remember'); }catch(e){}
     await new Promise(r=>setTimeout(r,350));
     showApp(); loginBusy(false);
   }
   else { loginBusy(false); const e=document.getElementById('loginErr'); e.textContent='Mot de passe incorrect'; setTimeout(()=>e.textContent='',2500); }
 }
-function logoutSaisie(){ try{ localStorage.removeItem('mj_remember'); }catch(e){} try{ sessionStorage.removeItem('mj_saisie'); sessionStorage.removeItem('mj_pwdhash'); sessionStorage.removeItem('mj_access'); }catch(e){} location.reload(); }
+async function logoutSaisie(){ try{ if(typeof SBA!=='undefined'&&SBA.hasSession()) await SBA.logout(); }catch(e){} try{ localStorage.removeItem('mj_remember'); }catch(e){} try{ sessionStorage.removeItem('mj_saisie'); sessionStorage.removeItem('mj_pwdhash'); sessionStorage.removeItem('mj_access'); }catch(e){} location.reload(); }
 function showApp(){ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; init(); }
 
 // ── Modèle ──
 const RESTOS=CFG.restos.map(r=>[r.key,r.label]);
 const MONTHS=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
-const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['budget','Budget & PNL'],['valid','Validation du prévisionnel'],['documents','Documents'],['acces','Mots de passe']];
+const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['budget','Budget & PNL'],['valid','Validation du prévisionnel'],['documents','Documents'],['acces','Mots de passe'],['equipes','Équipes']];
 // Indicateurs saisis chaque semaine : le mois correspondant (onglet Mensuel)
 // se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
 const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
@@ -385,7 +387,7 @@ function lastLabel(tab){
 
 function fitTabs(){ const b=document.getElementById('tabBar'); if(!b) return; b.classList.remove('wrapped'); const w=b.scrollWidth>b.clientWidth+1; b.classList.toggle('wrapped',w); document.body.classList.toggle('tabs-wrapped',w); }
 let _fitT=null; window.addEventListener('resize',()=>{ clearTimeout(_fitT); _fitT=setTimeout(fitTabs,80); });
-function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin())).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'||k==='valid')&&!accCan(k)?'🔒 ':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
+function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>(k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin()))&&(typeof sbTabOk==='function'?sbTabOk(k):k!=='equipes')).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'||k==='valid')&&!accCan(k)?'🔒 ':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(typeof fitTabs==='function') fitTabs(); });
 function init(){
   if(!configured()) document.getElementById('cfgWarn').style.display='block';
@@ -412,7 +414,7 @@ function setResto(r){
   document.getElementById('restoBadge').style.display='flex';
   hidePicker(); renderPanel();
 }
-function setTab(t){ curTab=t; document.body.classList.toggle('pv-wide',t==='prevca'||t==='budget'); fitTabs(); document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto||t==='acces') renderPanel(); }
+function setTab(t){ curTab=t; document.body.classList.toggle('pv-wide',t==='prevca'||t==='budget'); fitTabs(); document.querySelectorAll('.tab').forEach(p=>p.classList.toggle('on',p.dataset.t===t)); if(curResto||t==='acces'||t==='equipes') renderPanel(); }
 
 function weekOptions(year,sel){
   let o=''; for(let w=1;w<=weeksInYear(year);w++){ const mon=weekMonday(year,w), sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
@@ -463,6 +465,7 @@ function fieldHtml(f){
 let GATE_ON=false;
 function renderPanel(keepPeriod){
   if(curTab==='acces') return renderAcces();
+  if(curTab==='equipes') return renderEquipes();
   if(curTab==='documents') return renderDocuments();
   if(curTab==='prevca') return renderPrevCa();
   if(curTab==='budget') return renderBudget();
@@ -1783,7 +1786,7 @@ function bdDetM(p) {
   for (const x of (p.det || [])) { if (!BD_DET_KEYS.includes(x.k)) continue; const a = out[x.k] = out[x.k] || Array(12).fill(0); for (let i = 0; i < 12; i++) a[i] += x.m ? (x.m[i] || 0) : (x.amt || 0) / 12; }
   return out;
 }
-// Équipe de direction (EDG) saisie par poste (initiales, jamais de noms) : coût mensuel = brut + primes (prime annuelle répartie sur les mois travaillés) ; null = ligne « brut managers » saisie à la main
+// Équipe de gestion (EDG) saisie par poste (initiales, jamais de noms) : coût mensuel = brut + primes (prime annuelle répartie sur les mois travaillés) ; null = ligne « brut managers » saisie à la main
 const BD_POSTES = ['Directeur', 'Adjoint', 'Assistant', 'Manager'];
 function bdEdgM(p) {
   if (typeof accCan === 'function' && !accCan('edg')) return null;      // salaires par poste : réservés aux accès qui ont le droit « edg »
@@ -2015,7 +2018,7 @@ function bdDetSetM(id, m, v) {
   x.m = x.m || Array(12).fill((x.amt || 0) / 12); x.m[m] = n; x.amt = x.m.reduce((a, b) => a + b, 0); delete x.amtF; bdSave(); renderBudget();
 }
 function bdDetEven(id) { const x = bdDet().find(r => r.id === id); if (x) { delete x.m; bdSave(); renderBudget(); } }
-// Équipe de direction : salaires par poste
+// Équipe de gestion : salaires par poste
 function bdEdg() { const p = bdParams(curResto).p; return p.edg = p.edg || { on: true, rows: [] }; }
 function bdEdgAdd(poste) { bdEdg().rows.push({ poste: poste || 'Manager', ini: '', ctr: '', sal: Array(12).fill(0), prime: 0, from: 0 }); bdSave(); renderBudget(); }
 function bdEdgPreset() { const e = bdEdg(); if (e.rows.length && !confirm('Ajouter la structure type (1 directeur, 2 adjoints, 2 assistants, 4 managers) aux postes déjà saisis ?')) return; for (const po of ['Directeur', 'Adjoint', 'Adjoint', 'Assistant', 'Assistant', 'Manager', 'Manager', 'Manager', 'Manager']) e.rows.push({ poste: po, ini: '', ctr: '', sal: Array(12).fill(0), prime: 0, from: 0 }); bdSave(); renderBudget(); }
@@ -2092,7 +2095,7 @@ function renderBudget() {
   const editable = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn' || x.t === 'fix');
   const hypEdit = x => {
     if (detM[x.k]) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= détail par société (${(p.det || []).filter(d => d.k === x.k).length} ligne(s), ci-dessus)</td><td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
-    if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de direction, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
+    if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de gestion, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
     const md = bdMode(p, x.k), base = x.t === 'pctn' ? 'CA net' : 'CA alim.';
     const varM = md === 'r' && p.pm && p.pm[x.k], wr = varM ? sum(L[x.k]) / (x.t === 'pctn' ? sum(L.net) : A) : null;
     const val = md === 'r' ? bdIn(varM ? (wr || 0) : p[x.k]) : String(Math.round(sum(p[x.k])));
@@ -2168,7 +2171,7 @@ function renderBudget() {
       ${dets.length && BUD.entry === 'm' ? `<div class="sim-h">Détail mensuel (budget ${Ty})</div><div class="sim-wrap"><table class="bd" style="min-width:1250px"><thead><tr><th>Prestation · société</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${detGrid}</tbody></table></div>` : ''}
       <datalist id="bdPrest">${BD_PREST.map(x => `<option value="${escH(x)}">`).join('')}</datalist><datalist id="bdSoc">${bdSocList().map(x => `<option value="${escH(x)}">`).join('')}</datalist>
     </details>`;
-  // équipe de direction : une ligne par poste (initiales pour reconnaître la personne sans la nommer)
+  // équipe de gestion : une ligne par poste (initiales pour reconnaître la personne sans la nommer)
   const eIn = 'padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;';
   const eCost = x => x.sal.reduce((a, b) => a + b, 0) + (x.sal.some(v => v > 0) ? (x.prime || 0) : 0);
   const edgRows = edg.rows.map((x, i) => { const from = x.from || 0; return `<tr><td class="l"><select style="${eIn}" onchange="bdEdgSet(${i},'poste',this.value)">${BD_POSTES.map(po => `<option ${po === x.poste ? 'selected' : ''}>${po}</option>`).join('')}</select></td>
@@ -2181,7 +2184,7 @@ function renderBudget() {
   const edgTotal = edg.rows.reduce((a, x) => a + eCost(x), 0);
   const edgGrid = edg.rows.map((x, i) => `<tr><td>${escH(x.poste)} · ${escH(x.ini || '#' + (i + 1))}</td>${x.sal.map((v, k) => `<td><input type="text" inputmode="decimal" style="width:64px;padding:3px 5px;border:1.5px solid var(--border);border-radius:7px;text-align:right;font-family:inherit;font-size:.72rem" value="${v ? Math.round(v) : ''}" onchange="bdEdgMonth(${i},${k},this.value)"></td>`).join('')}<td><b>${bdE(x.sal.reduce((a, b) => a + b, 0))}</b></td><td></td></tr>`).join('');
   const edgBrut = Array.from({ length: 12 }, (_, k) => edg.rows.reduce((a, x) => a + (x.sal[k] || 0), 0)), edgTotRows = edg.rows.length ? `<tr class="b"><td>Brut total</td>${edgBrut.map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(sum(edgBrut))}</b></td><td></td></tr>
-      <tr class="k"><td>Coût équipe de direction (brut + primes)</td>${(edgM || Array(12).fill(0)).map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(edgM ? sum(edgM) : 0)}</b></td><td></td></tr>` : '';
+      <tr class="k"><td>Coût équipe de gestion (brut + primes)</td>${(edgM || Array(12).fill(0)).map(v => `<td>${bdE(v)}</td>`).join('')}<td><b>${bdE(edgM ? sum(edgM) : 0)}</b></td><td></td></tr>` : '';
   pn.innerHTML = `
     <div class="panel-head"><div><div class="panel-title">Budget & PNL ${Ty} · ${escH(name)}</div>
       <div class="last-saisie">Le CA alimentaire de chaque mois est la somme de la prévision de CA journalière du calendrier « Prévision CA » (la simulation s'y dépose aussi). Le compte de résultat en découle avec les hypothèses du restaurant, comme dans l'onglet PNL du classeur « PREV ET BUDGET ».</div></div>
@@ -2197,10 +2200,10 @@ function renderBudget() {
     ${plHead}
     <div class="sim-wrap">${per === 'a' ? plAnnual : plMonthly}</div>
     <div class="hint" style="margin-top:6px">* mois de ${Ty - 1} encore incomplet (jours saisis / jours du mois au survol) : l'évolution n'est calculée que sur les mois complets.</div>
-    ${canEdg ? `    <details class="sim-d" open><summary>Équipe de direction : salaires par poste</summary>
+    ${canEdg ? `    <details class="sim-d" open><summary>Équipe de gestion : salaires par poste</summary>
       <div class="hint" style="margin:6px 0 8px">Saisis un poste par ligne avec les <b>initiales</b> de la personne (jamais son nom) : brut mensuel, mois d'effet (revalorisation, arrivée ; départ = 0 à partir du mois) et prime annuelle. Le total alimente la ligne « Main d'œuvre brute managers » du compte de résultat ; les charges sociales managers s'y appliquent. <b>Ta saisie est enregistrée à part dans le dossier de validation</b> (« Enregistrer ma version ») : elle est visible de toi et des échelons au-dessus de toi, jamais des échelons en dessous, et tu ne vois jamais la saisie des échelons au-dessus. Elle n'est ni publiée ni envoyée au Sheet public (« Appliquer » n'enregistre que le coût de main-d'œuvre en % du CA).</div>
       <label style="font-size:.78rem"><input type="checkbox" ${edg.on ? 'checked' : ''} onchange="bdEdgOn(this.checked)"> utiliser ces salaires pour la ligne « Main d'œuvre brute managers »${edg.on && !edgM ? ' <small style="color:var(--muted)">(aucun salaire saisi : la ligne reste celle des hypothèses)</small>' : ''}</label>
-      ${edg.rows.length ? `<div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:760px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Brut mensuel (€)</th><th class="l">À partir de</th><th>Prime annuelle (€)</th><th>Coût ${Ty} (€)</th><th></th></tr></thead><tbody>${edgRows}<tr class="tot"><td class="l">Total équipe de direction</td><td></td><td></td><td></td><td></td><td></td><td>${bdE(edgTotal)}</td><td></td></tr></tbody></table></div>` : '<div class="hint" style="margin-top:8px">Aucun poste saisi.</div>'}
+      ${edg.rows.length ? `<div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:760px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Brut mensuel (€)</th><th class="l">À partir de</th><th>Prime annuelle (€)</th><th>Coût ${Ty} (€)</th><th></th></tr></thead><tbody>${edgRows}<tr class="tot"><td class="l">Total équipe de gestion</td><td></td><td></td><td></td><td></td><td></td><td>${bdE(edgTotal)}</td><td></td></tr></tbody></table></div>` : '<div class="hint" style="margin-top:8px">Aucun poste saisi.</div>'}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${BD_POSTES.map(po => `<button class="step" onclick="bdEdgAdd('${po}')">+ ${po}</button>`).join('')}<button class="step" onclick="bdEdgPreset()" title="1 directeur, 2 adjoints, 2 assistants, 4 managers (comme le classeur)">Structure type du classeur</button></div>
       ${edg.rows.length ? `<details class="sim-d"><summary>Salaires mois par mois (ajustements)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Poste · initiales</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${edgGrid}${edgTotRows}</tbody></table></div></details>` : ''}
     </details>
@@ -2844,7 +2847,7 @@ async function accRecheck(h) {                                  // appareil mém
   else if (r.ok) { accGrant(r.access); try { buildTabs(); } catch (e) {} }
 }
 function accAdmin() { const ps = accProfiles(); return ps.find(p => p.role === 'owner') || ps.find(p => p.role === 'franchise') || ps.find(p => p.role === 'collab') || null; }      // propriétaire > franchisé > collaboratrice
-function accIsAdmin() { return ACX_ON && !!accAdmin(); }
+function accIsAdmin() { return ACX_ON && !(typeof SB_RIGHTS !== 'undefined' && SB_RIGHTS) && !(typeof SBA !== 'undefined' && SBA.strict()) && !!accAdmin(); }
 
 const ACX = { rows: null, journal: [], dyn: true, open: null, flash: '', busy: false, ak: '' };      // ak : clé d'administration (sha256('acc|' + mot de passe)), gardée en mémoire seulement, jamais enregistrée
 const acxHead = '<div class="panel-head"><div class="panel-title">Mots de passe des accès</div></div>';
@@ -2920,14 +2923,401 @@ async function acxSave(id) {
   ACX.open = null; ACX.flash = `✓ Mot de passe de « ${row ? row.label : id} » modifié : il est actif immédiatement.`;
   renderAcces();
 }
+// ══ COMPTES INDIVIDUELS (Supabase) — côté page : connexion e-mail + mot de passe, session commune dashboard / saisie ══
+// Totalement INACTIF tant que la configuration « auth.mode » vaut 'legacy' : ni écran, ni interception des appels.
+//   'both'     : l'écran propose le compte personnel ET (lien discret) l'ancien mot de passe partagé
+//   'accounts' : compte personnel obligatoire ; le serveur (Apps Script) refuse tout ce qui n'a pas de jeton valide
+// La session (jeton + jeton de renouvellement) est gardée sous la clé f<id>_sb : une seule connexion pour le dashboard ET la saisie.
+// Les droits (modules, restaurants, niveau) ne viennent JAMAIS de la page : ils sont relus dans la base (fonction mes_droits) et revérifiés par le serveur.
+const SBA = (() => {
+  const CF = () => (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {}));
+  const AU = () => CF().auth || {};
+  const mode = () => AU().mode || 'legacy';
+  const enabled = () => mode() !== 'legacy' && !!(AU().supabase_url && AU().supabase_key);
+  const strict = () => enabled() && mode() === 'accounts';
+  const MODULE = typeof FRANCHISE_CFG !== 'undefined' ? 'dashboard' : 'saisie';
+  const SKEY = () => 'f' + CF().id + '_sb';
+  let gateRes, refreshing = null, rightsC = null, legacyOk = false;
+  const gate = new Promise(r => { gateRes = r; });
+  const now = () => Math.floor(Date.now() / 1000);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+  // ── session ──
+  function load() { try { const r = localStorage.getItem(SKEY()) || sessionStorage.getItem(SKEY()); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+  function save(s, remember) {
+    try {
+      const keep = remember === undefined ? !!localStorage.getItem(SKEY()) : !!remember;
+      const t = JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at || (now() + (s.expires_in || 3600)), email: (s.user && s.user.email) || s.email || '' });
+      localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY());
+      (keep ? localStorage : sessionStorage).setItem(SKEY(), t);
+    } catch (e) {}
+  }
+  function clear() { try { localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY()); } catch (e) {} rightsC = null; }
+  async function api(path, opt) {                                                // appel à Supabase (Auth ou REST) avec la clé publique
+    opt = opt || {};
+    const h = Object.assign({ apikey: AU().supabase_key, 'Content-Type': 'application/json' }, opt.headers || {});
+    if (opt.tok) h.Authorization = 'Bearer ' + opt.tok;
+    let r, j = null;
+    try { r = await realFetch(AU().supabase_url.replace(/\/+$/, '') + path, { method: opt.method || 'GET', headers: h, body: opt.body == null ? undefined : JSON.stringify(opt.body) }); }
+    catch (e) { return { ok: false, status: 0, j: { msg: 'connexion impossible' } }; }
+    try { const t = await r.text(); j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
+    return { ok: r.ok, status: r.status, j };
+  }
+  async function refresh(s) {
+    if (!s || !s.refresh_token) { clear(); return ''; }
+    if (!refreshing) refreshing = (async () => {
+      const r = await api('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: s.refresh_token } });
+      refreshing = null;
+      if (r.ok && r.j && r.j.access_token) { save(r.j); return r.j.access_token; }
+      if (r.status === 400 || r.status === 401 || r.status === 403) clear();        // refusé : session terminée (déconnecté, désactivé ou jeton révoqué)
+      return '';
+    })();
+    return refreshing;
+  }
+  async function token() { const s = load(); if (!s) return ''; return (s.expires_at - now() > 90) ? s.access_token : refresh(s); }
+  const hasSession = () => !!load();
+
+  // ── droits ──
+  async function rights(force) {
+    if (rightsC && !force && Date.now() - rightsC.at < 60000) return rightsC.r;
+    const tok = await token(); if (!tok) return null;
+    const r = await api('/rest/v1/rpc/mes_droits', { method: 'POST', tok, body: { f: AU().franchise } });
+    if (!r.ok) return null;
+    rightsC = { r: r.j || null, at: Date.now() }; return rightsC.r;
+  }
+  const allowed = r => !r || !r.restos || r.restos.includes('*') ? null : r.restos;     // null = tous les restaurants
+
+  // ── connexion ──
+  const ERR = { invalid_credentials: 'Adresse e-mail ou mot de passe incorrect', email_not_confirmed: "Adresse e-mail pas encore confirmée : utilisez « Première connexion »", over_request_rate_limit: 'Trop de tentatives : réessayez dans quelques minutes', over_email_send_rate_limit: "Trop de liens demandés : réessayez dans quelques minutes", weak_password: 'Mot de passe trop faible : 12 caractères minimum, évitez les mots courants' };
+  const errText = r => ERR[(r.j && (r.j.error_code || r.j.code)) || ''] || (r.status === 429 ? ERR.over_request_rate_limit : (r.status === 0 ? 'Connexion impossible : vérifiez votre réseau' : ((r.j && (r.j.msg || r.j.message || r.j.error_description)) || 'Échec de la connexion')));
+  async function login(email, pwd, remember) {
+    const r = await api('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: String(email).trim().toLowerCase(), password: pwd } });
+    if (!r.ok || !r.j || !r.j.access_token) return { ok: false, error: errText(r) };
+    save(r.j, remember); rightsC = null; return { ok: true };
+  }
+  async function sendLink(email) {                                               // première connexion ou mot de passe oublié : lien envoyé par e-mail
+    const q = AU().redirect ? '?redirect_to=' + encodeURIComponent(AU().redirect) : '';
+    const r = await api('/auth/v1/otp' + q, { method: 'POST', body: { email: String(email).trim().toLowerCase(), create_user: true } });
+    return r.ok ? { ok: true } : { ok: false, error: errText(r) };
+  }
+  async function setPassword(pwd) {
+    if (String(pwd).length < 12) return { ok: false, error: '12 caractères minimum' };
+    const tok = await token(); if (!tok) return { ok: false, error: 'session expirée : redemandez un lien' };
+    const r = await api('/auth/v1/user', { method: 'PUT', tok, body: { password: pwd } });
+    return r.ok ? { ok: true } : { ok: false, error: errText(r) };
+  }
+  function consumeHash() {                                                       // retour du lien reçu par e-mail : #access_token=…&refresh_token=…&type=…
+    const h = String(location.hash || ''); if (!/access_token=|error=/.test(h)) return null;
+    const p = new URLSearchParams(h.replace(/^#/, ''));
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (p.get('error')) return { error: /expired|invalid/i.test(p.get('error_description') || p.get('error_code') || '') ? 'Ce lien a expiré ou a déjà servi : demandez-en un nouveau' : (p.get('error_description') || 'Lien invalide') };
+    save({ access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_in: +p.get('expires_in') || 3600, email: '' }, false);
+    rightsC = null; return { type: p.get('type') || 'magiclink' };
+  }
+  async function logout() {
+    const tok = (load() || {}).access_token;
+    if (tok) { try { await api('/auth/v1/logout', { method: 'POST', tok }); } catch (e) {} }
+    clear();
+  }
+
+  // ── interception des appels vers l'Apps Script (jeton joint, lectures en POST) ──
+  const realFetch = window.fetch.bind(window);
+  let reloading = 0;
+  function expired() {                                                           // le serveur dit « session expirée ou accès retiré »
+    clear(); try { sessionStorage.setItem('sba_msg', 'Votre session a expiré ou votre accès a été modifié. Reconnectez-vous.'); } catch (e) {}
+    if (Date.now() - reloading > 8000) { reloading = Date.now(); location.reload(); }
+  }
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : ((input && input.url) || ''), base = CF().apps_script_url;
+    if (!enabled() || !base || !String(url).startsWith(base)) return realFetch(input, init);
+    await gate;                                                                  // rien ne part tant que personne n'est connecté
+    const tok = await token(); if (!tok) return realFetch(input, init);          // connexion par l'ancien mot de passe partagé (mode « both ») : appel inchangé
+    const method = String((init && init.method) || 'GET').toUpperCase();
+    let res;
+    if (method === 'GET') {
+      const q = {}; new URL(url).searchParams.forEach((v, k) => { if (k !== '_') q[k] = v; });
+      res = await realFetch(base, Object.assign({}, init, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'read', q, tok }) }));
+    } else {
+      let body = init && init.body;
+      if (typeof body === 'string') { try { const o = JSON.parse(body); o.tok = tok; body = JSON.stringify(o); } catch (e) {} }
+      res = await realFetch(input, Object.assign({}, init, { body }));
+    }
+    try { res.clone().text().then(t => { if (t.length < 700 && /"code":\s*"AUTH"/.test(t) && /session|accès retiré|connexion requise/.test(t)) expired(); }); } catch (e) {}
+    return res;
+  };
+
+  // ── écran de connexion (inséré dans la boîte de connexion existante de la page) ──
+  const CSS = '.sba-who{font-size:.8rem;font-weight:700;color:var(--muted,#6b7280);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}.sba-who:empty{display:none}#sba-box{text-align:left;margin:0 0 6px}#sba-box input[type=email],#sba-box input[type=password],#sba-box input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border,#d6dae4);border-radius:11px;font-size:1rem;font-family:inherit;margin:0 0 10px;box-sizing:border-box;background:#fff;color:#111}#sba-box button{width:100%;padding:11px;border:none;border-radius:11px;background:var(--gold,#27ae60);color:#fff;font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit}#sba-box button.sba-sec{background:transparent;color:inherit;border:1.5px solid var(--border,#d6dae4);font-weight:700;margin-top:8px}#sba-box button:disabled{opacity:.6;cursor:wait}#sba-box .sba-rem{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 12px;cursor:pointer}#sba-box .sba-rem input{width:auto;margin:0}#sba-box .sba-a{display:block;text-align:center;font-size:.8rem;color:var(--muted,#6b7280);margin-top:12px;cursor:pointer;text-decoration:underline}#sba-box .sba-msg{min-height:1.2em;font-size:.82rem;margin:2px 0 8px;text-align:center}#sba-box .sba-msg.err{color:var(--red,#c0392b)}#sba-box .sba-msg.ok{color:var(--green,#1e8449)}#sba-box h2{font-size:1rem;margin:0 0 8px;text-align:center}#sba-box p{font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 10px;text-align:center}';
+  function msg(t, kind) { const m = $('sba-msg'); if (m) { m.className = 'sba-msg ' + (kind || ''); m.textContent = t || ''; } }
+  function busy(on, label) { const b = $('sba-go'); if (b) { b.disabled = on; if (label) b.textContent = on ? label.on : label.off; } }
+  let ui = { view: 'login', onOk: null, scope: null, legacy: [] };
+  function view(v) {
+    ui.view = v; const L = v === 'login', K = v === 'link', P = v === 'pwd';
+    const sh = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
+    sh('sba-pwd', L); sh('sba-rem', L); sh('sba-email', L || K); sh('sba-new', P); sh('sba-new2', P); sh('sba-skip', P);
+    sh('sba-leg', L && mode() === 'both'); sh('sba-lnk', L); sh('sba-back', K);
+    const go = $('sba-go'); if (go) go.textContent = L ? 'Connexion' : (K ? 'Envoyer le lien' : 'Enregistrer mon mot de passe');
+    const t = $('sba-title'), p = $('sba-help');
+    if (t) t.textContent = L ? '' : (K ? 'Première connexion ou mot de passe oublié' : 'Choisissez votre mot de passe');
+    if (p) p.textContent = K ? "Saisissez votre adresse e-mail professionnelle : vous recevez un lien (valable 1 heure) pour définir votre mot de passe." : (P ? '12 caractères minimum. Vous l\'utiliserez ensuite avec votre e-mail.' : '');
+    msg('');
+  }
+  const ROLE = { owner: 'Propriétaire', franchise: 'Franchisé', collab: 'Collaboratrice', superviseur: 'Superviseur', directeur: 'Directeur' };
+  function showWho(r) {                                                          // « 👤 Camille D. » dans l'en-tête de la page
+    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '👤 ' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
+  }
+  async function enter() {                                                       // connexion réussie : droits relus dans la base, puis ouverture de la page
+    const r = await rights(true);
+    if (!r) { await logout(); return { ok: false, error: "Ce compte n'a aucun accès actif. Demandez à votre responsable de vous ajouter." }; }
+    if (!(r.modules || []).includes(MODULE)) { await logout(); return { ok: false, error: MODULE === 'dashboard' ? "Ce compte n'a pas accès au dashboard." : "Ce compte n'a pas accès à la saisie." }; }
+    showWho(r);
+    try { if (ui.scope) ui.scope(r); } catch (e) {}                              // périmètre de la personne appliqué AVANT que le moindre appel de données ne parte
+    gateRes(); return { ok: true, rights: r };
+  }
+  async function submit() {
+    const email = ($('sba-email') || {}).value || '';
+    if (ui.view === 'link') {
+      if (!/.+@.+\..+/.test(email)) return msg('Saisissez votre adresse e-mail', 'err');
+      busy(true, { on: 'Envoi…', off: 'Envoyer le lien' });
+      const r = await sendLink(email); busy(false, { on: '', off: 'Envoyer le lien' });
+      return r.ok ? msg('Lien envoyé à ' + email.trim() + '. Pensez à vérifier les courriers indésirables.', 'ok') : msg(r.error, 'err');
+    }
+    if (ui.view === 'pwd') {
+      const a = ($('sba-new') || {}).value || '', b = ($('sba-new2') || {}).value || '';
+      if (a !== b) return msg('Les deux mots de passe sont différents', 'err');
+      busy(true, { on: 'Enregistrement…', off: 'Enregistrer mon mot de passe' });
+      const r = await setPassword(a); busy(false, { on: '', off: 'Enregistrer mon mot de passe' });
+      if (!r.ok) return msg(r.error, 'err');
+      return finish();
+    }
+    const pwd = ($('sba-pwd') || {}).value || '';
+    if (!email || !pwd) return msg('Saisissez votre adresse e-mail et votre mot de passe', 'err');
+    busy(true, { on: 'Connexion en cours…', off: 'Connexion' });
+    const r = await login(email, pwd, !!($('sba-rem-chk') || {}).checked);
+    if (!r.ok) { busy(false, { on: '', off: 'Connexion' }); return msg(r.error, 'err'); }
+    await finish(); busy(false, { on: '', off: 'Connexion' });
+  }
+  async function finish() {
+    const e = await enter();
+    if (!e.ok) { view('login'); return msg(e.error, 'err'); }
+    if (ui.onOk) ui.onOk(e.rights);
+  }
+  function mount(opts) {                                                         // opts : { box (boîte de connexion), legacy:[éléments de l'ancien formulaire], onOk(droits) }
+    if (!enabled() || !opts || !opts.box) return false;
+    ui = { view: 'login', onOk: opts.onOk, scope: opts.scope, legacy: opts.legacy || [] };
+    if (!$('sba-css')) { const st = document.createElement('style'); st.id = 'sba-css'; st.textContent = CSS; document.head.appendChild(st); }
+    const d = document.createElement('div'); d.id = 'sba-box';
+    d.innerHTML = '<h2 id="sba-title"></h2><p id="sba-help"></p>'
+      + '<input type="email" id="sba-email" placeholder="Adresse e-mail" autocomplete="username">'
+      + '<input type="password" id="sba-pwd" placeholder="Mot de passe" autocomplete="current-password">'
+      + '<input type="password" id="sba-new" placeholder="Nouveau mot de passe (12 caractères minimum)" autocomplete="new-password">'
+      + '<input type="password" id="sba-new2" placeholder="Répétez le mot de passe" autocomplete="new-password">'
+      + '<label class="sba-rem" id="sba-rem"><input type="checkbox" checked> Se souvenir de moi</label>'
+      + '<div class="sba-msg" id="sba-msg" role="alert"></div>'
+      + '<button type="button" id="sba-go">Connexion</button>'
+      + '<button type="button" class="sba-sec" id="sba-skip">Plus tard</button>'
+      + '<a class="sba-a" id="sba-lnk">Première connexion ou mot de passe oublié ?</a>'
+      + '<a class="sba-a" id="sba-back">← Retour à la connexion</a>'
+      + '<a class="sba-a" id="sba-leg">Utiliser le mot de passe partagé (temporaire)</a>';
+    const first = opts.legacy && opts.legacy[0]; if (first && first.parentNode === opts.box) opts.box.insertBefore(d, first); else opts.box.appendChild(d);
+    (opts.legacy || []).forEach(e => { if (e) e.style.display = 'none'; });       // l'ancien formulaire reste caché (« both » : réaffiché par le lien discret)
+    $('sba-rem').querySelector('input').id = 'sba-rem-chk';
+    $('sba-go').onclick = submit; $('sba-lnk').onclick = () => view('link'); $('sba-back').onclick = () => view('login');
+    $('sba-skip').onclick = () => finish();
+    $('sba-leg').onclick = () => { d.style.display = 'none'; (opts.legacy || []).forEach(e => { if (e) e.style.display = ''; }); };
+    d.addEventListener('keydown', ev => { if (ev.key === 'Enter') submit(); });
+    view('login');
+    try { const m = sessionStorage.getItem('sba_msg'); if (m) { msg(m, 'err'); sessionStorage.removeItem('sba_msg'); } } catch (e) {}
+    return true;
+  }
+  // appelé au démarrage de la page : session existante (reprise silencieuse), ou retour d'un lien e-mail
+  async function start() {
+    if (!enabled()) return { state: 'off' };
+    const h = consumeHash();
+    if (h && h.error) { view('login'); msg(h.error, 'err'); return { state: 'login' }; }
+    if (h && h.type) { const e = await enter(); if (!e.ok) { msg(e.error, 'err'); return { state: 'login' }; } view('pwd'); return { state: 'pwd' }; }
+    if (hasSession()) { const e = await enter(); if (e.ok) return { state: 'ok', rights: e.rights }; msg(e.error || 'Session expirée : reconnectez-vous', 'err'); }
+    return { state: 'login' };
+  }
+  const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
+  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
+})();
+// ══ COMPTES INDIVIDUELS — côté saisie : connexion, périmètre de la personne, onglet « Équipes » ══
+// Dépend de auth_sb.js (SBA). Inactif tant que auth.mode = 'legacy' (aucun écran, aucun onglet).
+let SB_RIGHTS = null;                                                      // droits de la personne connectée (relus dans la base à chaque ouverture)
+const sbEffCan = r => { const c = (r.can || []).slice(); if (r.role === 'owner') { ['sim', 'budget', 'valid'].forEach(x => { if (!c.includes(x)) c.push(x); }); return c.filter(x => x !== 'edg'); } return c; };   // le propriétaire garde la main sans accéder aux salaires
+function saisieEnter(r) {                                                 // personne identifiée : on prépare le profil d'accès attendu par la saisie
+  SB_RIGHTS = r;
+  const scope = (r.restos || []).includes('*') ? '*' : (r.restos || []);
+  try {
+    sessionStorage.setItem('mj_saisie', '1'); sessionStorage.setItem('mj_pwdhash', 'sb');                // « sb » : le serveur ignore ce champ, le jeton personnel prime
+    sessionStorage.setItem('mj_access', JSON.stringify([{ id: 'sb:' + r.email, role: r.role, label: r.nom, scope, can: sbEffCan(r), h: 'sb' }]));
+  } catch (e) {}
+  showApp();
+}
+function saisieScope(r) { const sc = (r.restos || []).includes('*') ? '*' : (r.restos || []); if (sc !== '*') RESTOS.splice(0, RESTOS.length, ...RESTOS.filter(x => sc.includes(x[0]))); }   // seuls ses restaurants
+function saisieMountLogin() {
+  const q = s => document.querySelector(s);
+  return SBA.mount({ box: q('#login .login-box'), legacy: [q('#pwd'), q('#login label.rem'), q('#loginBtn'), q('#loginErr')], onOk: saisieEnter, scope: saisieScope });
+}
+function sbTabOk(k) {                                                      // onglets propres aux comptes
+  if (k !== 'equipes') return true;
+  return !!SB_RIGHTS && ((SB_RIGHTS.modules || []).includes('utilisateurs'));
+}
+// ── Onglet « Équipes » : les personnes de CETTE franchise, leurs accès (modules, restaurants, niveau) ──
+const EQ = { rows: [], journal: [], f218: null, edit: null, loading: false, msg: ['', ''] };
+const EQ_218 = { employe: 'Salarié', superviseur: 'Superviseur', lecteur: 'Lecteur', admin: 'Administrateur (DRH)' }, EQ_218_URL = 'https://matthieujacobmcd-beep.github.io/franchise-py-forfait/';
+const EQ_MODS = [['dashboard', 'Dashboard'], ['saisie', 'Saisie'], ['revue', 'Business Review'], ['planning', 'Planning EDG'], ['utilisateurs', 'Équipes (gestion des accès)']];
+const EQ_CAN = [['sim', 'Prévision CA et simulation'], ['budget', 'Budget & PNL'], ['valid', 'Circuit de validation'], ['edg', "Salaires de l'équipe de gestion"]];
+const EQ_RANK = { owner: 3, franchise: 2, collab: 1, superviseur: 0, directeur: 0 };
+const EQ_DEF = {                                                           // droits proposés par fonction (modifiables)
+  directeur:   { modules: ['dashboard', 'saisie', 'planning'], can: ['sim', 'budget', 'valid', 'edg'], tous: false },
+  superviseur: { modules: ['dashboard', 'saisie', 'planning'], can: ['sim', 'budget', 'valid', 'edg'], tous: false },
+  franchise:   { modules: ['dashboard', 'saisie', 'revue', 'planning', 'utilisateurs'], can: ['sim', 'budget', 'valid', 'edg'], tous: true },
+  collab:      { modules: ['saisie'], can: ['budget'], tous: true },
+};
+const eqRolesFor = () => ['franchise', 'collab', 'superviseur', 'directeur'].filter(k => EQ_RANK[k] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0));
+const eqMods = () => EQ_MODS.filter(([k]) => k !== 'revue' || CFG.id === 'py');
+function eqSet(t, k) { EQ.msg = [k || '', t || '']; const m = document.getElementById('eqMsg'); if (m) { m.className = 'save-msg ' + (k || ''); m.textContent = t || ''; } }
+async function eqCall(path, method, body, headers) {
+  const tok = await SBA.token(); if (!tok) { eqSet('Session expirée : reconnectez-vous.', 'err'); return { ok: false, j: null }; }
+  return SBA.api(path, { method: method || 'GET', tok, body, headers });
+}
+async function renderEquipes() {
+  const p = document.getElementById('panel');
+  if (!SB_RIGHTS || !sbTabOk('equipes')) { p.innerHTML = '<div class="hint">🔒 Réservé aux personnes qui gèrent les accès.</div>'; return; }
+  p.innerHTML = '<div class="hint">⏳ Chargement des équipes…</div>';
+  const fr = encodeURIComponent(CFG.auth.franchise);
+  const [a, b, c] = await Promise.all([eqCall('/rest/v1/droits?franchise=eq.' + fr + '&select=*&order=nom.asc'), eqCall('/rest/v1/droits_journal?franchise=eq.' + fr + '&select=*&order=quand.desc&limit=12'), eqCall('/rest/v1/rpc/acces_218_liste', 'POST', { f: CFG.auth.franchise })]);
+  if (!a.ok) { p.innerHTML = `<div class="entry-banner err" style="display:block">Impossible de charger les équipes${a.j && a.j.message ? ' : ' + escH(a.j.message) : ''}.</div>`; return; }
+  EQ.rows = a.j || []; EQ.journal = (b.ok && b.j) || []; EQ.edit = null;
+  EQ.f218 = c.ok && Array.isArray(c.j) ? Object.fromEntries(c.j.map(x => [String(x.email).toLowerCase(), x])) : null;     // null = lien avec le 218 jours pas encore installé côté base
+  eqPaint();
+}
+const eqLabel = k => (ACC_ROLE && ACC_ROLE[k]) || k;
+const eqResto = r => (r.restos || []).includes('*') ? 'Tous' : (r.restos || []).map(x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1]).join(', ') || '—';
+const eqState = r => !r.actif ? ['Désactivé', 'var(--red)'] : (r.user_id ? ['Actif', 'var(--green)'] : ['Invitation en attente', 'var(--gold)']);
+const eq218 = r => { if (!EQ.f218) return ['—', 'var(--muted)']; const x = EQ.f218[String(r.email).toLowerCase()]; return !x ? ['Pas de fiche', 'var(--muted)'] : [(x.actif ? 'Actif' : 'Désactivé') + ' · ' + (EQ_218[x.role] || x.role), x.actif ? 'var(--green)' : 'var(--red)']; };
+const eqWhen = s => { try { return new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
+function eqPaint() {
+  const p = document.getElementById('panel'), can = eqRolesFor().length > 0, banner = SBA.mode() === 'both' ? '<div class="hint" style="margin-bottom:10px">ℹ️ Mode transition : les anciens mots de passe partagés fonctionnent encore. Ils seront supprimés quand chacun aura son compte.</div>' : '';
+  const th = 'padding:6px;text-align:left;font-size:.75rem;color:var(--muted)', td = 'padding:8px 6px;border-top:1px solid var(--border);vertical-align:top';
+  const rows = EQ.rows.map(r => {
+    const st = eqState(r), me = SB_RIGHTS && r.email.toLowerCase() === SB_RIGHTS.email.toLowerCase(), low = EQ_RANK[r.role] < (SB_RIGHTS.rang || 0) && !me;
+    return `<tr><td style="${td}"><b>${escH(r.nom)}</b>${me ? ' <small style="color:var(--muted)">(vous)</small>' : ''}<br><span style="font-size:.76rem;color:var(--muted)">${escH(r.email)}</span></td>
+      <td data-l="Fonction · restaurants" style="${td};font-size:.82rem">${escH(eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span></td>
+      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}</td>
+      <td data-l="218 jours" style="${td};font-size:.78rem;font-weight:700;color:${eq218(r)[1]}">${escH(eq218(r)[0])}</td>
+      <td data-l="Statut" style="${td};font-size:.8rem;font-weight:700;color:${st[1]}">${st[0]}</td>
+      <td style="${td};text-align:right;white-space:nowrap">${low ? `<button class="btn-save" style="padding:5px 10px;font-size:.78rem" onclick="eqOpen('${r.id}')">Modifier</button>` : ''}</td></tr>`;
+  }).join('');
+  const jr = EQ.journal.map(x => `<li>${escH(eqWhen(x.quand))} · ${escH(x.par || '')} · ${escH(x.cible || '')} : ${escH({ INSERT: 'ajouté', UPDATE: 'modifié', DELETE: 'supprimé' }[x.action] || x.action)}</li>`).join('');
+  p.innerHTML = `<style>@media (max-width:700px){.eq-t{min-width:0 !important}.eq-t thead{display:none}.eq-t,.eq-t tbody,.eq-t tr,.eq-t td{display:block;width:100%;box-sizing:border-box}.eq-t tr{border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;margin-bottom:10px;background:var(--card)}.eq-t td{border-top:0 !important;padding:4px 0 !important;text-align:left !important;white-space:normal !important}.eq-t td[data-l]::before{content:attr(data-l);display:block;font-size:.68rem;font-weight:600;color:var(--muted)}.eq-t td:last-child:not([data-l]){padding-top:8px !important}}</style><div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.</div>${banner}
+    ${can ? '<div style="margin:0 0 12px"><button class="btn-save" onclick="eqOpen(\'\')">+ Ajouter une personne</button></div>' : ''}
+    <div id="eqForm"></div>
+    <div class="sim-wrap"><table class="eq-t" style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th style="${th}">Personne</th><th style="${th}">Fonction · restaurants</th><th style="${th}">Accès</th><th style="${th}">218 jours</th><th style="${th}">Statut</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" style="${td};color:var(--muted)">Aucune personne pour le moment.</td></tr>`}</tbody></table></div>
+    <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin-top:8px">${escH(EQ.msg[1])}</div>
+    ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}`;
+  if (EQ.edit !== null) eqForm();
+}
+function eqOpen(id) { EQ.edit = id === '' ? { id: '', role: eqRolesFor().slice(-1)[0] || 'directeur', isNew: true } : EQ.rows.find(r => r.id === id) || null; eqSet(''); eqPaint(); const f = document.getElementById('eqForm'); if (f) f.scrollIntoView({ block: 'nearest' }); }
+function eqForm() {
+  const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
+  const d = EQ_DEF[e.role] || EQ_DEF.directeur, has = (a, k) => (a || []).includes(k), isNew = !!e.isNew;
+  const modules = isNew ? d.modules : (e.modules || []), cans = isNew ? d.can : (e.can || []), restos = isNew ? (d.tous ? ['*'] : []) : (e.restos || []);
+  const all = has(restos, '*'), allR = CFG.restos.map(c => [c.key, c.label]);
+  const inp = 'padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box';
+  f.innerHTML = `<div style="border:1.5px solid var(--border);border-radius:12px;padding:14px;margin:0 0 14px;background:var(--card2)">
+    <div style="font-weight:800;margin-bottom:10px">${isNew ? 'Ajouter une personne' : 'Modifier ' + escH(e.nom)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
+      <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
+      <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" ${isNew ? '' : 'disabled'} placeholder="prenom@entreprise.fr"></label>
+      <label style="font-size:.78rem;color:var(--muted)">Fonction<select id="eqRole" style="${inp}" onchange="eqRoleChanged(this.value)">${(isNew ? eqRolesFor() : [e.role]).map(k => `<option value="${k}" ${k === e.role ? 'selected' : ''}>${escH(eqLabel(k))}</option>`).join('')}</select></label></div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
+      ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Ce que la personne peut ouvrir</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${eqMods().map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqM" value="${k}" ${has(modules, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Ce qu'elle peut enregistrer dans la saisie</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${EQ_CAN.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqC" value="${k}" ${has(cans, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>
+    ${eq218Block(e)}
+    ${isNew ? '<label style="font-size:.84rem;display:block;margin-bottom:12px"><input type="checkbox" id="eqInv" checked> Envoyer l\'invitation par e-mail (lien pour choisir son mot de passe)</label>' : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-save" id="eqGo" onclick="eqSave()">Enregistrer</button>
+      ${isNew ? '' : `<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqResend()">Renvoyer l'invitation</button><button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red)" onclick="eqToggle()">${e.actif ? 'Désactiver (départ)' : 'Réactiver'}</button>`}
+      <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.edit=null;eqPaint()">Annuler</button></div></div>`;
+}
+function eq218Block(e) {                                                  // accès à l'application « Suivi du forfait 218 jours » (comptes et fiches gérés dans cette appli)
+  const lien = `<a href="${EQ_218_URL}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir l'application 218 jours</a>`, ttl = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Application 218 jours (suivi du forfait jours)</div>';
+  if (e.isNew) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Si la personne est au forfait jours, sa fiche se crée dans l'application 218 jours (${lien}) ; elle apparaîtra ici ensuite.</div></div>`;
+  if (!EQ.f218) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Lien avec le 218 jours pas encore activé.</div></div>`;
+  const x = EQ.f218[String(e.email).toLowerCase()];
+  if (!x) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Pas de fiche 218 jours pour cette adresse. La fiche se crée dans l'application 218 jours (${lien}).</div></div>`;
+  const adm = x.role === 'admin';
+  return `<div style="margin-bottom:12px">${ttl}<label style="font-size:.84rem"><input type="checkbox" id="eq218" ${x.actif ? 'checked' : ''} ${adm ? 'disabled' : ''}> Accès actif — fiche « ${escH(EQ_218[x.role] || x.role)} »</label>${adm ? '<div style="font-size:.78rem;color:var(--muted)">Fiche administrateur : à gérer dans l\'application 218 jours.</div>' : ''}</div>`;
+}
+function eqRoleChanged(k) {                                                // changer de fonction propose les droits habituels de cette fonction
+  const d = EQ_DEF[k]; if (!d || !EQ.edit || !EQ.edit.isNew) return;
+  EQ.edit.role = k; EQ.edit.nom = (document.getElementById('eqNom') || {}).value || ''; EQ.edit.email = (document.getElementById('eqMail') || {}).value || ''; eqForm();
+}
+function eqRead() {
+  const v = id => ((document.getElementById(id) || {}).value || '').trim(), ck = c => [...document.querySelectorAll(c)].filter(x => x.checked).map(x => x.value);
+  const tous = !!(document.getElementById('eqAll') || {}).checked;
+  return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), modules: ck('.eqM'), can: ck('.eqC') };
+}
+async function eqSave() {
+  const e = EQ.edit, o = eqRead(), b = document.getElementById('eqGo');
+  if (!o.nom) return eqSet('Indiquez le prénom et l\'initiale', 'err');
+  if (e.isNew && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
+  if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
+  if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
+  const inv = e.isNew && !!(document.getElementById('eqInv') || {}).checked;
+  if (b) b.disabled = true; eqSet('Enregistrement…');
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, restos: o.restos, modules: o.modules, can: o.can };
+  const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
+  if (b) b.disabled = false;
+  if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
+  if (!r.ok) return eqSet(r.status === 409 ? 'Cette adresse a déjà un accès' : ((r.j && r.j.message) || 'Enregistrement refusé : vous ne pouvez pas accorder ce niveau').replace(/^droits : /, ''), 'err');
+  let note = '';
+  if (inv) { const s = await SBA.sendLink(o.email); note = s.ok ? ' Invitation envoyée par e-mail.' : ' Invitation non envoyée (' + s.error + ') : utilisez « Renvoyer l\'invitation ».'; }
+  const c218 = document.getElementById('eq218'), x218 = EQ.f218 && !e.isNew ? EQ.f218[String(e.email).toLowerCase()] : null;
+  if (c218 && x218 && !c218.disabled && c218.checked !== !!x218.actif) {
+    const r2 = await eqCall('/rest/v1/rpc/acces_218_set', 'POST', { f: CFG.auth.franchise, p_email: e.email, p_actif: c218.checked });
+    note += r2.ok ? ' Accès 218 jours ' + (c218.checked ? 'activé.' : 'désactivé.') : ' Accès 218 jours inchangé (' + (((r2.j && r2.j.message) || 'refusé').replace(/^218 jours : /, '')) + ').';
+  }
+  await renderEquipes(); eqSet('✓ Enregistré.' + note, 'ok');
+}
+async function eqToggle() {
+  const e = EQ.edit; if (!e) return;
+  if (e.actif && !confirm('Désactiver ' + e.nom + ' ? Son accès au dashboard, à la saisie et au planning est coupé en moins d\'une minute.')) return;
+  const r = await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', { actif: !e.actif }, { Prefer: 'return=representation' });
+  if (!r.ok || (Array.isArray(r.j) && !r.j.length)) return eqSet(((r.j && r.j.message) || 'Modification refusée').replace(/^droits : /, ''), 'err');
+  let n218 = '';
+  const x218 = EQ.f218 && EQ.f218[String(e.email).toLowerCase()];
+  if (e.actif && x218 && x218.actif && x218.role !== 'admin') {                // un départ coupe aussi la fiche du 218 jours
+    const r2 = await eqCall('/rest/v1/rpc/acces_218_set', 'POST', { f: CFG.auth.franchise, p_email: e.email, p_actif: false });
+    n218 = r2.ok ? ' Accès 218 jours coupé aussi.' : ' Attention : accès 218 jours NON coupé (' + (((r2.j && r2.j.message) || 'refusé').replace(/^218 jours : /, '')) + ').';
+  }
+  await renderEquipes(); eqSet(e.actif ? '✓ ' + e.nom + ' est désactivé(e) : accès coupé.' + n218 : '✓ ' + e.nom + ' est réactivé(e).', n218.includes('NON') ? 'err' : 'ok');
+}
+async function eqResend() {
+  const e = EQ.edit; if (!e) return; eqSet('Envoi…');
+  const s = await SBA.sendLink(e.email); eqSet(s.ok ? '✓ Invitation envoyée à ' + e.email + '.' : 'Envoi impossible : ' + s.error, s.ok ? 'ok' : 'err');
+}
 
 // ── Démarrage ──
 document.getElementById('pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') checkPwd(); });
 (async function(){ let ok=sessionStorage.getItem('mj_saisie')==='1';
+  if(typeof SBA!=='undefined'&&SBA.enabled()){                                           // comptes individuels
+    saisieMountLogin(); const st=await SBA.start();
+    if(st.state==='ok'){ saisieEnter(st.rights); return; }
+    if(st.state==='pwd'||SBA.strict()) return;                                           // choix du mot de passe, ou comptes obligatoires : on attend la connexion
+    ok=false;                                                                            // « both » : repli sur l'ancien mot de passe partagé (une session de saisie sans compte valide n'est pas reprise)
+  }
   if(!ok){ try{ const rm=localStorage.getItem('mj_remember'); if(rm){
       let acc=rm===PWD_HASH?null:ACCESS.find(a=>a.pwd_hash===rm);                         // appareil mémorisé : affichage immédiat avec le mot de passe d'origine…
       if(rm!==PWD_HASH&&!acc) acc=await accResolve(rm);                                    // …sinon (mot de passe modifié) le serveur tranche
-      if(rm===PWD_HASH||acc){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); if(acc){ accGrant(acc); accRecheck(rm); } ok=true; }
+      if(rm===PWD_HASH||acc){ sessionStorage.setItem('mj_saisie','1'); sessionStorage.setItem('mj_pwdhash',PWD_HASH); if(acc){ accGrant(acc); accRecheck(rm); } ok=true; if(typeof SBA!=='undefined'&&SBA.enabled()) SBA.release(); }
     } }catch(e){} }
   if(ok) showApp(); })();
 </script>
