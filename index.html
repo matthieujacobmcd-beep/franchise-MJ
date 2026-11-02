@@ -209,7 +209,7 @@ async function checkPassword() {
 // Oublier cet appareil (déconnexion)
 function logoutDevice() {
   try { localStorage.removeItem('fmj_remember'); } catch (e) {}
-  try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem('fmj_rv'); } catch (e) {}
   location.reload();
 }
 
@@ -1182,6 +1182,10 @@ window.addEventListener('DOMContentLoaded', () => {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       <span>Aide</span>
     </a>
+    <a id="btnLogout" onclick="logoutDevice()" class="topbar-intervention" title="Se déconnecter : le mot de passe sera redemandé" style="cursor:pointer;border-color:#64748b;color:#475569">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span>Se déconnecter</span>
+    </a>
     <div class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()" title="Mode nuit">🌙</div>
   </div>
 </div>
@@ -1980,6 +1984,11 @@ function expandAlerts() {
 }
 
 function openSection(cat) {
+  // Vue Franchise en année courante : un clic sur une tuile ouvre le Classement de la catégorie (retour aux tuiles : pastille 2026)
+  if (currentResto === 'FRANCHISE' && !restoSelection && !compareMode && !prevMode && !kpiViewMode && currentYear === YEAR_CUR && !currentSemester) {
+    const k0 = KPIs.find(k => k.cat === cat && kpiVisibleYear(k));
+    if (k0) { kpiViewSelected = k0.id; kpiViewYear = YEAR_CUR; setMode('kpiview'); return; }
+  }
   // Fermer toutes les autres, ouvrir celle-ci
   Object.keys(expandedSections).forEach(c => { expandedSections[c] = false; });
   expandedSections[cat] = true;
@@ -2555,6 +2564,9 @@ function calcAnnualComparable(kpiId, resto, year) {
   let sum = 0, count = 0;
   for (const m of months2026) {
     let v;
+    // N-1 : on ne garde que les mois où CE restaurant a des données N (sinon un restaurant dont la saisie s'arrête
+    // avant le mois partiel des autres, ex. Viviers au 31/10, se verrait comparé à novembre N-1 entier)
+    if (year === YEAR_PREV && DASHBOARD_DATA[YEAR_CUR]?.[kpiId]?.[m]?.[resto] == null) continue;
     if (year === YEAR_PREV && partialMonths.has(m)) {
       // Mois partiel → utiliser le comparable à date (existe pour tous les restos + franchise)
       const compVal = DASHBOARD_DATA[YEAR_PREV]?.[compKey]?.[m]?.[resto] ?? null;
@@ -3270,7 +3282,7 @@ function kvValue(kpi, r, year) {
     }
     return getData(year)[mid]?.[m]?.[r] ?? null;
   }
-  return (COMPARABLE_KPIS.has(kpi.id) && (year === YEAR_CUR || (year === YEAR_PREV && kpiViewYear === YEAR_CUR && ANNUAL_COMP_KPIS.has(kpi.id))) && (kpi.monthly || kpi.hasMonthly))
+  return (COMPARABLE_KPIS.has(kpi.id) && (year === YEAR_CUR || (year === YEAR_PREV && kpiViewYear === YEAR_CUR)) && (kpi.monthly || kpi.hasMonthly))
     ? calcAnnualComparable(kpi.id, r, year)
     : calcAnnual(kpi.id, r, year);
 }
@@ -7712,6 +7724,18 @@ function qhInitChart(canvas) {
 .pc-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; } .pc-msg { font-size:.8rem; font-weight:700; min-height:1.1em; } .pc-msg.err { color:var(--red); } .pc-msg.ok { color:var(--green); }
 .pc-mf { display:flex; gap:8px; align-items:center; padding:12px 18px 16px; border-top:1.5px solid var(--border); flex-wrap:wrap; } .pc-save { background:#0891b2 !important; border-color:#0891b2 !important; color:#fff !important; } .pc-del { color:var(--red) !important; border-color:var(--red) !important; }
 @media (max-width:700px) { .pc-grid, .pc-dh { display:none !important; } .pc-nav b { min-width:0; flex:1; } .pc-add { margin-left:0; width:100%; } .pc-row { grid-template-columns:1fr; } .pc-lrow { grid-template-columns:78px 1fr; } .pc-lrow .pc-la { grid-column:1/-1; } .pc-modal { padding:0; } .pc-box { border-radius:0; min-height:100%; } .pc-top select { flex:1 1 100%; } }
+.pc-cband { grid-column:1/-1; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px 5px; }
+.pc-camp { display:flex; align-items:center; gap:6px; min-width:0; font-family:inherit; font-size:.7rem; font-weight:700; line-height:1.2; padding:3px 8px; border:1px solid color-mix(in srgb, var(--tc) 28%, transparent); border-left:4px solid var(--tc); border-radius:7px; background:color-mix(in srgb, var(--tc) 11%, var(--card)); color:var(--text); cursor:pointer; text-align:left; overflow:hidden; }
+.pc-camp.sm .pc-cd { display:none; }
+.pc-camp .pc-cn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pc-camp .pc-cd { font-size:.64rem; font-weight:600; color:var(--muted); white-space:nowrap; }
+.pc-camp.cl { border-top-left-radius:0; border-bottom-left-radius:0; border-left-width:1px; } .pc-camp.cl::before { content:'‹'; font-size:.95rem; margin-right:-2px; color:var(--tc); } .pc-camp.cr { border-top-right-radius:0; border-bottom-right-radius:0; } .pc-camp.cr::after { content:'›'; font-size:.95rem; color:var(--tc); }
+.pc-camp.pc-new, .pc-cbar.pc-new { box-shadow:0 0 0 1.5px #ef4444; }
+.pc-cstrip { margin:0 0 12px; } .pc-ctk { position:relative; height:14px; font-size:.6rem; font-weight:800; color:var(--muted); } .pc-ctk span { position:absolute; transform:translateX(-50%); }
+.pc-ctrack { position:relative; border:1.5px solid var(--border); border-radius:9px; background:var(--card) repeating-linear-gradient(to right, transparent 0, transparent calc(100% / var(--n) - 1px), var(--border) calc(100% / var(--n) - 1px), var(--border) calc(100% / var(--n))); }
+.pc-cbar { position:absolute; height:24px; box-sizing:border-box; display:flex; align-items:center; padding:0 8px; border:1px solid color-mix(in srgb, var(--tc) 28%, transparent); border-left:4px solid var(--tc); border-radius:6px; background:color-mix(in srgb, var(--tc) 14%, var(--card)); color:var(--text); font-family:inherit; font-size:.7rem; font-weight:700; cursor:pointer; overflow:hidden; min-width:6px; } .pc-cbar span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pc-clist { display:grid; gap:4px; margin-top:8px; } .pc-cli { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:inherit; font-size:.78rem; text-align:left; padding:6px 10px; border:1.5px solid var(--tc); border-radius:9px; background:color-mix(in srgb, var(--tc) 10%, transparent); color:var(--text); cursor:pointer; }
+.pc-cli i { width:10px; height:10px; border-radius:50%; background:var(--tc); display:inline-block; } .pc-cli span { margin-left:auto; color:var(--muted); font-weight:700; }
+.pc-warn { display:none; margin-top:8px; font-size:.78rem; line-height:1.35; color:#92400e; background:rgba(245,158,11,.14); border:1.5px solid rgba(245,158,11,.5); border-radius:9px; padding:7px 10px; } .pc-warn.on { display:block; }
 @media (min-width:701px) { .pc-onlymobile { display:none; } }
 @media (max-width:700px) { .pc-viewseg { display:none !important; } }
 </style>
@@ -7731,8 +7755,9 @@ function qhInitChart(canvas) {
       <label>Catégorie</label><div class="pc-types" id="pcMType" style="margin-bottom:4px"></div>
       <label id="pcSubL">Type</label><select id="pcSub" onchange="pcSubChange()"></select>
       <input id="pcDetail" maxlength="120" autocomplete="off" style="margin-top:4px">
-      <label id="pcRestoL">Restaurant(s)</label><div class="pc-restos" id="pcMRestos"></div>
-      <div class="pc-row"><div><label>Début</label><input type="date" id="pcStart"></div><div><label>Fin (facultatif)</label><input type="date" id="pcEnd"></div><div><label>Heure (facultatif)</label><input id="pcTime" maxlength="30" placeholder="ex. 09:00 – 12:00"></div></div>
+      <label id="pcRestoL">Restaurant(s)</label><div class="pc-restos" id="pcMRestos" onchange="pcCampWarn()"></div>
+      <div class="pc-row"><div><label>Début</label><input type="date" id="pcStart" onchange="pcCampWarn()"></div><div><label>Fin (facultatif)</label><input type="date" id="pcEnd" onchange="pcCampWarn()"></div><div><label>Heure (facultatif)</label><input id="pcTime" maxlength="30" placeholder="ex. 09:00 – 12:00"></div></div>
+      <div class="pc-warn" id="pcWarn"></div>
       <label>Lieu (facultatif)</label><input id="pcPlace" maxlength="80" placeholder="ex. Salle de réunion Chambéry, Teams, Siège, restaurant de Belley…">
       <label>Note (champ libre)</label><textarea id="pcNote" maxlength="500" placeholder="Participants, ordre du jour, précisions…"></textarea>
       <div class="pc-cal">📅 Ajouter à mon agenda : <button type="button" class="pc-btn" onclick="pcCalForm('ics')" title="Fichier à ouvrir avec Apple Calendar, Outlook, Google Agenda…">Fichier .ics</button><button type="button" class="pc-btn" onclick="pcCalForm('google')">Google Agenda</button></div>
@@ -7752,6 +7777,7 @@ const PC_TYPES = [                                          // catégories (coul
   { k: 'election', l: 'Élection', c: '#e11d48', i: '🗳️', subs: ['Election CSE'] },
   { k: 'festif', l: 'Festif', c: '#db2777', i: '🎉', subs: ['Repas MANAGERS', 'Soirée EQUIPIERS'] },
   { k: 'formation', l: 'Formation', c: '#16a34a', i: '🎓', subs: ['SST', 'Atelier gestion de quart', 'Atelier culture service'] },
+  { k: 'campagne', l: 'Campagne', c: '#ea580c', i: '📣', subs: [] },                  // campagne clé : affichée en bandeau au-dessus des jours (pas dans chaque jour)
   { k: 'libre', l: 'Autre (champ libre)', c: '#64748b', i: '📌', subs: [] },
 ];
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
@@ -7762,6 +7788,8 @@ const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet
 const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const pcEsc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 const pcT = k => PC_TYPES.find(t => t.k === k) || PC_TYPES[PC_TYPES.length - 1];
+const pcFree = k => k === 'libre' || k === 'campagne';                  // catégories sans liste de types : on saisit un titre
+const pcNeed = t => t === 'campagne' ? 'Donne un nom à la campagne.' : pcFree(t) ? 'Donne un titre à l’événement.' : 'Précise le type.';
 const pcIso = d => d.toISOString().slice(0, 10);
 const pcFmt = iso => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const pcDow = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
@@ -7810,14 +7838,14 @@ function pcCalGo(o, how) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `agenda-${c.d0}-${slug}.ics`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 function pcFormData() {                                         // événement tel qu'il est saisi dans la fenêtre (valide ou non)
-  const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (type === 'libre' || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim();
+  const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (pcFree(type) || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim();
   const fr = document.getElementById('pcFr'), restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
   return { type, detail, periode: document.getElementById('pcStart').value, fin: document.getElementById('pcEnd').value, heure: document.getElementById('pcTime').value.trim(), lieu: document.getElementById('pcPlace').value.trim(), note: document.getElementById('pcNote').value.trim(), restos, id: PC.edit ? (PC.edit.ids ? PC.edit.ids[0] : PC.edit.id) : '' };
 }
 function pcCalForm(how) {
   const o = pcFormData();
   if (!o.periode) return pcMsg('err', 'Indique la date de début pour l’ajouter à ton agenda.');
-  if (!o.detail) return pcMsg('err', o.type === 'libre' ? 'Donne un titre à l’événement.' : 'Précise le type.');
+  if (!o.detail) return pcMsg('err', pcNeed(o.type));
   pcMsg('', ''); pcCalGo(o, how);
 }
 const pcCalOf = e => ({ type: e.type, detail: e.detail, periode: e.periode, fin: e.fin, heure: e.heure, lieu: e.lieu, note: e.note, restos: [e.restaurant], id: e.id });
@@ -7912,25 +7940,62 @@ function pcRender() {
   let body = '';
   if (view === 'cal') {
     const first = `${PC.ym}-01`, lead = pcDow(first), nDays = new Date(Date.UTC(Y, M, 0)).getUTCDate(), today = pcIso(new Date());
-    let cells = PC_J.map((j, i) => `<div class="pc-dh ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pc-day out"></div>'.repeat(lead);
+    const camps = monthEv.filter(e => e.type === 'campagne');
+    let cells = PC_J.map((j, i) => `<div class="pc-dh ${i > 4 ? 'we' : ''}">${j}</div>`).join('');
     for (let d = 1; d <= nDays; d++) {
-      const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
+      const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => e.type !== 'campagne' && pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
       const fer = PC.fer ? pcFer(iso) : '';
+      if (d === 1 || (lead + d - 1) % 7 === 0) cells += pcCampBand(PC.ym, lead, nDays, d, camps, fresh) + (d === 1 ? '<div class="pc-day out"></div>'.repeat(lead) : '');
       cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
     }
     body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
   }
   // liste (toujours rendue sous 700 px ; en option sur grand écran)
-  const sorted = monthEv.slice().sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
+  const sorted = monthEv.filter(e => e.type !== 'campagne').sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
   const ferRows = PC.fer ? pcFerMonth(PC.ym).map(([d, n]) => ({ fer: n, periode: d })) : [], mixed = sorted.concat(ferRows).sort((a, b) => a.periode.localeCompare(b.periode) || (b.fer ? 1 : 0) - (a.fer ? 1 : 0));
   const ferLi = e => `<div class="pc-lrow pc-lfer"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt">${pcEsc(e.fer)}<small>Jour férié</small></div><div class="pc-la"></div></div>`;
   const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" onclick="pcCalList('${pcEsc(e.id)}')" title="Ajouter à mon agenda (fichier .ics)">📅</button><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
-  card.innerHTML = top + body + (view === 'list' ? list : `<div class="pc-onlymobile">${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
+  const strip = pcCampStrip(PC.ym, nDaysOf(PC.ym), monthEv.filter(e => e.type === 'campagne'), fresh);
+  card.innerHTML = top + body + (view === 'list' ? strip + list : `<div class="pc-onlymobile">${strip}${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
   const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
   pcMarkSeen(monthEv); pcBadge();
   const nt = card.querySelector('.pc-note'); if (nt && unseenLeft) nt.insertAdjacentHTML('beforeend', ` <b style="color:#ef4444">${unseenLeft} autre${unseenLeft > 1 ? 's' : ''} événement${unseenLeft > 1 ? 's' : ''} non vu${unseenLeft > 1 ? 's' : ''} (autre mois, restaurant ou catégorie)</b> — <a href="#" onclick="pcSeenAll();return false" style="color:#0891b2;font-weight:700">Tout marquer comme vu</a>`);
   const g = document.getElementById('pcGrid'); if (g) g.onclick = ev => { const b = ev.target.closest('[data-id]'); if (b) return pcEdit(b.dataset.id); const d = ev.target.closest('[data-day]'); if (d) pcNew(d.dataset.day); };
-  card.querySelectorAll('.pc-lrow [data-id]').forEach(b => { b.onclick = () => pcEdit(b.dataset.id); });
+  card.querySelectorAll('.pc-lrow [data-id], .pc-cstrip [data-id]').forEach(b => { b.onclick = () => pcEdit(b.dataset.id); });
+}
+const nDaysOf = ym => new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+function pcLanes(items, lo, hi) {                                // range les campagnes sur des lignes sans chevauchement : items = [{ e, a, b }] (a, b = bornes incluses)
+  const ends = [], out = [];
+  items.slice().sort((x, y) => x.a - y.a || y.b - x.b || String(x.e.id).localeCompare(String(y.e.id))).forEach(it => {
+    let l = ends.findIndex(v => v < it.a); if (l < 0) { l = ends.length; ends.push(0); } ends[l] = it.b; out.push(Object.assign({ lane: l }, it));
+  });
+  return out;
+}
+const pcCampName = e => (e.detail || 'Campagne') + (e.restaurant !== PC_FR ? ' · ' + restoShort(e.restaurant) : '');
+const pcCampDates = e => pcFmt(e.periode).slice(0, 5) + (e.fin && e.fin !== e.periode ? ' → ' + pcFmt(e.fin).slice(0, 5) : '');
+function pcCampBand(ym, lead, nDays, d, camps, fresh) {         // bandeau d'une semaine : une barre par campagne, sur les colonnes des jours concernés
+  if (!camps.length) return '';
+  const d0 = d, d1 = Math.min(nDays, d === 1 ? 7 - lead : d + 6), i0 = `${ym}-${String(d0).padStart(2, '0')}`, i1 = `${ym}-${String(d1).padStart(2, '0')}`, col = n => (lead + n - 1) % 7;
+  const segs = camps.filter(e => e.periode <= i1 && (e.fin || e.periode) >= i0).map(e => ({ e, a: col(Math.max(d0, e.periode < i0 ? d0 : +e.periode.slice(8))), b: col(Math.min(d1, (e.fin || e.periode) > i1 ? d1 : +(e.fin || e.periode).slice(8))) }));
+  if (!segs.length) return '';
+  return `<div class="pc-cband">${pcLanes(segs).map(x => `<button type="button" class="pc-camp${x.b - x.a < 2 ? ' sm' : ''}${x.e.periode < i0 ? ' cl' : ''}${(x.e.fin || x.e.periode) > i1 ? ' cr' : ''}${fresh.has(pcKeyOf(x.e)) ? ' pc-new' : ''}" style="--tc:${pcT('campagne').c};grid-column:${x.a + 1}/${x.b + 2};grid-row:${x.lane + 1}" data-id="${pcEsc(x.e.id)}" title="${pcEsc(pcTitle(x.e))}"><span class="pc-cn">${pcT('campagne').i} ${pcEsc(pcCampName(x.e))}</span><span class="pc-cd">${pcCampDates(x.e)}</span></button>`).join('')}</div>`;
+}
+function pcCampStrip(ym, nDays, camps, fresh) {                 // frise du mois (liste / mobile) : les campagnes en barres au-dessus de l'échelle des jours
+  if (!camps.length) return '';
+  const i0 = `${ym}-01`, i1 = `${ym}-${String(nDays).padStart(2, '0')}`, day = iso => iso < i0 ? 1 : iso > i1 ? nDays : +iso.slice(8);
+  const segs = pcLanes(camps.map(e => ({ e, a: day(e.periode), b: day(e.fin || e.periode) })));
+  const lanes = Math.max(...segs.map(x => x.lane)) + 1, c = pcT('campagne').c;
+  return `<div class="pc-cstrip"><div class="pc-ctk">${[1, 5, 10, 15, 20, 25, 30].filter(n => n <= nDays).map(n => `<span style="left:${(n - 0.5) / nDays * 100}%">${n}</span>`).join('')}</div>
+    <div class="pc-ctrack" style="--n:${nDays};height:${lanes * 28 + 4}px">${segs.map(x => `<button type="button" class="pc-cbar${fresh.has(pcKeyOf(x.e)) ? ' pc-new' : ''}" style="--tc:${c};left:${(x.a - 1) / nDays * 100}%;width:${(x.b - x.a + 1) / nDays * 100}%;top:${x.lane * 28 + 2}px" data-id="${pcEsc(x.e.id)}" title="${pcEsc(pcTitle(x.e))}"><span>${pcEsc(pcCampName(x.e))}</span></button>`).join('')}</div>
+    <div class="pc-clist">${camps.slice().sort((a, b) => a.periode.localeCompare(b.periode)).map(e => `<button type="button" class="pc-cli" style="--tc:${c}" data-id="${pcEsc(e.id)}"><i></i><b>${pcEsc(pcCampName(e))}</b><span>${pcCampDates(e)}</span></button>`).join('')}</div></div>`;
+}
+function pcCampWarn() {                                         // à la saisie d'un événement : prévient s'il tombe pendant une campagne clé (non bloquant)
+  const w = document.getElementById('pcWarn'); if (!w) return;
+  const s = document.getElementById('pcStart').value, e = document.getElementById('pcEnd').value || s;
+  const fr = document.getElementById('pcFr'), sel = fr && fr.checked ? [] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
+  const hit = PC.mType === 'campagne' || !s ? [] : pcAll().filter(c => c.type === 'campagne' && c.periode <= e && (c.fin || c.periode) >= s && (c.restaurant === PC_FR || !sel.length || sel.includes(c.restaurant)));
+  w.className = 'pc-warn' + (hit.length ? ' on' : '');
+  w.innerHTML = hit.length ? `⚠ ${hit.length > 1 ? 'Campagnes en cours à cette date' : 'Campagne en cours à cette date'} : ${hit.map(c => `<b>${pcEsc(c.detail || 'Campagne')}</b> (${pcCampDates(c)})`).join(', ')}. Vérifie que l’événement ne la gêne pas.` : '';
 }
 function pcStatus(c, t) { const s = document.getElementById('pcStatus'); if (s) { s.className = 'pc-status ' + c; s.textContent = t; } }
 function pcSetResto(v) { PC.resto = v; pcRender(); }
@@ -7943,17 +8008,19 @@ function pcToggleType(k) { if (PC.types.has(k)) { if (PC.types.size > 1) PC.type
 function pcPickType(k, keep) {
   PC.mType = k; const t = pcT(k);
   document.querySelectorAll('#pcMType button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-  const sel = document.getElementById('pcSub'), free = k === 'libre';
+  const sel = document.getElementById('pcSub'), free = pcFree(k);
   document.getElementById('pcSubL').style.display = sel.style.display = free ? 'none' : '';
   document.getElementById('pcSubL').textContent = k === 'formation' ? 'Formation' : (n => 'Type ' + (/^[aeiouyéèêàâîôû]/i.test(n) ? 'd’' : 'de ') + n)(t.l.toLowerCase().replace(/^(les |la |le )/, '').replace('réunions', 'réunion'));
   sel.innerHTML = t.subs.map(x => `<option value="${pcEsc(x)}">${pcEsc(x)}</option>`).join('') + (free ? '' : `<option value="${PC_OTHER}">Autre (précise)…</option>`);
   if (!keep) sel.value = t.subs[0] || PC_OTHER;
   pcSubChange();
+  { const f = document.getElementById('pcFr'); if (k === 'campagne' && !PC.edit && f && !f.checked) { f.checked = true; pcFrToggle(true); } }
+  pcCampWarn();
 }
 function pcSubChange() {                                       // champ libre : titre d'un événement libre ou précision d'un « Autre »
-  const free = PC.mType === 'libre', other = document.getElementById('pcSub').value === PC_OTHER, inp = document.getElementById('pcDetail');
+  const free = pcFree(PC.mType), other = document.getElementById('pcSub').value === PC_OTHER, inp = document.getElementById('pcDetail');
   inp.style.display = (free || other) ? '' : 'none';
-  inp.placeholder = free ? 'Titre de l’événement * (ex. visite, animation, opération locale…)' : 'Précise le type *';
+  inp.placeholder = PC.mType === 'campagne' ? 'Nom de la campagne * (ex. Retour du P’tit Ananas, Programme de fidélité…)' : free ? 'Titre de l’événement * (ex. visite, animation, opération locale…)' : 'Précise le type *';
   if (!(free || other)) inp.value = '';
 }
 function pcOpen(ev) {
@@ -7963,8 +8030,8 @@ function pcOpen(ev) {
   document.getElementById('pcMType').innerHTML = PC_TYPES.map(t => `<button type="button" data-k="${t.k}" style="--tc:${t.c}" onclick="pcPickType('${t.k}')">${t.i} ${t.l}</button>`).join('');
   const ty = d.type || PC.mType || 'reunion', cat = pcT(ty);
   pcPickType(ty); const subEl = document.getElementById('pcSub'), inList = cat.subs.includes(d.detail);
-  if (d.detail && ty !== 'libre') subEl.value = inList ? d.detail : PC_OTHER;
-  pcSubChange(); document.getElementById('pcDetail').value = d.detail && (ty === 'libre' || !inList) ? d.detail : '';
+  if (d.detail && !pcFree(ty)) subEl.value = inList ? d.detail : PC_OTHER;
+  pcSubChange(); document.getElementById('pcDetail').value = d.detail && (pcFree(ty) || !inList) ? d.detail : '';
   const one = !!e, sel = d.restaurant ? [d.restaurant] : (PC.resto !== 'ALL' ? [PC.resto] : []);
   document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles';
   document.getElementById('pcMRestos').innerHTML = (one ? `<label><input type="radio" name="pcr" value="${PC_FR}" ${sel.includes(PC_FR) ? 'checked' : ''}> <b>Toute la franchise</b></label>` : `<label style="grid-column:1/-1"><input type="checkbox" id="pcFr" onchange="pcFrToggle(this.checked)"> <b>Toute la franchise</b> — un seul événement pour tous les restaurants</label>`) +
@@ -7973,7 +8040,8 @@ function pcOpen(ev) {
   document.getElementById('pcTime').value = d.heure || ''; document.getElementById('pcPlace').value = d.lieu || ''; document.getElementById('pcNote').value = d.note || '';
   document.getElementById('pcMsg').textContent = ''; document.getElementById('pcMsg').className = 'pc-msg';
   document.getElementById('pcDel').style.display = e ? '' : 'none'; document.getElementById('pcSaveBtn').disabled = false;
-  document.getElementById('pcModal').classList.add('show');
+  { const f = document.getElementById('pcFr'); if (!e && ty === 'campagne' && f) { f.checked = true; pcFrToggle(true); } }       // une campagne concerne toute la franchise
+  pcCampWarn(); document.getElementById('pcModal').classList.add('show');
 }
 function pcFrToggle(on) { document.querySelectorAll('#pcMRestos input[name=pcr]').forEach(i => { i.disabled = on; if (on) i.checked = false; }); }
 function pcNew(day) { if (day && day < '1970') return; pcOpen(day ? { periode: day } : null); }
@@ -7988,12 +8056,12 @@ async function pcPost(body) {
 }
 async function pcSave() {
   if (PC.busy) return;
-  const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (type === 'libre' || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
+  const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (pcFree(type) || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
   const fr = document.getElementById('pcFr'), restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
   if (!restos.length) return pcMsg('err', 'Choisis au moins un restaurant.');
   if (!start) return pcMsg('err', 'Indique la date de début.');
   if (end && end < start) return pcMsg('err', 'La date de fin est avant le début.');
-  if (!detail) return pcMsg('err', type === 'libre' ? 'Donne un titre à l’événement.' : 'Précise le type.');
+  if (!detail) return pcMsg('err', pcNeed(type));
   const base = { periode: start, fin: end, type, detail, heure: document.getElementById('pcTime').value.trim(), lieu: document.getElementById('pcPlace').value.trim(), note: document.getElementById('pcNote').value.trim() };
   const baseId = PC.edit ? (PC.edit.ids ? PC.edit.ids[0] : PC.edit.id) : null, rows = restos.map(r => Object.assign({ restaurant: r }, base, baseId ? { id: baseId } : {}));
   PC.busy = true; document.getElementById('pcSaveBtn').disabled = true; pcMsg('', 'Enregistrement…');
@@ -8089,6 +8157,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) esbT
 
 <!-- ════════ SUIVI DES INTERVENTIONS : FIL DE COMMENTAIRES (style messages) SUR CHAQUE DEMANDE ════════ -->
 <style>
+.suivi-xl { font-family:inherit; font-size:.72rem; font-weight:700; color:#0f766e; background:rgba(15,118,110,.08); border:1.5px solid rgba(15,118,110,.35); border-radius:9px; padding:6px 11px; cursor:pointer; white-space:nowrap; } .suivi-xl:hover { background:rgba(15,118,110,.16); } .suivi-xl:disabled { opacity:.6; cursor:wait; }
 .svc-blk { margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
 .svc-add { background:transparent; color:#0d9488; border:1.5px dashed #0d9488; border-radius:8px; padding:4px 9px; font-size:.68rem; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; margin-top:6px; }
 .svc-add:hover { background:rgba(13,148,136,.08); }
@@ -8135,6 +8204,52 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) esbT
   </div>
 </div>
 <script>
+// ── Export Excel du suivi : la liste affichée (filtres statut / restaurant / intervenant) + une feuille avec tous les commentaires ──
+const SVX_HEAD = '#0f766e';
+const svxSerial = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 + 25569 : null; };   // vraie date Excel (tri et filtres)
+const svxDateTime = d => { const s = String(d || ''); const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(s); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (svxSerial(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : s); };
+function svxItems() {                                          // mêmes filtres que le tableau affiché
+  let it = suiviItems || [];
+  if (suiviFilter === 'wait') it = it.filter(i => String(i.statut) !== 'Traité'); else if (suiviFilter === 'done') it = it.filter(i => String(i.statut) === 'Traité');
+  if (suiviResto !== 'all') it = it.filter(i => String(i.restaurant || '').trim() === suiviResto);
+  if (suiviInterv !== 'all') it = it.filter(i => splitTechs(i.techniciens).includes(suiviInterv));
+  return it;
+}
+function svxBuild(items) {                                     // classeur prêt à écrire (fonction pure, testable)
+  const hs = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: SVX_HEAD.slice(1) } }, alignment: { vertical: 'center', wrapText: true }, border: { bottom: { style: 'thin', color: { rgb: 'CBD5E1' } } } };
+  const txt = (v, wrap) => ({ t: 's', v: String(v == null ? '' : v), s: { alignment: { vertical: 'top', wrapText: !!wrap } } });
+  const dt = v => { const n = svxSerial(v); return n == null ? txt(v) : { t: 'n', v: n, z: 'dd/mm/yyyy', s: { alignment: { vertical: 'top', horizontal: 'left' } } }; };
+  const sheet = (head, rows, widths) => {
+    const aoa = [head.map(h => ({ t: 's', v: h, s: hs }))].concat(rows), ws = XLSX.utils.aoa_to_sheet(aoa.map(r => r.map(c => c.v)));
+    aoa.forEach((r, ri) => r.forEach((c, ci) => { const a = XLSX.utils.encode_cell({ r: ri, c: ci }); ws[a] = Object.assign({}, c); }));
+    ws['!cols'] = widths.map(w => ({ wch: w })); ws['!rows'] = [{ hpt: 24 }];
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: Math.max(aoa.length - 1, 1), c: head.length - 1 }) };
+    return ws;
+  };
+  const rows = items.map(i => {
+    const cs = (i.comments || []).filter(c => c && String(c.texte || '').trim()), last = cs[cs.length - 1];
+    return [txt(i.id), dt(i.date), txt(i.restaurant), txt(i.demandeur), txt(i.description, true), txt(i.urgence), txt(i.techniciens), txt(i.superviseur),
+      txt(String(i.statut) === 'Traité' ? 'Traité' : 'En attente'), txt(String(i.statut) === 'Traité' ? i.valide_par : ''), dt(i.date_validation), i.photos ? { t: 's', v: 'Voir les photos', l: { Target: String(i.photos), Tooltip: 'Ouvrir les photos de la demande' }, s: { font: { color: { rgb: '0563C1' }, underline: true }, alignment: { vertical: 'top' } } } : txt(''),
+      { t: 'n', v: cs.length, s: { alignment: { vertical: 'top', horizontal: 'center' } } }, txt(last ? `${last.auteur || ''} (${svxDateTime(last.date)}) : ${last.texte}` : '', true)];
+  });
+  const crow = [];
+  items.forEach(i => (i.comments || []).filter(c => c && String(c.texte || '').trim()).forEach(c => crow.push([txt(i.id), txt(i.restaurant), dt(i.date), txt(String(i.description || '').slice(0, 140), true), txt(svxDateTime(c.date)), txt(c.auteur), txt(c.texte, true)])));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet(['N°', 'Date de la demande', 'Restaurant', 'Demandeur', 'Demande', 'Urgence', 'Intervenant(s)', 'Superviseur', 'Statut', 'Traité par', 'Date de traitement', 'Photos', 'Commentaires', 'Dernier commentaire'], rows, [16, 14, 18, 18, 52, 14, 20, 18, 12, 16, 14, 28, 12, 52]), 'Interventions');
+  XLSX.utils.book_append_sheet(wb, sheet(['N° demande', 'Restaurant', 'Date de la demande', 'Demande', 'Date du commentaire', 'Auteur', 'Commentaire'], crow, [16, 18, 14, 44, 18, 16, 70]), 'Commentaires');
+  return wb;
+}
+async function suiviExportXlsx() {
+  const items = svxItems(); if (!items.length) return;
+  const b = document.getElementById('svxBtn'); if (b) { b.disabled = true; b.textContent = '⏳ Export…'; }
+  try {
+    await _loadXlsx();
+    const f = [suiviFilter === 'wait' ? 'en-attente' : suiviFilter === 'done' ? 'traitees' : '', suiviResto !== 'all' ? suiviResto : '', suiviInterv !== 'all' ? suiviInterv : ''].filter(Boolean).join('_').normalize('NFD').replace(/[^\w-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    XLSX.writeFile(svxBuild(items), `${((typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.title) || 'Franchise').replace(/\s+/g, '_')}_Interventions${f ? '_' + f : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  } catch (e) { alert('Export Excel impossible : ' + e.message + '. Vérifie la connexion et réessaie.'); }
+  if (b) { b.disabled = false; b.textContent = '📊 Exporter Excel'; }
+}
+
 // Chaque demande (en attente ou traitée) a un fil de commentaires façon messages : plusieurs commentaires, jamais modifiables ni effaçables, signés d'un prénom.
 // Stockés dans l'onglet « Commentaires » du Sheet du suivi (Apps Script du suivi : action comment = ajout seul) et lus par tous les utilisateurs du dashboard.
 const SVC = { id: null, timer: null, busy: false }, SVC_NAME = 'fmj_svcname';
@@ -8950,6 +9065,7 @@ function renderSuivi() {
     <select class="suivi-sel" onchange="setSuiviInterv(this.value)"><option value="all"${suiviInterv==='all'?' selected':''}>🔧 Tous les intervenants</option>${opt(intervs, suiviInterv)}</select>
     ${(suiviResto !== 'all' || suiviInterv !== 'all') ? `<button class="suivi-sel-clear" onclick="setSuiviReset()">✕ Réinitialiser</button>` : ''}
     <span class="suivi-count">${items.length} demande${items.length > 1 ? 's' : ''}</span>
+    <button type="button" id="svxBtn" class="suivi-xl" onclick="suiviExportXlsx()" title="Exporter la liste affichée (filtres appliqués) et tous les commentaires au format Excel">📊 Exporter Excel</button>
   </div>`;
 
   if (!items.length) { body.innerHTML = tools + '<div class="suivi-empty">Aucune demande pour ce filtre.</div>'; return; }
@@ -9195,7 +9311,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261027-110632';
+const BUILD_VERSION = '20261102-132850';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
