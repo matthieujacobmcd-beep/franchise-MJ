@@ -423,8 +423,13 @@ const SBA = (() => {
     if (hasSession()) { const e = await enter(); if (e.ok) return { state: 'ok', rights: e.rights }; msg(e.error || 'Session expirée : reconnectez-vous', 'err'); }
     return { state: 'login' };
   }
+  let noted = false;
+  async function note() {                                                         // journal des connexions (visible du seul propriétaire) : une note par ouverture de la page
+    if (noted) return; noted = true;
+    try { const tok = await token(); if (tok) await api('/rest/v1/rpc/connexion_note', { method: 'POST', tok, body: { f: AU().franchise, appli: MODULE } }); } catch (e) {}
+  }
   const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
-  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
+  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
 })();
 
 let SB_SCOPE = false, SB_DASH = null;
@@ -437,6 +442,7 @@ function dashScope(r) {                                              // personne
 function dashEnter(r) {
   SB_DASH = r; try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
   if (typeof plgOnLogin === 'function') plgOnLogin(r);
+  try { SBA.note(); } catch (e) {}
   document.getElementById('app').style.display = 'block';
   renderTabs(); renderMain();
   document.getElementById('login-screen').style.display = 'none';
@@ -10034,7 +10040,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261103-201526';
+const BUILD_VERSION = '20261103-205443';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

@@ -3163,15 +3163,20 @@ const SBA = (() => {
     if (hasSession()) { const e = await enter(); if (e.ok) return { state: 'ok', rights: e.rights }; msg(e.error || 'Session expirée : reconnectez-vous', 'err'); }
     return { state: 'login' };
   }
+  let noted = false;
+  async function note() {                                                         // journal des connexions (visible du seul propriétaire) : une note par ouverture de la page
+    if (noted) return; noted = true;
+    try { const tok = await token(); if (tok) await api('/rest/v1/rpc/connexion_note', { method: 'POST', tok, body: { f: AU().franchise, appli: MODULE } }); } catch (e) {}
+  }
   const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
-  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
+  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
 })();
 // ══ COMPTES INDIVIDUELS — côté saisie : connexion, périmètre de la personne, onglet « Équipes » ══
 // Dépend de auth_sb.js (SBA). Inactif tant que auth.mode = 'legacy' (aucun écran, aucun onglet).
 let SB_RIGHTS = null;                                                      // droits de la personne connectée (relus dans la base à chaque ouverture)
 const sbEffCan = r => { const c = (r.can || []).slice(); if (r.role === 'owner') { ['sim', 'budget', 'valid'].forEach(x => { if (!c.includes(x)) c.push(x); }); return c.filter(x => x !== 'edg'); } return c; };   // le propriétaire garde la main sans accéder aux salaires
 function saisieEnter(r) {                                                 // personne identifiée : on prépare le profil d'accès attendu par la saisie
-  SB_RIGHTS = r;
+  SB_RIGHTS = r; try { SBA.note(); } catch (e) {}
   const scope = (r.restos || []).includes('*') ? '*' : (r.restos || []);
   try {
     sessionStorage.setItem('mj_saisie', '1'); sessionStorage.setItem('mj_pwdhash', 'sb');                // « sb » : le serveur ignore ce champ, le jeton personnel prime
@@ -3243,9 +3248,29 @@ function eqPaint() {
     <div id="eqForm"></div>
     <div class="sim-wrap"><table class="eq-t" style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th style="${th}">Personne</th><th style="${th}">Fonction · restaurants</th><th style="${th}">Accès</th><th style="${th}">218 jours</th><th style="${th}">Statut</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" style="${td};color:var(--muted)">Aucune personne pour le moment.</td></tr>`}</tbody></table></div>
     <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin-top:8px">${escH(EQ.msg[1])}</div>
-    ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}`;
+    ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}
+    ${SB_RIGHTS && SB_RIGHTS.role === 'owner' ? `<details class="sim-d" style="margin-top:12px" ontoggle="if(this.open)eqCxLoad()"><summary>Journal des connexions (visible de vous seul)</summary><div id="eqCx" style="margin-top:8px;font-size:.8rem;color:var(--muted)">Chargement…</div></details>` : ''}`;
   if (EQ.edit !== null) eqForm();
 }
+// ── Journal des connexions : réservé au propriétaire (la base refuse tout autre compte) ──
+const eqUa = ua => { ua = String(ua || ''); const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '', nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''; return [nav, os].filter(Boolean).join(' · ') || (ua ? 'autre' : '—'); };
+async function eqCxLoad() {
+  const box = document.getElementById('eqCx'); if (!box) return;
+  const r = await eqCall('/rest/v1/rpc/connexions_liste', 'POST', { f: CFG.auth.franchise, n: 500 });
+  if (!r.ok) { box.textContent = r.status === 404 ? 'Journal pas encore installé côté base.' : (((r.j && r.j.message) || 'Lecture refusée').replace(/^journal : /, '')); return; }
+  EQ.cx = r.j || []; eqCxPaint();
+}
+function eqCxPaint() {
+  const box = document.getElementById('eqCx'); if (!box) return; const L = EQ.cx || [], th = 'padding:5px 6px;text-align:left;font-size:.72rem;color:var(--muted)', td = 'padding:5px 6px;border-top:1px solid var(--border);vertical-align:top;font-size:.78rem';
+  const par = {}; L.forEach(x => { const p = par[x.email] || (par[x.email] = { x, n: 0, ap: new Set() }); p.n += x.ouvertures; p.ap.add(x.appli === 'dashboard' ? 'Dashboard' : 'Saisie'); if (x.derniere > p.x.derniere) p.x = x; });
+  const dern = Object.values(par).sort((a, b) => (a.x.derniere < b.x.derniere ? 1 : -1)), jamais = (EQ.rows || []).filter(r => r.actif && !par[String(r.email).toLowerCase()]).map(r => r.nom);
+  box.innerHTML = `<div style="margin-bottom:8px">${L.length} session${L.length > 1 ? 's' : ''} sur 13 mois maximum · ${dern.length} personne${dern.length > 1 ? 's' : ''} · <button class="btn-save" style="padding:3px 10px;font-size:.74rem" onclick="eqCxLoad()">Actualiser</button></div>
+    ${jamais.length ? `<div style="margin-bottom:8px">Jamais connecté(e) avec un compte : <b>${jamais.map(escH).join(', ')}</b></div>` : ''}
+    <div class="sim-wrap"><table style="width:100%;border-collapse:collapse;min-width:640px"><thead><tr><th style="${th}">Personne</th><th style="${th}">Dernière ouverture</th><th style="${th}">Appli</th><th style="${th}">Appareil</th><th style="${th}">Ouvertures</th></tr></thead><tbody>${dern.map(p => `<tr><td style="${td}"><b>${escH(p.x.nom || p.x.email)}</b><br><span style="color:var(--muted)">${escH(p.x.email)}</span></td><td style="${td}">${escH(eqWhen(p.x.derniere))}</td><td style="${td}">${[...p.ap].join(' + ')}</td><td style="${td}">${escH(eqUa(p.x.appareil))}</td><td style="${td}">${p.n}</td></tr>`).join('') || `<tr><td colspan="5" style="${td}">Aucune connexion notée pour le moment.</td></tr>`}</tbody></table></div>
+    <details class="sim-d" style="margin-top:8px"><summary>Détail des sessions (${Math.min(L.length, 150)} dernières)</summary><div class="sim-wrap"><table style="width:100%;border-collapse:collapse;min-width:640px"><thead><tr><th style="${th}">Dernière ouverture</th><th style="${th}">Personne</th><th style="${th}">Appli</th><th style="${th}">Appareil</th><th style="${th}">Début de session</th><th style="${th}">Ouvertures</th></tr></thead><tbody>${L.slice(0, 150).map(x => `<tr><td style="${td}">${escH(eqWhen(x.derniere))}</td><td style="${td}">${escH(x.nom || x.email)}</td><td style="${td}">${x.appli === 'dashboard' ? 'Dashboard' : 'Saisie'}</td><td style="${td}">${escH(eqUa(x.appareil))}</td><td style="${td}">${escH(eqWhen(x.premiere))}</td><td style="${td}">${x.ouvertures}</td></tr>`).join('')}</tbody></table></div></details>
+    <div style="margin-top:6px">Notées : les connexions par compte individuel (ni adresse IP ni saisies). Les tentatives échouées se voient dans Supabase (Authentication → Logs). Conservation : 13 mois.</div>`;
+}
+
 function eqOpen(id) { EQ.edit = id === '' ? { id: '', role: eqRolesFor().slice(-1)[0] || 'directeur', isNew: true } : EQ.rows.find(r => r.id === id) || null; eqSet(''); eqPaint(); const f = document.getElementById('eqForm'); if (f) f.scrollIntoView({ block: 'nearest' }); }
 function eqForm() {
   const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
@@ -3258,7 +3283,7 @@ function eqForm() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
       <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
       <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" ${isNew ? '' : 'disabled'} placeholder="prenom@entreprise.fr"></label>
-      <label style="font-size:.78rem;color:var(--muted)">Fonction<select id="eqRole" style="${inp}" onchange="eqRoleChanged(this.value)">${(isNew ? eqRolesFor() : [e.role]).map(k => `<option value="${k}" ${k === e.role ? 'selected' : ''}>${escH(eqLabel(k))}</option>`).join('')}</select></label></div>
+      <label style="font-size:.78rem;color:var(--muted)">Fonction<select id="eqRole" style="${inp}" onchange="eqRoleChanged(this.value)">${(isNew || eqRolesFor().includes(e.role) ? eqRolesFor() : [e.role, ...eqRolesFor()]).map(k => `<option value="${k}" ${k === e.role ? 'selected' : ''}>${escH(eqLabel(k))}</option>`).join('')}</select></label></div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
       ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
@@ -3284,8 +3309,11 @@ function eq218Block(e) {                                                  // acc
   return `<div style="margin-bottom:12px">${ttl}<label style="font-size:.84rem"><input type="checkbox" id="eq218" ${x.actif ? 'checked' : ''} ${adm ? 'disabled' : ''}> Accès actif — fiche « ${escH(EQ_218[x.role] || x.role)} »</label>${adm ? '<div style="font-size:.78rem;color:var(--muted)">Fiche administrateur : à gérer dans l\'application 218 jours.</div>' : ''}</div>`;
 }
 function eqRoleChanged(k) {                                                // changer de fonction propose les droits habituels de cette fonction
-  const d = EQ_DEF[k]; if (!d || !EQ.edit || !EQ.edit.isNew) return;
-  EQ.edit.role = k; EQ.edit.nom = (document.getElementById('eqNom') || {}).value || ''; EQ.edit.email = (document.getElementById('eqMail') || {}).value || ''; eqForm();
+  const d = EQ_DEF[k]; if (!d || !EQ.edit) return;
+  const nom = (document.getElementById('eqNom') || {}).value || '', mail = (document.getElementById('eqMail') || {}).value || '';
+  if (EQ.edit.isNew) { EQ.edit.role = k; EQ.edit.nom = nom; EQ.edit.email = mail; eqForm(); return; }
+  EQ.edit = Object.assign({}, EQ.edit, { role: k, nom, modules: d.modules.slice(), can: d.can.slice(), restos: d.tous ? ['*'] : (EQ.edit.restos || []), restos_planning: k === 'directeur' ? (EQ.edit.restos_planning || []) : [] });   // copie : la ligne de la liste ne change qu'après l'enregistrement
+  eqForm(); eqSet('Fonction changée : les accès habituels de « ' + eqLabel(k) + ' » sont proposés ci-dessous. Vérifiez-les puis enregistrez.', '');
 }
 function eqRead() {
   const v = id => ((document.getElementById(id) || {}).value || '').trim(), ck = c => [...document.querySelectorAll(c)].filter(x => x.checked).map(x => x.value);
@@ -3299,9 +3327,11 @@ async function eqSave() {
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
   if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');
+  const orig = e.isNew ? null : EQ.rows.find(r => r.id === e.id);
+  if (orig && orig.role !== o.role && !confirm('Passer ' + o.nom + ' de « ' + eqLabel(orig.role) + ' » à « ' + eqLabel(o.role) + ' » ?\n\nSes accès seront ceux affichés dans le formulaire.')) return;
   const inv = e.isNew && !!(document.getElementById('eqInv') || {}).checked;
   if (b) b.disabled = true; eqSet('Enregistrement…');
-  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can };
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can };
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
