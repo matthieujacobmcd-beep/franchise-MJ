@@ -1022,6 +1022,10 @@ function pvDraftBar() {
 }
 window.addEventListener('beforeunload', e => { try { if (pvPending().length) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
 const PV_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const PV_WKKEY = 'mj_pvwk';                                                              // préférence de l'appareil : « dim » = semaines du dimanche au samedi, sinon du lundi au dimanche
+const pvWk0 = () => { try { return localStorage.getItem(PV_WKKEY) === 'dim' ? 0 : 1; } catch (e) { return 1; } };   // premier jour de la semaine affichée (getUTCDay) : 1 = lundi (par défaut), 0 = dimanche
+const pvPos = iso => (new Date(Date.parse(iso + 'T00:00:00Z')).getUTCDay() - pvWk0() + 7) % 7;       // rang du jour dans la semaine affichée (0 = premier jour)
+function pvWkSet(sun) { try { localStorage.setItem(PV_WKKEY, sun ? 'dim' : 'lun'); } catch (e) {} renderPrevCa(); }
 const _pvT = s => Date.parse(s + 'T00:00:00Z');
 const pvShift = (iso, days) => new Date(_pvT(iso) + days * 86400000).toISOString().slice(0, 10);
 const pvEur = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
@@ -1082,14 +1086,15 @@ function renderPrevCa() {
   pvInit();
   const [y, m] = PV.ym.split('-').map(Number), days = pvDays(PV.ym), name = RESTOS.find(r => r[0] === curResto)[1];
   const mois = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase()), minM = y === 2026 ? 11 : 1, maxM = 12;
-  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, today = new Date().toISOString().slice(0, 10);
+  const wk0 = pvWk0(), order = wk0 === 0 ? [6, 0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];          // indices de PV_JOURS (lundi = 0) dans l'ordre de la semaine affichée
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() - wk0 + 7) % 7, today = new Date().toISOString().slice(0, 10);
   // calendrier : 7 jours + une colonne « Semaine » en bout de ligne (total prévu de la semaine)
-  let cells = PV_JOURS.map((j, i) => `<div class="pv-h ${i > 4 ? 'we' : ''}">${j}</div>`).join('') + '<div class="pv-h pv-hw">Semaine</div>' + '<div class="pv-empty"></div>'.repeat(lead);
+  let cells = order.map(i => `<div class="pv-h ${i > 4 ? 'we' : ''}">${PV_JOURS[i]}</div>`).join('') + '<div class="pv-h pv-hw">Semaine</div>' + '<div class="pv-empty"></div>'.repeat(lead);
   const wkCell = mon => { const w = simIsoWeek(mon); return `<div class="pv-wk" id="pvw_${mon}"><div class="pv-wkh">Semaine ${w.w}</div><div class="pv-wkv" id="pvwv_${mon}">—</div><div class="pv-wks" id="pvws_${mon}"></div></div>`; };
   let inRow = lead, curMon = null;
   for (const iso of days) {
     const n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), real = pvCa(curResto, iso), v = PV.vals[iso];
-    const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, fer = pvFerie(iso), mon = pvShift(iso, -dow); curMon = mon;
+    const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, pos = pvPos(iso), fer = pvFerie(iso), mon = pvShift(iso, -pos); curMon = mon;
     cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}" id="pvc_${iso}" data-u="${PV.unit}"><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
       ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}
       ${real != null ? `<div class="pv-real">Réel <b>${pvEur(real)}</b></div>` : ''}
@@ -1098,7 +1103,7 @@ function renderPrevCa() {
         <select class="pv-unit" id="pvu_${iso}" onchange="pvUnit('${iso}')" aria-label="Unité de saisie"><option value="e">€</option><option value="p">% vs N-1</option><option value="m">% du mois</option><option value="t">TAC'S × PM</option></select></div>
       <div class="pv-ca" id="pvk_${iso}"></div><div class="pv-tot" id="pvt_${iso}"></div><div class="pv-delta" id="pvd_${iso}"></div></div>`;
     inRow++;
-    if (dow === 6) { cells += wkCell(mon); inRow = 0; curMon = null; }
+    if (pos === 6) { cells += wkCell(mon); inRow = 0; curMon = null; }
   }
   if (curMon) { cells += '<div class="pv-empty"></div>'.repeat(7 - inRow) + wkCell(curMon); }
   p.innerHTML = `
@@ -1118,6 +1123,7 @@ function renderPrevCa() {
       <div class="field" style="align-self:end"><button class="btn-save" style="padding:10px 18px" onclick="pvVentiler()">Ventiler sur les jours</button></div></div>
     <div class="pv-bar"><label>Saisir en <select id="pvUAll" onchange="pvUnitAll(this.value)"><option value="e">€</option><option value="p">% vs N-1</option><option value="m">% du mois</option><option value="t">TAC'S × PM</option></select></label>
       <label>Arrondi de chaque jour <select id="pvStep" onchange="pvStepSet(this.value)"><option value="1">1 €</option><option value="10">10 €</option><option value="50">50 €</option><option value="100">100 €</option></select></label>
+      <label title="Préférence de cet appareil : change seulement l'affichage des semaines"><input type="checkbox" id="pvWk" ${wk0 === 0 ? 'checked' : ''} onchange="pvWkSet(this.checked)" style="width:auto;margin-right:6px">Semaine commençant le dimanche</label>
       <span class="pv-barh">Le CA prévu de chaque jour est arrondi au pas choisi dès la saisie ; en « TAC'S × PM », le CA = TAC'S × panier moyen (à défaut, ceux du jour équivalent N-1).</span></div>
     <div class="pv-cal">${cells}</div>
     <div class="foot"><button class="btn-save" id="pvSave" onclick="pvSave()">Enregistrer la prévision</button>
@@ -1193,7 +1199,7 @@ function pvRefresh(iso) {
 // Total prévu de chaque semaine (colonne « Semaine » en bout de ligne) : jours du mois affiché, avec l'évolution sur les mêmes jours N-1
 function pvWeeks() {
   const W = {};
-  for (const iso of pvDays(PV.ym)) { const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, mon = pvShift(iso, -dow), w = W[mon] = W[mon] || { n: 0, set: 0, sum: 0, on1: 0, n1: 0 }, v = PV.vals[iso], a = pvN1(curResto, iso); w.n++; if (v != null) { w.set++; w.sum += v; if (a != null) { w.on1 += v; w.n1 += a; } } }
+  for (const iso of pvDays(PV.ym)) { const mon = pvShift(iso, -pvPos(iso)), w = W[mon] = W[mon] || { n: 0, set: 0, sum: 0, on1: 0, n1: 0 }, v = PV.vals[iso], a = pvN1(curResto, iso); w.n++; if (v != null) { w.set++; w.sum += v; if (a != null) { w.on1 += v; w.n1 += a; } } }
   for (const mon of Object.keys(W)) {
     const w = W[mon], el = document.getElementById('pvwv_' + mon), sm = document.getElementById('pvws_' + mon); if (!el) continue;
     el.textContent = w.set ? pvEur(w.sum) : '—';
@@ -1628,7 +1634,7 @@ function renderSimu() {
   const rrows = (c.ranges || []).map((x, i) => `<tr><td>${x.from.slice(8)}/${x.from.slice(5, 7)} → ${x.to.slice(8)}/${x.to.slice(5, 7)}</td><td class="l">${escH(x.lbl)}</td><td>${x.j != null ? simPct(x.j) : '—'}</td><td>${x.l != null ? simPct(x.l) : '—'}</td><td><button class="step" onclick="simRangeDel(${i})">✕</button></td></tr>`).join('');
   // Semaines
   const wk = {};
-  for (const d of Y.days) { const w = simIsoWeek(d.iso), k = w.mon; (wk[k] = wk[k] || { w: w.w, y: w.y, ds: [] }).ds.push(d); }
+  for (const d of Y.days) { const k = pvShift(d.iso, -pvPos(d.iso)), w = simIsoWeek(k); (wk[k] = wk[k] || { w: w.w, y: w.y, ds: [] }).ds.push(d); }   // semaines du lundi ou du dimanche selon la préférence de l'appareil
   const wrows = Object.keys(wk).sort().map(k => { const g = wk[k], s = simSum(g.ds), e = s.a ? s.ca / s.a - 1 : null, et = s.t0 ? s.t / s.t0 - 1 : null;
     return `<tr><td>S ${g.w}${g.ds.length < 7 ? ' <small>(partielle)</small>' : ''} <small>${k.slice(8)}/${k.slice(5, 7)}</small></td><td>${s.n ? pvEur(s.a) : '—'}</td><td><b>${s.n ? pvEur(s.ca) : '—'}</b></td><td class="${simSign(e)}">${simPct(e)}</td><td>${s.n ? Math.round(s.t).toLocaleString('fr-FR') : '—'}</td><td class="${simSign(et)}">${simPct(et)}</td></tr>`; }).join('');
   // Historique des deux années précédentes (CA alim., TAC'S, panier moyen) + graphique CA par mois

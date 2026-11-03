@@ -9149,17 +9149,20 @@ function igGo() {
 <script>
 // ══ PLANNING EDG : équipe, horaires des lettres par restaurant, grille hebdomadaire, résumés (mois / cycle de 13 semaines) ══
 // Données dans Supabase (tables equipe, planning_*) lues et écrites avec le jeton de la personne ; campagnes lues dans le Plan de communication.
-const PLG = { editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null };
+const PLG = { dk: new Set(), editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null };
 const PLG_FN = { directeur: 'Directeur', directeur_adjoint: 'Directeur adjoint', assistant_direction: 'Assistant de direction', manager: 'Manager', responsable_zone: 'Responsable de zone' };
 const PLG_SEUILS = { jour_max: 10, semaine_max: 48, moyenne12: 44, repos_jour: 11, repos_hebdo: 35, jours_max: 6, assistant_direction_shifts: 2, directeur_adjoint_shifts_min: 1 };
 const PLG_JL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], PLG_J = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const PLG_WKKEY = 'fmj_plgwk';                                                  // préférence de l'appareil : « lun » = semaines du lundi au dimanche ; par défaut du dimanche au samedi (modèle EDG)
+const plgOff = () => { try { return localStorage.getItem(PLG_WKKEY) === 'lun' ? 1 : 0; } catch (e) { return 0; } };   // 0 = semaine du dimanche, 1 = semaine du lundi
+const plgJL = i => PLG_JL[(plgOff() + (((i % 7) + 7) % 7)) % 7];             // nom du jour (en toutes lettres) selon sa place dans la semaine affichée
 const PLG_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const plgE = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 // ── dates (UTC : pas de décalage d'heure d'été) ──
 const plgD = s => new Date(s + 'T00:00:00Z'), plgIso = d => d.toISOString().slice(0, 10), plgAdd = (s, n) => { const d = plgD(s); d.setUTCDate(d.getUTCDate() + n); return plgIso(d); };
-const plgSun = s => plgAdd(s, -plgD(s).getUTCDay()), plgFr = s => s.slice(8, 10) + '/' + s.slice(5, 7), plgWk = (a, b) => Math.round((plgD(b) - plgD(a)) / 6048e5);
+const plgSun = s => plgAdd(s, -plgD(s).getUTCDay()), plgWS = s => plgAdd(s, -((plgD(s).getUTCDay() - plgOff() + 7) % 7)), plgThu = ws => plgAdd(ws, 4 - plgOff()), plgRaw = sun => PLG.weeks[PLG.resto + '|' + sun], plgTouch = date => { PLG.dirty = true; PLG.dk.add(plgSun(date)); }, plgFr = s => s.slice(8, 10) + '/' + s.slice(5, 7), plgWk = (a, b) => Math.round((plgD(b) - plgD(a)) / 6048e5);
 function plgCycleStart(ws) {                                                  // dimanche qui ouvre le cycle de 13 semaines contenant la semaine ws
-  const base0 = PLG.cfg.debut_cycle || plgSun(plgAdd(plgAdd(ws, 4).slice(0, 4) + '-01-01', 0));
+  const base0 = plgAdd(PLG.cfg.debut_cycle || plgSun(plgThu(ws).slice(0, 4) + '-01-01'), plgOff());   // le cycle commence le dimanche (ou le lundi suivant si la semaine commence le lundi)
   const n = Math.floor(plgWk(base0, ws) / 13); return { start: plgAdd(base0, n * 13 * 7), n: ((n % 4) + 4) % 4 + 1, base: base0 };
 }
 const plgCan = () => !!PLG.rights && ['directeur', 'franchise', 'owner'].includes(PLG.rights.role);
@@ -9177,12 +9180,12 @@ function plgOnLogin(r) {
   const al = (r && r.restos || []).includes('*') ? RESTOS.slice() : RESTOS.filter(k => (r.restos || []).includes(k));
   PLG.restos = al; if (!PLG.resto || !al.includes(PLG.resto)) PLG.resto = al[0] || null;
 }
-function loadPlanning() { if (!PLG.ws) PLG.ws = plgSun(plgIso(new Date())); plgLoad(); }
+function loadPlanning() { if (!PLG.ws) PLG.ws = plgWS(plgIso(new Date())); plgLoad(); }
 // ── lecture ──
 async function plgLoad() {
   const card = document.getElementById('plgCard'); if (!PLG.rights || !PLG.resto) { card.innerHTML = '<div style="color:var(--muted)">Aucun restaurant n\'est ouvert à votre compte pour le planning.</div>'; return; }
   PLG.busy = true; plgRender();
-  const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto }, cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 7);
+  const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto }, cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 14);
   const rs = await Promise.all([
     PLG.def ? null : plgApi('/rest/v1/planning_codes_defaut?' + plgQ({ franchise: 'eq.' + PLG.FR, order: 'ordre.asc' })),
     plgApi('/rest/v1/equipe?' + plgQ(Object.assign({ actif: 'eq.true', order: 'ordre.asc,cree_le.asc' }, f))),
@@ -9193,11 +9196,11 @@ async function plgLoad() {
   if (!rs[1].ok) { PLG.busy = false; card.innerHTML = '<div class="plg-box plg-alert">Impossible de charger l\'équipe : ' + plgE((rs[1].j && rs[1].j.message) || 'le planning n\'est pas encore installé côté base.') + '</div>'; return; }
   PLG.team = rs[1].j || []; const c0 = rs[2].ok && rs[2].j && rs[2].j[0]; PLG.cfg = c0 ? { modulation: !!c0.modulation, debut_cycle: c0.debut_cycle || null, seuils: c0.seuils || {} } : { modulation: false, debut_cycle: null, seuils: {} };
   PLG.over = rs[3].ok && Array.isArray(rs[3].j) ? rs[3].j : [];
-  PLG.busy = false; PLG.dirty = false; PLG.conflict = null; if (!PLG.month) PLG.month = PLG.ws.slice(0, 7); plgRender();
+  PLG.busy = false; PLG.dirty = false; PLG.dk.clear(); PLG.conflict = null; if (!PLG.month) PLG.month = PLG.ws.slice(0, 7); plgRender();
 }
 async function plgFetchWeeks(from, to) {
   const r = await plgApi('/rest/v1/planning_semaine?select=semaine,cellules,version&franchise=eq.' + PLG.FR + '&restaurant=eq.' + encodeURIComponent(PLG.resto) + '&semaine=gte.' + from + '&semaine=lte.' + to);
-  if (r.ok && Array.isArray(r.j)) r.j.forEach(x => { const k = String(x.semaine).slice(0, 10); if (!(PLG.dirty && k === PLG.ws)) { PLG.weeks[PLG.resto + '|' + k] = JSON.parse(JSON.stringify(x.cellules || {})); PLG.ver[PLG.resto + '|' + k] = x.version; } });
+  if (r.ok && Array.isArray(r.j)) r.j.forEach(x => { const k = String(x.semaine).slice(0, 10); if (!PLG.dk.has(k)) { PLG.weeks[PLG.resto + '|' + k] = JSON.parse(JSON.stringify(x.cellules || {})); PLG.ver[PLG.resto + '|' + k] = x.version; } });
   return r;
 }
 const plgW = ws => PLG.weeks[PLG.resto + '|' + ws] || (PLG.weeks[PLG.resto + '|' + ws] = {});
@@ -9235,19 +9238,27 @@ function plgInfo(v, codes) {                                                  //
   if (cc && !PLG_ABS.test(cc.code)) { const r = plgRng(sp.range); return { t: 'code', code: cc.code, custom: r.norm, h: r.h, d: r.d, f: r.f, shift: cc.shift, abs: false, bg: cc.fond, fg: cc.texte, norm: cc.code + ' ' + r.norm }; }
   return { t: 'bad', h: 0, d: null, f: null, shift: null, abs: false };
 }
-const plgRow = (ws, pid) => { const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
-const plgPeek = (ws, pid) => { const r = (PLG.weeks[PLG.resto + '|' + ws] || {})[pid]; return Array.isArray(r) ? r : null; };
+function plgView(ws, pid) {                                                  // semaine affichée commençant un lundi : les 7 jours viennent de deux semaines enregistrées (dimanche → samedi)
+  const at = j => { const d = plgAdd(ws, j); return [plgSun(d), plgD(d).getUTCDay()]; };
+  return new Proxy(new Array(7).fill(''), {
+    get(t, k) { if (typeof k === 'string' && /^[0-6]$/.test(k)) { const a = at(+k), r = (plgRaw(a[0]) || {})[pid]; return Array.isArray(r) ? (r[a[1]] || '') : ''; } return Reflect.get(t, k); },
+    set(t, k, v) { if (typeof k === 'string' && /^[0-6]$/.test(k)) { const a = at(+k), w = plgW(a[0]); if (!Array.isArray(w[pid])) w[pid] = ['', '', '', '', '', '', '']; w[pid][a[1]] = v; PLG.dirty = true; PLG.dk.add(a[0]); return true; } return Reflect.set(t, k, v); }
+  });
+}
+const plgRow = (ws, pid) => { if (plgOff()) return plgView(ws, pid); const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
+const plgPeek = (ws, pid) => { if (plgOff()) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
+function plgEvList(ws) { const out = []; for (let j = 0; j < 7; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); } return out; }   // événements de la semaine affichée, avec leur jour et leur place dans la semaine enregistrée
 // ── analyse d'une personne pour la semaine affichée ──
 function plgAnalyse(p, codes) {
   const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], se = k => plgSeuil(k);
   const jours = inf.filter(x => x.h > 0 && !x.abs).length, shifts = inf.filter(x => x.shift).length;
   const fj = plgFj(p);
-  inf.forEach((x, j) => { if (x.t === 'bad') al.push('case « ' + row[j] + ' » inconnue (' + PLG_JL[j] + ')'); else if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + PLG_JL[j] + ' (' + plgH(x.h) + ')'); });
+  inf.forEach((x, j) => { if (x.t === 'bad') al.push('case « ' + row[j] + ' » inconnue (' + plgJL(j) + ')'); else if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + plgJL(j) + ' (' + plgH(x.h) + ')'); });
   const iv = [], add = (ws2, j, x) => { if (x.d != null && x.f != null) iv.push([plgWk(ws, ws2) * 168 + j * 24 + x.d, plgWk(ws, ws2) * 168 + j * 24 + x.f]); };
   const pr = plgPeek(plgAdd(ws, -7), p.id), nx = plgPeek(plgAdd(ws, 7), p.id);
   if (pr) pr.forEach((v, j) => add(plgAdd(ws, -7), j, plgInfo(v, codes))); inf.forEach((x, j) => add(ws, j, x)); if (nx) nx.forEach((v, j) => add(plgAdd(ws, 7), j, plgInfo(v, codes)));   // semaines voisines lues en entier : un OFF en bord de semaine est du repos
   iv.sort((a, b) => a[0] - b[0]);
-  for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + PLG_JL[Math.floor(iv[k][0] / 24) % 7] + ' (' + se('repos_jour') + ' h minimum)'); }
+  for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + plgJL(Math.floor(iv[k][0] / 24)) + ' (' + se('repos_jour') + ' h minimum)'); }
   if (iv.some(x => x[0] >= 0 && x[0] < 168)) {                                // repos hebdomadaire : plus long creux sans travail touchant la semaine ; semaine voisine non planifiée = on ne peut pas conclure (pas d'alerte)
     const gaps = [[pr ? -168 : -Infinity, iv[0][0]]]; for (let k = 1; k < iv.length; k++) gaps.push([iv[k - 1][1], iv[k][0]]); gaps.push([iv[iv.length - 1][1], nx ? 336 : Infinity]);
     let best = 0; gaps.forEach(g => { if (g[1] > 0 && g[0] < 168) best = Math.max(best, g[1] - g[0]); });
@@ -9275,21 +9286,21 @@ function plgRender() {
   if (PLG.busy) { card.innerHTML = '<div style="color:var(--muted);font-size:.84rem">Chargement…</div>'; return; }
   const codes = plgCodes(), ws = PLG.ws, we = plgAdd(ws, 6), cy = plgCycleStart(ws), mod = PLG.cfg.modulation, can = plgCan(), T = PLG.team, list = [...codes.values()].sort((a, b) => a.ordre - b.ordre);
   const camps = (typeof pcAll === 'function' ? pcAll() : []).filter(e => e.type === 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === 'FRANCHISE' || e.restaurant === PLG.resto));
-  const evs = (plgW(ws)._ev || []), alerts = [], rems = [];
+  const evs = plgEvList(ws), alerts = [], rems = [];
   const today = plgIso(new Date()), dd = (a, b) => Math.round((plgD(b) - plgD(a)) / 864e5);
   let h = '<div class="plg-bar"><div class="plg-tabs">' + PLG.restos.map(k => { const cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, kk = plgE(k);
       return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
     + '<label class="plg-mod"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
   h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgGo(-1)" aria-label="Semaine précédente">‹</button><b>Semaine du ' + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgGo(1)" aria-label="Semaine suivante">›</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button></div>'
-    + '<div style="font-size:.76rem;color:var(--muted)">' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</div></div></div>';
+    + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Préférence de cet appareil : change seulement l\'affichage des semaines, le planning enregistré est le même pour tous"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
   h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la semaine' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
   if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
   else {
     const lanes = []; const bars = camps.slice().sort((a, b) => (a.periode < b.periode ? -1 : 1)).map(e => { const s0 = Math.max(0, dd(ws, e.periode)), e0 = Math.min(6, dd(ws, e.fin || e.periode)); let ln = lanes.findIndex(end => end < s0); if (ln < 0) { ln = lanes.length; lanes.push(-1); } lanes[ln] = e0;
       return '<span class="plg-cb' + (e.periode < ws ? ' l' : '') + ((e.fin || e.periode) > we ? ' r' : '') + '" style="grid-column:' + (s0 + 1) + '/' + (e0 + 2) + ';grid-row:' + (ln + 1) + '" title="' + plgE((e.detail || 'Campagne') + ' · du ' + plgFr(e.periode) + ' au ' + plgFr(e.fin || e.periode)) + '">' + (e.periode < ws ? '‹ ' : '📣 ') + plgE(e.detail || 'Campagne') + ((e.fin || e.periode) > we ? ' ›' : '') + '</span>'; }).join('');
-    h += '<div class="plg-wrap"><table class="plg"><colgroup><col style="width:168px"><col span="7"><col style="width:84px"></colgroup><thead><tr><th></th>' + PLG_J.map((j, i) => { const dy = plgAdd(ws, i); return '<th class="plg-dh' + (dy === today ? ' now' : '') + (i === 0 || i === 6 ? ' we' : '') + '"><div class="plg-dn">' + j + '</div><div class="plg-dd">' + plgFr(dy) + '</div></th>'; }).join('') + '<th>Total</th></tr>'
+    h += '<div class="plg-wrap"><table class="plg"><colgroup><col style="width:168px"><col span="7"><col style="width:84px"></colgroup><thead><tr><th></th>' + Array.from({ length: 7 }, (_, i) => { const dy = plgAdd(ws, i), dw = plgD(dy).getUTCDay(); return '<th class="plg-dh' + (dy === today ? ' now' : '') + (dw === 0 || dw === 6 ? ' we' : '') + '"><div class="plg-dn">' + PLG_J[dw] + '</div><div class="plg-dd">' + plgFr(dy) + '</div></th>'; }).join('') + '<th>Total</th></tr>'
       + (camps.length ? '<tr><th class="plg-lh">Campagnes</th><th colspan="7" class="plg-lane"><div class="plg-gr">' + bars + '</div></th><th class="plg-lane"></th></tr>' : '')
-      + '<tr><th class="plg-lh">Événements</th>' + PLG_J.map((j, i) => '<th style="vertical-align:top;border-top:1px solid var(--border)">' + evs.map((e, k) => e.d === i ? '<span class="plg-ev" title="' + (can ? 'Cliquer pour retirer' : '') + '" ' + (can ? 'onclick="plgDelEv(' + k + ')" style="cursor:pointer"' : '') + '>' + (e.h ? plgE(e.h) + ' ' : '') + plgE(e.x) + '</span>' : '').join('') + '</th>').join('') + '<th style="border-top:1px solid var(--border)"></th></tr></thead><tbody>';
+      + '<tr><th class="plg-lh">Événements</th>' + Array.from({ length: 7 }, (_, i) => '<th style="vertical-align:top;border-top:1px solid var(--border)">' + evs.map((x, k) => x.j === i ? '<span class="plg-ev" title="' + (can ? 'Cliquer pour retirer' : '') + '" ' + (can ? 'onclick="plgDelEv(' + k + ')" style="cursor:pointer"' : '') + '>' + (x.e.h ? plgE(x.e.h) + ' ' : '') + plgE(x.e.x) + '</span>' : '').join('') + '</th>').join('') + '<th style="border-top:1px solid var(--border)"></th></tr></thead><tbody>';
     T.forEach(p => {
       const a = plgAnalyse(p, codes), cible = +p.heures_hebdo || 35, b = plgOF(p, codes), d = b[0] - b[1], bc = Math.abs(d) <= 1 ? ['#e8f6ee', '#1e8449', 'équilibré'] : (Math.abs(d) === 2 ? ['#fdf3e1', '#b9770e', d > 0 ? 'plus d\'ouvertures' : 'plus de fermetures'] : ['#fdecea', '#a93226', d > 0 ? 'trop d\'ouvertures' : 'trop de fermetures']);
       const fj = plgFj(p), diff = a.tot - cible, cl = !fj && a.tot > plgSeuil('semaine_max') ? '#c0392b' : (fj || mod ? 'inherit' : (Math.abs(diff) < .01 ? '#1e8449' : '#b9770e'));
@@ -9326,7 +9337,7 @@ function plgSummary(codes) {
       h += '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td>' + cells + '<td><b>' + (fj ? tot + ' j' : fmt(tot)) + '</b></td><td>' + (fj ? '218 j/an' : fmt(cible)) + '</td>' + (fj ? '<td>—</td></tr>' : '<td style="color:' + (ecart > 0 ? '#c0392b' : '#1e8449') + '" title="Par rapport à l\'objectif attendu à ce jour (' + fmt(asof) + ') : ' + (ecAs >= 0 ? '+' : '−') + fmt(Math.abs(ecAs)) + '">' + (ecart >= 0 ? '+' : '−') + fmt(Math.abs(ecart)) + '</td></tr>'); });
     return h + '</tbody></table></div><div style="font-size:.7rem;color:var(--muted);margin-top:6px">Directeur et directeur adjoint (forfait 218 jours) : comptés en jours travaillés. Le « · » signale une semaine pas encore planifiée. Survolez l\'écart pour le comparer à l\'objectif attendu à ce jour.</div>';
   }
-  const [Y, M] = PLG.month.split('-').map(Number), first = PLG.month + '-01', last = plgIso(new Date(Date.UTC(Y, M, 0))), ws0 = plgSun(first), nW = plgWk(ws0, plgSun(last)) + 1, wsL = Array.from({ length: nW }, (_, i) => plgAdd(ws0, i * 7));
+  const [Y, M] = PLG.month.split('-').map(Number), first = PLG.month + '-01', last = plgIso(new Date(Date.UTC(Y, M, 0))), ws0 = plgWS(first), nW = plgWk(ws0, plgWS(last)) + 1, wsL = Array.from({ length: nW }, (_, i) => plgAdd(ws0, i * 7));
   let h = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><button class="plg-btn" onclick="plgMonth(-1)">‹</button><b style="min-width:140px;text-align:center">' + PLG_MOIS[M - 1] + ' ' + Y + '</b><button class="plg-btn" onclick="plgMonth(1)">›</button></div>'
     + '<div class="plg-wrap"><table class="plg plg-sum" style="min-width:640px"><thead><tr><th style="text-align:left;width:120px">Personne</th>' + wsL.map(w => '<th>Sem. ' + plgFr(w) + '</th>').join('') + '<th>Total du mois</th><th>Théorique</th><th>Écart</th></tr></thead><tbody>';
   T.forEach(p => { let tot = 0, miss = false; const fj = plgFj(p), c = +p.heures_hebdo || 35, theo = c * 52 / 12;
@@ -9337,12 +9348,12 @@ function plgSummary(codes) {
 async function plgMonth(d) { const [Y, M] = PLG.month.split('-').map(Number), n = new Date(Date.UTC(Y, M - 1 + d, 1)); PLG.month = plgIso(n).slice(0, 7); const f = plgSun(PLG.month + '-01'), t = plgAdd(plgSun(plgIso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)))), 0); await plgFetchWeeks(plgAdd(f, -7), plgAdd(t, 7)); plgRender(); }
 // ── événements propres au planning (la lecture du Plan de communication ne reprend que les campagnes) ──
 function plgEvForm(can) {
-  const ws = PLG.ws, evs = plgW(ws)._ev || [];
-  return (evs.length ? evs.map((e, k) => '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(PLG_JL[e.d]) + ' ' + plgFr(plgAdd(ws, e.d)) + '</b> · ' + plgE(e.t) + ' · ' + plgE(e.x) + (e.h ? ' · ' + plgE(e.h) : '') + '</span>' + (can ? '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>' : '') + '</div>').join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement cette semaine.</div>')
-    + (can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><select class="plg-in" id="plgEd">' + PLG_JL.map((j, i) => '<option value="' + i + '">' + j + ' ' + plgFr(plgAdd(ws, i)) + '</option>').join('') + '</select><select class="plg-in" id="plgEt"><option>Réunion</option><option>Formation</option><option>Audit</option><option>Évaluation</option><option>Festif</option><option>Autre</option></select><input class="plg-in" id="plgEx" maxlength="60" placeholder="Titre (ex. Réunion managers)" style="width:200px"><input class="plg-in" id="plgEh" type="time"><button class="plg-btn" onclick="plgAddEv()">Ajouter</button></div>' : '');
+  const ws = PLG.ws, evs = plgEvList(ws);
+  return (evs.length ? evs.map((x, k) => '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(plgJL(x.j)) + ' ' + plgFr(plgAdd(ws, x.j)) + '</b> · ' + plgE(x.e.t) + ' · ' + plgE(x.e.x) + (x.e.h ? ' · ' + plgE(x.e.h) : '') + '</span>' + (can ? '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>' : '') + '</div>').join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement cette semaine.</div>')
+    + (can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><select class="plg-in" id="plgEd">' + Array.from({ length: 7 }, (_, i) => '<option value="' + i + '">' + plgJL(i) + ' ' + plgFr(plgAdd(ws, i)) + '</option>').join('') + '</select><select class="plg-in" id="plgEt"><option>Réunion</option><option>Formation</option><option>Audit</option><option>Évaluation</option><option>Festif</option><option>Autre</option></select><input class="plg-in" id="plgEx" maxlength="60" placeholder="Titre (ex. Réunion managers)" style="width:200px"><input class="plg-in" id="plgEh" type="time"><button class="plg-btn" onclick="plgAddEv()">Ajouter</button></div>' : '');
 }
-function plgAddEv() { const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; } const w = plgW(PLG.ws); (w._ev = w._ev || []).push({ d: +document.getElementById('plgEd').value, t: document.getElementById('plgEt').value, x: x.slice(0, 60), h: document.getElementById('plgEh').value || '' }); PLG.dirty = true; plgRender(); }
-function plgDelEv(k) { const w = plgW(PLG.ws); if (!w._ev) return; w._ev.splice(k, 1); PLG.dirty = true; plgRender(); }
+function plgAddEv() { const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; } const date = plgAdd(PLG.ws, +document.getElementById('plgEd').value), w = plgW(plgSun(date)); (w._ev = w._ev || []).push({ d: plgD(date).getUTCDay(), t: document.getElementById('plgEt').value, x: x.slice(0, 60), h: document.getElementById('plgEh').value || '' }); plgTouch(date); plgRender(); }
+function plgDelEv(k) { const x = plgEvList(PLG.ws)[k]; if (!x) return; plgW(x.sun)._ev.splice(x.i, 1); PLG.dirty = true; PLG.dk.add(x.sun); plgRender(); }
 // ── horaires des lettres, par restaurant ──
 function plgCodesTable(list, can) {
   const sel = (c, v) => '<select class="plg-in" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c) + '\',\'shift\',this.value)">' + [['', 'Pas un shift'], ['ouverture', 'Ouverture'], ['fermeture', 'Fermeture'], ['autre', 'Autre shift']].map(o => '<option value="' + o[0] + '" ' + (o[0] === (v || '') ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
@@ -9423,29 +9434,38 @@ function plgSet(pid, j, el) {
   const sp = plgSplit(row[j]);
   if (x.t === 'code') row[j] = x.custom ? x.norm : (sp.range && sp.code.toUpperCase() === x.code.toUpperCase() && !x.abs ? x.code + ' ' + sp.range : x.code);   // même lettre : on garde les horaires du jour ; autre lettre : horaires par défaut
   else row[j] = x.t === 'range' ? x.norm : String(el.value).trim();
-  PLG.dirty = true; plgRender();
+  plgTouch(plgAdd(PLG.ws, j)); plgRender();
 }
 function plgSetH(pid, j, el) {                                               // horaires du jour sous la lettre : vide = horaires de la lettre
   const row = plgRow(PLG.ws, pid), sp = plgSplit(row[j]), t = String(el.value).trim();
   if (!t) row[j] = sp.code; else { const g = plgRng(t); if (!g) { plgMsg('Horaires non reconnus : écrivez par exemple 8h-17h, 8h30-17h ou 16h30-1h45.', 'err'); plgRender(); return; } row[j] = (sp.code ? sp.code + ' ' : '') + g.norm; }
-  PLG.dirty = true; plgRender();
+  plgTouch(plgAdd(PLG.ws, j)); plgRender();
 }
-function plgGo(d) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer de semaine les perdrait. Continuer ?')) return; PLG.dirty = false; PLG.ws = plgAdd(PLG.ws, 7 * d); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
-function plgToday() { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.ws = plgSun(plgIso(new Date())); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
-function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
+function plgGo(d) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer de semaine les perdrait. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgAdd(PLG.ws, 7 * d); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
+function plgToday() { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgIso(new Date())); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
+function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
 async function plgSetMod(v) {
   const r = await plgApi('/rest/v1/rpc/planning_resto_save', 'POST', { f: PLG.FR, resto: PLG.resto, p_modulation: !!v, p_debut: PLG.cfg.debut_cycle, p_seuils: PLG.cfg.seuils || {} });
   if (!r.ok) { plgMsg('Réglage refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); plgRender(); return; } PLG.cfg.modulation = !!v; plgRender(); plgMsg(v ? '✓ Ce restaurant passe en modulation (cycles de 13 semaines).' : '✓ Ce restaurant passe à 35 h par semaine.', 'ok');
 }
 async function plgSave(force) {
-  const ws = PLG.ws, k = PLG.resto + '|' + ws, base = force ? (PLG.conflict ? PLG.conflict.version : PLG.ver[k]) : (PLG.ver[k] || 0);
-  const r = await plgApi('/rest/v1/rpc/planning_save', 'POST', { f: PLG.FR, resto: PLG.resto, sem: ws, cell: plgW(ws), base_version: base });
-  if (!r.ok) { plgMsg('Enregistrement refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); return; }
-  if (r.j && r.j.conflit) { PLG.conflict = { version: r.j.version, cellules: r.j.cellules }; plgRender(); return; }
-  PLG.ver[k] = r.j.version; PLG.dirty = false; PLG.conflict = null; plgRender(); plgMsg('✓ Semaine enregistrée.', 'ok');
+  const keys = [...PLG.dk].sort(); if (!keys.length) keys.push(plgSun(PLG.ws));      // les semaines enregistrées (dimanche → samedi) touchées par les modifications
+  for (const sun of keys) {
+    const k = PLG.resto + '|' + sun, base = force && PLG.conflict && PLG.conflict.sun === sun ? PLG.conflict.version : (PLG.ver[k] || 0);
+    const r = await plgApi('/rest/v1/rpc/planning_save', 'POST', { f: PLG.FR, resto: PLG.resto, sem: sun, cell: plgW(sun), base_version: base });
+    if (!r.ok) { plgMsg('Enregistrement refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); return; }
+    if (r.j && r.j.conflit) { PLG.conflict = { sun, version: r.j.version, cellules: r.j.cellules }; plgRender(); return; }
+    PLG.ver[k] = r.j.version; PLG.dk.delete(sun);
+  }
+  PLG.dirty = false; PLG.dk.clear(); PLG.conflict = null; plgRender(); plgMsg('✓ Semaine enregistrée.', 'ok');
 }
 const plgForce = () => plgSave(true);
-function plgReload() { PLG.dirty = false; PLG.conflict = null; plgLoad(); }
+function plgReload() { PLG.dirty = false; PLG.dk.clear(); PLG.conflict = null; plgLoad(); }
+function plgWkSet(lun) {                                                     // première jour de la semaine affichée : préférence de l'appareil (le planning enregistré est le même pour tous)
+  if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer d\'affichage les perdrait. Continuer ?')) { plgRender(); return; }
+  try { localStorage.setItem(PLG_WKKEY, lun ? 'lun' : 'dim'); } catch (e) {}
+  PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgAdd(PLG.ws, 3)); PLG.month = PLG.ws.slice(0, 7); plgLoad();     // on garde la semaine qui contient le milieu de celle qui était affichée
+}
 
 // ── export Excel au format du modèle MODULATION.xlsx : « 1er Cycle » … « 4ème Cycle » (13 semaines chacune, 2 semaines côte à côte, formules d'heures) + « 35H OU MODULATION » (résumés et tableau des valeurs) ──
 const plgRgb = c => String(c || '').replace('#', '').toUpperCase();
@@ -9467,7 +9487,7 @@ function plgWorkbook(base) {
     list.forEach((c, i) => { const st = c.fond ? { fill: { fgColor: { rgb: plgRgb(c.fond) } }, font: { bold: true, color: { rgb: plgRgb(c.texte) } }, alignment: ctr, border: bd } : { alignment: ctr, border: bd }; put(ws, 5 + i, 28, c.libelle, { border: bd }); put(ws, 5 + i, 29, c.code, st); put(ws, 5 + i, 30, tf(plgDur(c)), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(ws, 5 + i, 31, frac(c.debut), { alignment: ctr, border: bd }, { z: 'hh:mm' }); put(ws, 5 + i, 32, frac(c.fin), { alignment: ctr, border: bd }, { z: 'hh:mm' }); });
     for (let i = 0; i < 13; i++) {
       const wsd = plgAdd(base, ((k - 1) * 13 + i) * 7), b = Math.floor(i / 2), top = 4 + b * blockH, c0 = i % 2 === 0 ? 2 : 15;
-      ['SEMAINE', 'DIMANCHE', 'LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'HEURES (plages)', 'HEURES (codes)', 'TOTAL'].forEach((t, j) => put(ws, top, c0 + j, t, HEAD));
+      ['SEMAINE', ...Array.from({ length: 7 }, (_, j) => PLG_JL[(plgOff() + j) % 7].toUpperCase()), 'HEURES (plages)', 'HEURES (codes)', 'TOTAL'].forEach((t, j) => put(ws, top, c0 + j, t, HEAD));
       put(ws, top + 1, c0, (k - 1) * 13 + i + 1, SUB); for (let j = 0; j < 7; j++) put(ws, top + 1, c0 + 1 + j, plgSerial(plgAdd(wsd, j)), SUB, { z: 'dd/mm' }); for (let j = 8; j <= 10; j++) put(ws, top + 1, c0 + j, '', SUB);
       for (let q = 0; q < nR; q++) {
         const p = T[q], r = top + 2 + q; put(ws, r, c0, p ? p.prenom : '', { font: { bold: true }, border: bd });
@@ -9481,10 +9501,10 @@ function plgWorkbook(base) {
     X.book_append_sheet(wb, ws, k === 1 ? '1er Cycle' : k + 'ème Cycle');
   }
   // feuille de synthèse : mois (35 h) puis cycles (modulation), comme « 35H OU MODULATION »
-  const sy = {}, yr = +plgAdd(base, 4).slice(0, 4); sy['!cols'] = [{ wch: 2 }, { wch: 24 }, { wch: 18 }, ...Array(13).fill({ wch: 11 }), { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
+  const sy = {}, yr = +plgThu(base).slice(0, 4); sy['!cols'] = [{ wch: 2 }, { wch: 24 }, { wch: 18 }, ...Array(13).fill({ wch: 11 }), { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
   put(sy, 2, 2, '35H - TEMPS PARTIEL', HEAD); put(sy, 2, 3, '', HEAD); PLG_MOIS.forEach((m, i) => put(sy, 2, 4 + i, m.toUpperCase(), HEAD)); put(sy, 2, 16, 'TOTAL', HEAD);
   T.forEach((p, q) => { put(sy, 3 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
-    for (let m = 0; m < 12; m++) { let h = 0; const last = new Date(Date.UTC(yr, m + 1, 0)).getUTCDate(); for (let d = 1; d <= last; d++) { const day = yr + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'), w0 = plgSun(day), r = plgPeek(w0, p.id); if (r) h += plgInfo(r[plgD(day).getUTCDay()], codes).h; } tot += h; put(sy, 3 + q, 4 + m, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
+    for (let m = 0; m < 12; m++) { let h = 0; const last = new Date(Date.UTC(yr, m + 1, 0)).getUTCDate(); for (let d = 1; d <= last; d++) { const day = yr + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'), r = (plgRaw(plgSun(day)) || {})[p.id]; if (Array.isArray(r)) h += plgInfo(r[plgD(day).getUTCDay()], codes).h; } tot += h; put(sy, 3 + q, 4 + m, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
     put(sy, 3 + q, 16, tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: '[h]:mm' }); });
   const m0 = 3 + T.length + 2; put(sy, m0, 2, 'MODULATION', HEAD); put(sy, m0, 3, '', HEAD); ['1ER CYCLE', '2e CYCLE', '3e CYCLE', '4e CYCLE', 'TOTAL', 'CIBLE', 'ÉCART'].forEach((t, i) => put(sy, m0, 5 + i, t, HEAD));
   T.forEach((p, q) => { put(sy, m0 + 1 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
@@ -9499,7 +9519,7 @@ async function plgExport() {
   const b = document.getElementById('plgExp'); if (b) { b.disabled = true; b.textContent = 'Préparation du classeur…'; }
   try {
     await _loadXlsx(); const base = plgCycleStart(PLG.ws).base; await plgFetchWeeks(plgAdd(base, -7), plgAdd(base, 54 * 7));
-    const nm = ((typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto) || '').replace(/[^A-Za-z0-9À-ÿ]+/g, '_'), file = 'Planning_EDG_' + nm + '_' + plgAdd(base, 4).slice(0, 4) + '.xlsx', wb = plgWorkbook(base);
+    const nm = ((typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto) || '').replace(/[^A-Za-z0-9À-ÿ]+/g, '_'), file = 'Planning_EDG_' + nm + '_' + plgThu(base).slice(0, 4) + '.xlsx', wb = plgWorkbook(base);
     if (window.__PLG_CAPTURE) { window.__PLG_CAPTURE(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }), file); } else XLSX.writeFile(wb, file);
     plgMsg('✓ ' + file + ' exporté (4 cycles de 13 semaines + synthèse).', 'ok');
   } catch (e) { plgMsg('Export impossible : ' + e.message, 'err'); }
@@ -10000,7 +10020,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261103-185736';
+const BUILD_VERSION = '20261103-192640';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
