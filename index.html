@@ -9153,8 +9153,7 @@ const PLG = { dk: new Set(), editId: null, rights: null, FR: '', resto: null, re
 const PLG_FN = { directeur: 'Directeur', directeur_adjoint: 'Directeur adjoint', assistant_direction: 'Assistant de direction', manager: 'Manager', responsable_zone: 'Responsable de zone' };
 const PLG_SEUILS = { jour_max: 10, semaine_max: 48, moyenne12: 44, repos_jour: 11, repos_hebdo: 35, jours_max: 6, assistant_direction_shifts: 2, directeur_adjoint_shifts_min: 1 };
 const PLG_JL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], PLG_J = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-const PLG_WKKEY = 'fmj_plgwk';                                                  // préférence de l'appareil : « lun » = semaines du lundi au dimanche ; par défaut du dimanche au samedi (modèle EDG)
-const plgOff = () => { try { return localStorage.getItem(PLG_WKKEY) === 'lun' ? 1 : 0; } catch (e) { return 0; } };   // 0 = semaine du dimanche, 1 = semaine du lundi
+const plgOff = () => (PLG.cfg && PLG.cfg.lundi) ? 1 : 0;                  // premier jour de la semaine affichée : réglage du restaurant (0 = dimanche, 1 = lundi), le même pour tous
 const plgJL = i => PLG_JL[(plgOff() + (((i % 7) + 7) % 7)) % 7];             // nom du jour (en toutes lettres) selon sa place dans la semaine affichée
 const PLG_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const plgE = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
@@ -9165,7 +9164,7 @@ function plgCycleStart(ws) {                                                  //
   const base0 = plgAdd(PLG.cfg.debut_cycle || plgSun(plgThu(ws).slice(0, 4) + '-01-01'), plgOff());   // le cycle commence le dimanche (ou le lundi suivant si la semaine commence le lundi)
   const n = Math.floor(plgWk(base0, ws) / 13); return { start: plgAdd(base0, n * 13 * 7), n: ((n % 4) + 4) % 4 + 1, base: base0 };
 }
-const plgCan = () => !!PLG.rights && ['directeur', 'franchise', 'owner'].includes(PLG.rights.role);
+const plgCan = () => !!PLG.rights && ['directeur', 'superviseur', 'franchise', 'owner'].includes(PLG.rights.role);
 const plgSeuil = k => { const v = (PLG.cfg.seuils || {})[k]; return typeof v === 'number' ? v : PLG_SEUILS[k]; };
 async function plgApi(path, method, body, headers) {
   const tok = await SBA.token(); if (!tok) return { ok: false, status: 401, j: { message: 'session expirée' } };
@@ -9177,24 +9176,35 @@ function plgOnLogin(r) {
   PLG.rights = r; PLG.FR = (FRANCHISE_CFG.auth && FRANCHISE_CFG.auth.franchise) || '';
   const ok = !!r && (r.modules || []).includes('planning');
   const pill = document.getElementById('pillPlanning'); if (pill) pill.style.display = ok ? '' : 'none';
-  const al = (r && r.restos || []).includes('*') ? RESTOS.slice() : RESTOS.filter(k => (r.restos || []).includes(k));
+  const tous = FRANCHISE_CFG.restos.map(x => x.key), al = !r ? [] : (r.role === 'directeur' ? tous.filter(k => (r.restos || []).includes(k)) : tous);   // liste complète de la franchise (RESTOS est déjà limité au périmètre de la personne)   // le directeur : ses restaurants seulement ; les autres rôles ayant le module « planning » : tous
   PLG.restos = al; if (!PLG.resto || !al.includes(PLG.resto)) PLG.resto = al[0] || null;
 }
-function loadPlanning() { if (!PLG.ws) PLG.ws = plgWS(plgIso(new Date())); plgLoad(); }
+async function plgRestosLoad() {                                              // plannings que la personne ouvre : le directeur → son restaurant ; les autres rôles → tous (décidé côté base)
+  const tous = FRANCHISE_CFG.restos.map(x => x.key), r = PLG.rights; if (!r) return;
+  let al = r.role === 'directeur' ? tous.filter(k => (r.restos || []).includes('*') || (r.restos || []).includes(k)) : tous;                // repli si le script SQL n'est pas encore installé
+  const x = await plgApi('/rest/v1/rpc/planning_restos', 'POST', { f: PLG.FR });
+  if (x.ok && Array.isArray(x.j)) al = x.j.includes('*') ? tous : tous.filter(k => x.j.includes(k));
+  PLG.restos = al; if (!PLG.resto || !al.includes(PLG.resto)) PLG.resto = al[0] || null;
+}
+async function loadPlanning() { if (!PLG.ws) PLG.ws = plgWS(plgIso(new Date())); await plgRestosLoad(); plgLoad(); }
 // ── lecture ──
 async function plgLoad() {
   const card = document.getElementById('plgCard'); if (!PLG.rights || !PLG.resto) { card.innerHTML = '<div style="color:var(--muted)">Aucun restaurant n\'est ouvert à votre compte pour le planning.</div>'; return; }
   PLG.busy = true; plgRender();
-  const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto }, cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 14);
+  const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto };
+  const rc = await plgApi('/rest/v1/planning_resto?' + plgQ(f)), r0 = rc.ok && rc.j && rc.j[0];
+  PLG.cfg = r0 ? { modulation: !!r0.modulation, debut_cycle: r0.debut_cycle || null, seuils: r0.seuils || {}, lundi: +r0.semaine_planning === 1 } : { modulation: false, debut_cycle: null, seuils: {}, lundi: false };
+  if (plgD(PLG.ws).getUTCDay() !== plgOff()) PLG.ws = plgWS(plgAdd(PLG.ws, 3));         // la semaine affichée commence le jour choisi pour ce restaurant
+  const cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 14);
   const rs = await Promise.all([
     PLG.def ? null : plgApi('/rest/v1/planning_codes_defaut?' + plgQ({ franchise: 'eq.' + PLG.FR, order: 'ordre.asc' })),
     plgApi('/rest/v1/equipe?' + plgQ(Object.assign({ actif: 'eq.true', order: 'ordre.asc,cree_le.asc' }, f))),
-    plgApi('/rest/v1/planning_resto?' + plgQ(f)),
+    rc,
     plgApi('/rest/v1/planning_codes?' + plgQ(Object.assign({ order: 'ordre.asc' }, f))),
     plgFetchWeeks(from, to)]);
   if (rs[0]) PLG.def = rs[0].ok && Array.isArray(rs[0].j) ? rs[0].j : [];
   if (!rs[1].ok) { PLG.busy = false; card.innerHTML = '<div class="plg-box plg-alert">Impossible de charger l\'équipe : ' + plgE((rs[1].j && rs[1].j.message) || 'le planning n\'est pas encore installé côté base.') + '</div>'; return; }
-  PLG.team = rs[1].j || []; const c0 = rs[2].ok && rs[2].j && rs[2].j[0]; PLG.cfg = c0 ? { modulation: !!c0.modulation, debut_cycle: c0.debut_cycle || null, seuils: c0.seuils || {} } : { modulation: false, debut_cycle: null, seuils: {} };
+  PLG.team = rs[1].j || [];
   PLG.over = rs[3].ok && Array.isArray(rs[3].j) ? rs[3].j : [];
   PLG.busy = false; PLG.dirty = false; PLG.dk.clear(); PLG.conflict = null; if (!PLG.month) PLG.month = PLG.ws.slice(0, 7); plgRender();
 }
@@ -9292,7 +9302,7 @@ function plgRender() {
       return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
     + '<label class="plg-mod"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
   h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgGo(-1)" aria-label="Semaine précédente">‹</button><b>Semaine du ' + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgGo(1)" aria-label="Semaine suivante">›</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button></div>'
-    + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Préférence de cet appareil : change seulement l\'affichage des semaines, le planning enregistré est le même pour tous"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
+    + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Réglage du restaurant : il change l\'affichage des semaines pour tous ceux qui ouvrent ce planning (le planning enregistré ne change pas)"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
   h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la semaine' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
   if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
   else {
@@ -9305,8 +9315,8 @@ function plgRender() {
       const a = plgAnalyse(p, codes), cible = +p.heures_hebdo || 35, b = plgOF(p, codes), d = b[0] - b[1], bc = Math.abs(d) <= 1 ? ['#e8f6ee', '#1e8449', 'équilibré'] : (Math.abs(d) === 2 ? ['#fdf3e1', '#b9770e', d > 0 ? 'plus d\'ouvertures' : 'plus de fermetures'] : ['#fdecea', '#a93226', d > 0 ? 'trop d\'ouvertures' : 'trop de fermetures']);
       const fj = plgFj(p), diff = a.tot - cible, cl = !fj && a.tot > plgSeuil('semaine_max') ? '#c0392b' : (fj || mod ? 'inherit' : (Math.abs(diff) < .01 ? '#1e8449' : '#b9770e'));
       h += '<tr><td class="n"><div class="plg-pn">' + plgAv(p) + '<div><b style="font-size:.8rem">' + plgE(p.prenom) + '</b><br><span class="plg-tag">' + plgE(PLG_FN[p.fonction] || p.fonction) + (fj ? ' · 218 j' : '') + '</span>' + (b[0] + b[1] > 0 ? '<span class="plg-bal" style="background:' + bc[0] + ';color:' + bc[1] + '" title="Depuis le début du cycle : ' + b[0] + ' ouverture(s), ' + b[1] + ' fermeture(s) — ' + bc[2] + '">O ' + b[0] + ' · F ' + b[1] + '</span>' : '') + '</div></div></td>';
-      a.inf.forEach((x, j) => { const v = plgRow(ws, p.id)[j], sp = plgSplit(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', cod = x.t === 'range' ? '' : (x.t === 'bad' ? v : sp.code);
-        const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : ''), own = x.t === 'range' || x.custom ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : '', roH = !can || x.abs || x.t === 'bad' || (x.t === 'code' && !x.custom && x.d == null);
+      a.inf.forEach((x, j) => { const v = plgRow(ws, p.id)[j], sp = plgSplit(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', cod = x.t === 'range' ? '' : sp.code, rg = x.t === 'bad' && sp.range ? plgRng(sp.range) : null;
+        const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : ''), own = x.t === 'range' || x.custom ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (rg ? plgFmtH(rg.d) + '-' + plgFmtH(rg.f) : ''), roH = !can || x.abs || (x.t === 'bad' && !rg) || (x.t === 'code' && !x.custom && x.d == null);
         h += '<td class="plg-cell"><input class="plg-c' + (x.t === 'bad' ? ' bad' : '') + '" list="plgCodes" style="' + st + '" value="' + plgE(cod) + '" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + j + ',this)" aria-label="Lettre, ' + plgE(p.prenom) + ', ' + PLG_JL[j] + '" title="' + (x.t === 'bad' ? 'Lettre inconnue : choisissez dans la liste ou saisissez des horaires : 8h-16h, 8h30-17h ou 08:00-16:00' : '') + '">'
           + '<input class="plg-h' + (own ? ' cu' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" ' + (roH ? 'readonly tabindex="-1"' : '') + ' onchange="plgSetH(\'' + p.id + '\',' + j + ',this)" aria-label="Horaires, ' + plgE(p.prenom) + ', ' + PLG_JL[j] + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : (def && !roH ? 'Horaires de la lettre : tapez d\'autres horaires pour ce jour (ex. 8h30-17h)' : '')) + '"></td>'; });
       h += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">' + (a.inf.some(x => !x.abs && x.h > 0) ? plgH(a.inf.reduce((n, x) => n + (x.abs ? 0 : x.h), 0)) : 'forfait 218 j') + '</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
@@ -9432,8 +9442,10 @@ async function plgTeamOff(id) { const p = PLG.team.find(x => x.id === id); if (!
 function plgSet(pid, j, el) {
   const codes = plgCodes(), x = plgInfo(el.value, codes), row = plgRow(PLG.ws, pid);
   const sp = plgSplit(row[j]);
-  if (x.t === 'code') row[j] = x.custom ? x.norm : (sp.range && sp.code.toUpperCase() === x.code.toUpperCase() && !x.abs ? x.code + ' ' + sp.range : x.code);   // même lettre : on garde les horaires du jour ; autre lettre : horaires par défaut
-  else row[j] = x.t === 'range' ? x.norm : String(el.value).trim();
+  const lettre = String(el.value).trim();
+  if (x.t === 'code') row[j] = x.custom ? x.norm : (sp.range && !x.abs ? x.code + ' ' + sp.range : x.code);     // la lettre ne change jamais les horaires déjà saisis (lettre d'absence : OFF, CP… efface les horaires)
+  else if (x.t === 'range') row[j] = (sp.code && !PLG_ABS.test(sp.code) && plgCodes().has(sp.code.toUpperCase()) ? sp.code + ' ' : '') + x.norm;   // horaires tapés dans la case : la lettre déjà choisie reste
+  else row[j] = lettre && sp.range ? lettre + ' ' + sp.range : lettre;                // lettre inconnue : gardée (en rouge) avec les horaires
   plgTouch(plgAdd(PLG.ws, j)); plgRender();
 }
 function plgSetH(pid, j, el) {                                               // horaires du jour sous la lettre : vide = horaires de la lettre
@@ -9461,10 +9473,12 @@ async function plgSave(force) {
 }
 const plgForce = () => plgSave(true);
 function plgReload() { PLG.dirty = false; PLG.dk.clear(); PLG.conflict = null; plgLoad(); }
-function plgWkSet(lun) {                                                     // première jour de la semaine affichée : préférence de l'appareil (le planning enregistré est le même pour tous)
+async function plgWkSet(lun) {                                              // premier jour de la semaine : réglage du restaurant, partagé par tous ceux qui ouvrent ce planning
+  if (!plgCan()) { plgRender(); return; }
   if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer d\'affichage les perdrait. Continuer ?')) { plgRender(); return; }
-  try { localStorage.setItem(PLG_WKKEY, lun ? 'lun' : 'dim'); } catch (e) {}
-  PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgAdd(PLG.ws, 3)); PLG.month = PLG.ws.slice(0, 7); plgLoad();     // on garde la semaine qui contient le milieu de celle qui était affichée
+  const r = await plgApi('/rest/v1/rpc/semaine_reglage_set', 'POST', { f: PLG.FR, resto: PLG.resto, quoi: 'planning', lundi: !!lun });
+  if (!r.ok) { plgMsg('Réglage refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^semaine : /, ''), 'err'); plgRender(); return; }
+  PLG.cfg.lundi = !!lun; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgAdd(PLG.ws, 3)); PLG.month = PLG.ws.slice(0, 7); plgLoad();     // on garde la semaine qui contient le milieu de celle qui était affichée
 }
 
 // ── export Excel au format du modèle MODULATION.xlsx : « 1er Cycle » … « 4ème Cycle » (13 semaines chacune, 2 semaines côte à côte, formules d'heures) + « 35H OU MODULATION » (résumés et tableau des valeurs) ──
@@ -10020,7 +10034,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261103-192640';
+const BUILD_VERSION = '20261103-201526';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

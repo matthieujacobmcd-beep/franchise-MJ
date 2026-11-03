@@ -1022,10 +1022,26 @@ function pvDraftBar() {
 }
 window.addEventListener('beforeunload', e => { try { if (pvPending().length) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
 const PV_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-const PV_WKKEY = 'mj_pvwk';                                                              // préférence de l'appareil : « dim » = semaines du dimanche au samedi, sinon du lundi au dimanche
-const pvWk0 = () => { try { return localStorage.getItem(PV_WKKEY) === 'dim' ? 0 : 1; } catch (e) { return 1; } };   // premier jour de la semaine affichée (getUTCDay) : 1 = lundi (par défaut), 0 = dimanche
+const PV_WKKEY = 'mj_pvwk';                                                              // repli quand on n'est pas connecté avec un compte individuel : préférence de l'appareil (« dim » = semaines du dimanche)
+const pvSb = () => typeof SBA !== 'undefined' && SBA.enabled() && SBA.hasSession();
+const pvWk0 = () => { const m = (PV.wkMap || {})[curResto]; if (m != null) return m; try { return localStorage.getItem(PV_WKKEY) === 'dim' ? 0 : 1; } catch (e) { return 1; } };   // premier jour de la semaine affichée (getUTCDay) : 1 = lundi (par défaut), 0 = dimanche ; avec un compte, réglage du RESTAURANT, le même pour tous
+async function pvWkLoad() {                                                              // lit le réglage du restaurant (Supabase) ; vrai si l'affichage doit changer
+  if (!pvSb()) return false;
+  try { const tok = await SBA.token(); if (!tok) return false;
+    const r = await SBA.api('/rest/v1/rpc/semaine_reglage', { method: 'POST', tok, body: { f: CFG.auth.franchise, resto: curResto } });
+    if (!r.ok || !r.j) return false;
+    const v = +r.j.prevision === 0 ? 0 : 1, old = pvWk0(); (PV.wkMap = PV.wkMap || {})[curResto] = v; return v !== old;
+  } catch (e) { return false; }
+}
 const pvPos = iso => (new Date(Date.parse(iso + 'T00:00:00Z')).getUTCDay() - pvWk0() + 7) % 7;       // rang du jour dans la semaine affichée (0 = premier jour)
-function pvWkSet(sun) { try { localStorage.setItem(PV_WKKEY, sun ? 'dim' : 'lun'); } catch (e) {} renderPrevCa(); }
+async function pvWkSet(sun) {
+  if (pvSb()) {
+    const tok = await SBA.token(), r = tok ? await SBA.api('/rest/v1/rpc/semaine_reglage_set', { method: 'POST', tok, body: { f: CFG.auth.franchise, resto: curResto, quoi: 'prevision', lundi: !sun } }) : null;
+    if (!r || !r.ok) { renderPrevCa(); pvMsg('err', 'Réglage refusé : ' + (((r && r.j && r.j.message) || 'session expirée').replace(/^semaine : /, ''))); return; }
+    (PV.wkMap = PV.wkMap || {})[curResto] = sun ? 0 : 1;
+  } else { try { localStorage.setItem(PV_WKKEY, sun ? 'dim' : 'lun'); } catch (e) {} }
+  renderPrevCa();
+}
 const _pvT = s => Date.parse(s + 'T00:00:00Z');
 const pvShift = (iso, days) => new Date(_pvT(iso) + days * 86400000).toISOString().slice(0, 10);
 const pvEur = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
@@ -1084,6 +1100,7 @@ function renderPrevCa() {
   }
   if (!ALIMM || !PREVJ) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div><div class="hint">⏳ Chargement du CA des années précédentes…</div>`; loadTx(); return; }
   pvInit();
+  if (PV.wkFor !== curResto) { PV.wkFor = curResto; pvWkLoad().then(ch => { if (ch && document.getElementById('pvWk')) renderPrevCa(); }); }   // réglage de la semaine : lu une fois par restaurant
   const [y, m] = PV.ym.split('-').map(Number), days = pvDays(PV.ym), name = RESTOS.find(r => r[0] === curResto)[1];
   const mois = MONTHS.map(x => x.charAt(0) + x.slice(1).toLowerCase()), minM = y === 2026 ? 11 : 1, maxM = 12;
   const wk0 = pvWk0(), order = wk0 === 0 ? [6, 0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];          // indices de PV_JOURS (lundi = 0) dans l'ordre de la semaine affichée
@@ -1123,7 +1140,7 @@ function renderPrevCa() {
       <div class="field" style="align-self:end"><button class="btn-save" style="padding:10px 18px" onclick="pvVentiler()">Ventiler sur les jours</button></div></div>
     <div class="pv-bar"><label>Saisir en <select id="pvUAll" onchange="pvUnitAll(this.value)"><option value="e">€</option><option value="p">% vs N-1</option><option value="m">% du mois</option><option value="t">TAC'S × PM</option></select></label>
       <label>Arrondi de chaque jour <select id="pvStep" onchange="pvStepSet(this.value)"><option value="1">1 €</option><option value="10">10 €</option><option value="50">50 €</option><option value="100">100 €</option></select></label>
-      <label title="Préférence de cet appareil : change seulement l'affichage des semaines"><input type="checkbox" id="pvWk" ${wk0 === 0 ? 'checked' : ''} onchange="pvWkSet(this.checked)" style="width:auto;margin-right:6px">Semaine commençant le dimanche</label>
+      <label title="Réglage du restaurant : il change l'affichage des semaines pour tous ceux qui ouvrent cette prévision"><input type="checkbox" id="pvWk" ${wk0 === 0 ? 'checked' : ''} onchange="pvWkSet(this.checked)" style="width:auto;margin-right:6px">Semaine commençant le dimanche</label>
       <span class="pv-barh">Le CA prévu de chaque jour est arrondi au pas choisi dès la saisie ; en « TAC'S × PM », le CA = TAC'S × panier moyen (à défaut, ceux du jour équivalent N-1).</span></div>
     <div class="pv-cal">${cells}</div>
     <div class="foot"><button class="btn-save" id="pvSave" onclick="pvSave()">Enregistrer la prévision</button>
@@ -3203,6 +3220,8 @@ async function renderEquipes() {
 }
 const eqLabel = k => (ACC_ROLE && ACC_ROLE[k]) || k;
 const eqResto = r => (r.restos || []).includes('*') ? 'Tous' : (r.restos || []).map(x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1]).join(', ') || '—';
+const eqNomR = x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1];
+const eqPlan = r => { if (r.role !== 'directeur' || !(r.modules || []).includes('planning')) return ''; const p = r.restos_planning || []; return '<br><span style="font-size:.74rem;color:' + (p.length ? 'var(--muted)' : 'var(--gold)') + '">Planning : ' + (p.length ? p.map(eqNomR).map(escH).join(', ') : 'à définir (tous pour le moment)') + '</span>'; };
 const eqState = r => !r.actif ? ['Désactivé', 'var(--red)'] : (r.user_id ? ['Actif', 'var(--green)'] : ['Invitation en attente', 'var(--gold)']);
 const eq218 = r => { if (!EQ.f218) return ['—', 'var(--muted)']; const x = EQ.f218[String(r.email).toLowerCase()]; return !x ? ['Pas de fiche', 'var(--muted)'] : [(x.actif ? 'Actif' : 'Désactivé') + ' · ' + (EQ_218[x.role] || x.role), x.actif ? 'var(--green)' : 'var(--red)']; };
 const eqWhen = s => { try { return new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
@@ -3212,7 +3231,7 @@ function eqPaint() {
   const rows = EQ.rows.map(r => {
     const st = eqState(r), me = SB_RIGHTS && r.email.toLowerCase() === SB_RIGHTS.email.toLowerCase(), low = EQ_RANK[r.role] < (SB_RIGHTS.rang || 0) && !me;
     return `<tr><td style="${td}"><b>${escH(r.nom)}</b>${me ? ' <small style="color:var(--muted)">(vous)</small>' : ''}<br><span style="font-size:.76rem;color:var(--muted)">${escH(r.email)}</span></td>
-      <td data-l="Fonction · restaurants" style="${td};font-size:.82rem">${escH(eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span></td>
+      <td data-l="Fonction · restaurants" style="${td};font-size:.82rem">${escH(eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span>${eqPlan(r)}</td>
       <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}</td>
       <td data-l="218 jours" style="${td};font-size:.78rem;font-weight:700;color:${eq218(r)[1]}">${escH(eq218(r)[0])}</td>
       <td data-l="Statut" style="${td};font-size:.8rem;font-weight:700;color:${st[1]}">${st[0]}</td>
@@ -3243,6 +3262,8 @@ function eqForm() {
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
       ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+    ${e.role === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres fonctions ouvrent tous les plannings)</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Ce que la personne peut ouvrir</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${eqMods().map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqM" value="${k}" ${has(modules, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Ce qu'elle peut enregistrer dans la saisie</div>
@@ -3269,7 +3290,7 @@ function eqRoleChanged(k) {                                                // ch
 function eqRead() {
   const v = id => ((document.getElementById(id) || {}).value || '').trim(), ck = c => [...document.querySelectorAll(c)].filter(x => x.checked).map(x => x.value);
   const tous = !!(document.getElementById('eqAll') || {}).checked;
-  return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), modules: ck('.eqM'), can: ck('.eqC') };
+  return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), restos_planning: v('eqRole') === 'directeur' ? ck('.eqP') : [], modules: ck('.eqM'), can: ck('.eqC') };
 }
 async function eqSave() {
   const e = EQ.edit, o = eqRead(), b = document.getElementById('eqGo');
@@ -3277,9 +3298,10 @@ async function eqSave() {
   if (e.isNew && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
+  if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');
   const inv = e.isNew && !!(document.getElementById('eqInv') || {}).checked;
   if (b) b.disabled = true; eqSet('Enregistrement…');
-  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, restos: o.restos, modules: o.modules, can: o.can };
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can };
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
