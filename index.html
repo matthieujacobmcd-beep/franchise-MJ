@@ -9251,7 +9251,22 @@ function igGo() {
   #plgPrintArea .pp-top{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px}
   #plgPrintArea .pp-t{font-size:15px;font-weight:800}#plgPrintArea .pp-s{font-size:10px;color:#555}
   #plgPrintArea .pp-block{break-inside:avoid;page-break-inside:avoid;margin:0 0 7mm}
-  #plgPrintArea .pp-block:nth-of-type(2n){break-after:page;page-break-after:always}
+  #plgPrintArea .pp-page{break-inside:avoid;page-break-inside:avoid}
+  #plgPrintArea .pp-page:not(:last-child){break-after:page;page-break-after:always}
+  #plgPrintArea .pp-k.pp-block{margin:0 0 1.6mm;font-size:var(--fs)}
+  #plgPrintArea .pp-k table.pp{border-collapse:collapse}
+  #plgPrintArea .pp-k .pp th,#plgPrintArea .pp-k .pp td{padding:0 2px;height:var(--rh);line-height:var(--rh);font-size:var(--fs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #plgPrintArea .pp-k .pp-wk,#plgPrintArea .pp-k .pp-d,#plgPrintArea .pp-k .pp-l{font-size:var(--fs)}
+  #plgPrintArea .pp-k .pp-d{height:calc(var(--rh) * 1.2);line-height:calc(var(--rh) * 1.2)}
+  #plgPrintArea .pp-k .pp-d span{display:inline;font-size:var(--fs);margin-right:2px}#plgPrintArea .pp-k .pp-d b{font-size:var(--fs)}
+  #plgPrintArea .pp-k .pp-lane{padding:0!important}
+  #plgPrintArea .pp-k .pp-gr{grid-auto-rows:var(--rh);gap:0 2px}
+  #plgPrintArea .pp-k .pp-cb{font-size:var(--fs);line-height:var(--rh);padding:0 3px}
+  #plgPrintArea .pp-k .pp-e{padding:0 1px!important}
+  #plgPrintArea .pp-k .pp-e span{font-size:var(--fs);line-height:calc(var(--rh) - .3mm);padding:0 2px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #plgPrintArea .pp-k .pp-n{padding-left:3px!important}#plgPrintArea .pp-k .pp-n b{display:inline;font-size:var(--fs)}#plgPrintArea .pp-k .pp-n small{display:inline;font-size:calc(var(--fs) * .82);margin-left:3px}
+  #plgPrintArea .pp-k .pp-tot{font-size:var(--fs)}
+  #plgPrintArea .pp-k .pp-w{font-weight:700}#plgPrintArea .pp-k .pp-w i{font-style:normal;font-weight:400;margin-left:3px}
   #plgPrintArea table.pp{width:100%;border-collapse:collapse;table-layout:fixed}
   #plgPrintArea .pp th,#plgPrintArea .pp td{border:1px solid #c8c8c8;padding:2px 3px;text-align:center;vertical-align:middle}
   #plgPrintArea .pp-wk{background:#203864;color:#fff;font-weight:800;font-size:10px}
@@ -9828,16 +9843,29 @@ function plgBlocks(from, to, o) {                                             //
   }
   return out;
 }
-function plgPrintHtml(blocks, R) {
-  const fr = iso => plgFr(iso) + '/' + iso.slice(0, 4), we = iso => { const g = plgD(iso).getUTCDay(); return g === 0 || g === 6; };
-  let h = '<div class="pp-top"><div class="pp-t">Planning EDG · ' + plgE(plgNomResto()) + '</div><div class="pp-s">Du ' + fr(R.from) + ' au ' + fr(R.to) + ' · imprimé le ' + new Date().toLocaleDateString('fr-FR') + '</div></div>';
-  blocks.forEach(b => {
-    h += '<div class="pp-block"><table class="pp"><colgroup><col style="width:15%"><col span="7" style="width:11.5%"><col style="width:6.5%"></colgroup><thead><tr><th class="pp-wk">SEMAINE ' + b.wk + '</th>' + b.days.map(d => '<th class="pp-d' + (we(d) ? ' we' : '') + '"><span>' + PLG_J[plgD(d).getUTCDay()] + '</span><b>' + plgFr(d) + '</b></th>').join('') + '<th class="pp-d"><span>Total</span></th></tr>';
+function plgPrintHtml(blocks, R, npp) {                                       // npp = semaines par page (1 à 6) : au-delà de 2, mise en page compacte (cellules sur une ligne, hauteur calculée pour tenir sur la page)
+  npp = Math.max(1, Math.min(6, Math.round(+npp) || 2));
+  const fr = iso => plgFr(iso) + '/' + iso.slice(0, 4), we = iso => { const g = plgD(iso).getUTCDay(); return g === 0 || g === 6; }, compact = npp > 2;
+  const top = (a, b) => '<div class="pp-top"><div class="pp-t">Planning EDG · ' + plgE(plgNomResto()) + '</div><div class="pp-s">Du ' + fr(a) + ' au ' + fr(b) + ' · imprimé le ' + new Date().toLocaleDateString('fr-FR') + '</div></div>';
+  const lanes = b => (b.bars.length ? Math.max(...b.bars.map(x => x.ln)) + 1 : 0), evl = b => (b.evs.length ? Math.max(1, ...[0, 1, 2, 3, 4, 5, 6].map(i => b.evs.filter(e => e.j === i).length)) : 0);
+  const block = (b, st) => {
+    let h = '<div class="pp-block' + (compact ? ' pp-k' : '') + '"' + (st ? ' style="' + st + '"' : '') + '><table class="pp"><colgroup><col style="width:' + (compact ? 16 : 15) + '%"><col span="7" style="width:' + (compact ? 11.4 : 11.5) + '%"><col style="width:' + (compact ? 4.2 : 6.5) + '%"></colgroup><thead><tr><th class="pp-wk">' + (compact ? 'SEM. ' : 'SEMAINE ') + b.wk + '</th>' + b.days.map(d => '<th class="pp-d' + (we(d) ? ' we' : '') + '"><span>' + PLG_J[plgD(d).getUTCDay()] + '</span><b>' + plgFr(d) + '</b></th>').join('') + '<th class="pp-d"><span>' + (compact ? 'Tot.' : 'Total') + '</span></th></tr>';
     if (b.bars.length) h += '<tr><th class="pp-l">Campagnes</th><th colspan="7" class="pp-lane"><div class="pp-gr">' + b.bars.map(x => '<span class="pp-cb' + (x.l ? ' l' : '') + (x.r ? ' r' : '') + '" style="grid-column:' + (x.s + 1) + '/' + (x.e + 2) + ';grid-row:' + (x.ln + 1) + '">' + (x.l ? '‹ ' : '') + plgE(x.txt) + (x.r ? ' ›' : '') + '</span>').join('') + '</div></th><th></th></tr>';
     if (b.evs.length) h += '<tr><th class="pp-l">Événements</th>' + b.days.map((d, i) => '<th class="pp-e">' + b.evs.filter(e => e.j === i).map(e => '<span>' + plgE(e.txt) + '</span>').join('') + '</th>').join('') + '<th></th></tr>';
-    h += '</thead><tbody>' + b.rows.map(r => '<tr><td class="pp-n"><b>' + plgE(r.p.prenom) + '</b><small>' + plgE(PLG_FN[r.p.fonction] || r.p.fonction) + (r.fj ? ' · 218 j' : '') + '</small></td>' + r.cells.map(c => '<td><div class="pp-c" style="' + (c.bg ? 'background:' + c.bg + ';color:' + c.fg + ';' : '') + '">' + plgE(c.l) + '</div><div class="pp-h">' + plgE(c.h) + '</div></td>').join('') + '<td class="pp-tot">' + plgE(r.tot) + '</td></tr>').join('') + '</tbody></table></div>';
-  });
-  return h;
+    h += '</thead><tbody>' + b.rows.map(r => '<tr><td class="pp-n"><b>' + plgE(r.p.prenom) + '</b><small>' + plgE(PLG_FN[r.p.fonction] || r.p.fonction) + (r.fj ? ' · 218 j' : '') + '</small></td>'
+      + r.cells.map(c => compact
+        ? '<td class="pp-w" style="' + (c.bg ? 'background:' + c.bg + ';color:' + c.fg + ';' : '') + '">' + plgE(c.l) + (c.h ? '<i>' + plgE(c.h) + '</i>' : '') + '</td>'
+        : '<td><div class="pp-c" style="' + (c.bg ? 'background:' + c.bg + ';color:' + c.fg + ';' : '') + '">' + plgE(c.l) + '</div><div class="pp-h">' + plgE(c.h) + '</div></td>').join('') + '<td class="pp-tot">' + plgE(r.tot) + '</td></tr>').join('') + '</tbody></table></div>';
+    return h;
+  };
+  // hauteur de ligne commune à une page : A4 paysage = 194 mm utiles, moins l'en-tête de page et les espaces entre semaines (en dessous de 2,4 mm la page devient illisible : équipe nombreuse → moins de semaines par page)
+  const RH = pg => Math.min(5, (186 - 7 - 1.6 * pg.length) / (pg.reduce((a, b) => a + 1.2 + lanes(b) + evl(b) + b.rows.length, 0) || 1) - 0.3), pagesOf = k => { const o = []; for (let i = 0; i < blocks.length; i += k) o.push(blocks.slice(i, i + k)); return o; };
+  let k = npp; if (compact) while (k > 1 && Math.min(...pagesOf(k).map(RH)) < 2.4) k--;
+  plgPrintHtml.used = k;
+  return pagesOf(k).map(pg => {
+    let st = ''; if (compact) { const rh = Math.max(1.6, RH(pg)), fs = Math.max(4.6, Math.min(8.5, rh * 3.78 * .56)); st = '--rh:' + rh.toFixed(2) + 'mm;--fs:' + fs.toFixed(2) + 'px'; }
+    return '<div class="pp-page">' + top(pg[0].days[0], pg[pg.length - 1].days[6]) + pg.map(b => block(b, st)).join('') + '</div>';
+  }).join('');
 }
 function plgXMsg(t, k) { const m = document.getElementById('plgXm'); if (m) { m.textContent = t || ''; m.style.color = k === 'err' ? '#c0392b' : (k === 'ok' ? '#1e8449' : ''); } else plgMsg(t, k); }
 function plgXRange() {
@@ -9859,7 +9887,7 @@ function plgExpOpen() {
   o.innerHTML = '<div class="plg-md" role="dialog" aria-label="Exporter ou imprimer le planning"><div class="plg-mh"><b>Exporter / imprimer le planning</b><button class="plg-btn" onclick="plgExpClose()" aria-label="Fermer">✕</button></div>'
     + '<div class="plg-mr"><label>Du <input type="date" class="plg-in" id="plgXd1" value="' + PLG.ws + '"></label><label>au <input type="date" class="plg-in" id="plgXd2" value="' + plgAdd(PLG.ws, 13) + '"></label></div>'
     + '<div class="plg-mq"><button class="plg-btn" onclick="plgXq(7)">7 jours</button><button class="plg-btn" onclick="plgXq(14)">2 semaines</button><button class="plg-btn" onclick="plgXq(28)">4 semaines</button><button class="plg-btn" onclick="plgXq(91)">13 semaines</button><button class="plg-btn" onclick="plgXq(0)">Le mois</button></div>'
-    + '<div class="plg-mr"><label><input type="checkbox" id="plgXc" checked> Campagnes</label><label><input type="checkbox" id="plgXe" checked> Événements</label></div>'
+    + '<div class="plg-mr"><label><input type="checkbox" id="plgXc" checked> Campagnes</label><label><input type="checkbox" id="plgXe" checked> Événements</label><label>Semaines par page <select class="plg-in" id="plgXn" title="PDF : nombre de semaines réunies sur une même page (6 = compact ; réduit automatiquement si l\'équipe est nombreuse)"><option value="6" selected>6 (compact)</option><option value="4">4</option><option value="3">3</option><option value="2">2 (détaillé)</option><option value="1">1</option></select></label></div>'
     + '<div class="plg-ma"><button class="plg-btn pri" onclick="plgPrint()">Imprimer / enregistrer en PDF</button><button class="plg-btn" onclick="plgExportVisuel()">Excel (même visuel)</button><button class="plg-btn" id="plgExpModel" onclick="plgExport()" title="Classeur au format du modèle MODULATION : 4 cycles de 13 semaines et la synthèse">Excel modèle (cycles)</button></div>'
     + '<div id="plgXm" class="plg-mm">Choisissez les dates (92 jours au maximum). Pour un PDF : « Imprimer / enregistrer en PDF », puis « Enregistrer au format PDF » dans la fenêtre d\'impression. Les modifications non enregistrées sont incluses.</div></div>';
   host.appendChild(o);
@@ -9868,7 +9896,7 @@ async function plgPrint() {
   const R = plgXRange(); if (!R) return; plgXMsg('Préparation de l\'impression…');
   await plgFetchWeeks(plgAdd(R.from, -7), plgAdd(R.to, 7));
   const blocks = plgBlocks(R.from, R.to, R); let a = document.getElementById('plgPrintArea'); if (a) a.remove();
-  a = document.createElement('div'); a.id = 'plgPrintArea'; a.innerHTML = plgPrintHtml(blocks, R); document.body.appendChild(a);
+  a = document.createElement('div'); a.id = 'plgPrintArea'; a.innerHTML = plgPrintHtml(blocks, R, +(document.getElementById('plgXn') || {}).value || 6); document.body.appendChild(a);
   if (window.__PLG_NOPRINT) { plgXMsg('(test) zone d\'impression prête', 'ok'); return; }
   document.body.classList.add('plg-printing');
   const fin = () => { document.body.classList.remove('plg-printing'); const x = document.getElementById('plgPrintArea'); if (x) x.remove(); window.removeEventListener('afterprint', fin); };
@@ -10411,7 +10439,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261104-215101';
+const BUILD_VERSION = '20261104-220708';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
