@@ -9196,6 +9196,12 @@ function igGo() {
 .plg-palbox .plg-p0{grid-column:4/7;width:auto;height:26px;font-size:.7rem;font-weight:700;color:var(--text);background:var(--card2)}
 #espace-planning .plg-sec{box-shadow:0 1px 3px rgba(0,0,0,.04)}
 #espace-planning .plg-sec>summary:hover{color:var(--gold)}
+#espace-planning .plg-ov{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:14px}
+#espace-planning .plg-md{background:var(--card);color:var(--text);border-radius:16px;padding:16px 18px;width:min(580px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+#espace-planning .plg-mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:1rem}
+#espace-planning .plg-mr{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:.8rem;align-items:center}
+#espace-planning .plg-mq,#espace-planning .plg-ma{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+#espace-planning .plg-mm{font-size:.74rem;color:var(--muted);margin-top:8px;line-height:1.5}
 #espace-planning table.plg{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.78rem;min-width:760px}
 #espace-planning table.plg th{font-weight:700;color:var(--muted);font-size:.7rem;padding:6px 2px;text-align:center}
 #espace-planning table.plg td{padding:3px 2px;border-top:1px solid var(--border);vertical-align:middle;text-align:center}
@@ -9221,6 +9227,35 @@ function igGo() {
 #espace-planning .plg-sum td,#espace-planning .plg-sum th{font-size:.72rem}
 #espace-planning .plg-now{background:rgba(184,134,11,.12)}
 </style>
+<style>
+#plgPrintArea{display:none}
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  body.plg-printing{background:#fff!important;color:#111!important}
+  body.plg-printing>*:not(#plgPrintArea){display:none!important}
+  body.plg-printing #plgPrintArea{display:block!important;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:9.5px}
+  #plgPrintArea *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+  #plgPrintArea .pp-top{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px}
+  #plgPrintArea .pp-t{font-size:15px;font-weight:800}#plgPrintArea .pp-s{font-size:10px;color:#555}
+  #plgPrintArea .pp-block{break-inside:avoid;page-break-inside:avoid;margin:0 0 7mm}
+  #plgPrintArea .pp-block:nth-of-type(2n){break-after:page;page-break-after:always}
+  #plgPrintArea table.pp{width:100%;border-collapse:collapse;table-layout:fixed}
+  #plgPrintArea .pp th,#plgPrintArea .pp td{border:1px solid #c8c8c8;padding:2px 3px;text-align:center;vertical-align:middle}
+  #plgPrintArea .pp-wk{background:#203864;color:#fff;font-weight:800;font-size:10px}
+  #plgPrintArea .pp-d{background:#ededed;font-size:9px;line-height:1.25}#plgPrintArea .pp-d span{display:block;text-transform:uppercase;letter-spacing:.05em;font-size:8px;color:#555}#plgPrintArea .pp-d.we span{color:#b45309}#plgPrintArea .pp-d b{font-size:11px}
+  #plgPrintArea .pp-l{background:#f6f6f6;font-size:8px;color:#666;text-align:left}
+  #plgPrintArea .pp-lane{padding:1px 2px!important}
+  #plgPrintArea .pp-gr{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  #plgPrintArea .pp-cb{font-size:8px;font-weight:800;padding:1px 4px;background:#fbe5d6;color:#9a3412;border-left:3px solid #ea580c;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+  #plgPrintArea .pp-cb.l{border-left-width:0}
+  #plgPrintArea .pp-e{background:#fff;vertical-align:top!important;min-height:14px}
+  #plgPrintArea .pp-e span{display:block;font-size:8px;line-height:1.25;font-weight:700;color:#0e7490;background:#d6f1f7;border-radius:3px;padding:1px 3px;margin:1px 0;white-space:normal;word-break:break-word;text-align:left}
+  #plgPrintArea .pp-n{text-align:left!important;padding-left:5px!important}#plgPrintArea .pp-n b{display:block;font-size:10px}#plgPrintArea .pp-n small{display:block;font-size:7.5px;color:#666}
+  #plgPrintArea .pp-c{font-weight:800;font-size:10px;min-height:15px;line-height:15px;border-radius:4px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #plgPrintArea .pp-h{font-size:8px;color:#444;min-height:10px;line-height:10px;margin-top:1px;white-space:nowrap}
+  #plgPrintArea .pp-tot{font-weight:800;font-size:10px}
+}
+</style>
 <div id="espace-planning" style="display:none">
   <div class="main">
     <div class="esp-page-head">
@@ -9244,8 +9279,8 @@ const plgE = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&l
 // ── dates (UTC : pas de décalage d'heure d'été) ──
 const plgD = s => new Date(s + 'T00:00:00Z'), plgIso = d => d.toISOString().slice(0, 10), plgAdd = (s, n) => { const d = plgD(s); d.setUTCDate(d.getUTCDate() + n); return plgIso(d); };
 const plgSun = s => plgAdd(s, -plgD(s).getUTCDay()), plgWS = s => plgAdd(s, -((plgD(s).getUTCDay() - plgOff() + 7) % 7)), plgThu = ws => plgAdd(ws, 4 - plgOff()), plgRaw = sun => PLG.weeks[PLG.resto + '|' + sun], plgTouch = date => { PLG.dirty = true; PLG.dk.add(plgSun(date)); }, plgFr = s => s.slice(8, 10) + '/' + s.slice(5, 7), plgWk = (a, b) => Math.round((plgD(b) - plgD(a)) / 6048e5);
-function plgCycleStart(ws) {                                                  // dimanche qui ouvre le cycle de 13 semaines contenant la semaine ws
-  const base0 = plgAdd(PLG.cfg.debut_cycle || plgSun(plgThu(ws).slice(0, 4) + '-01-01'), plgOff());   // le cycle commence le dimanche (ou le lundi suivant si la semaine commence le lundi)
+function plgCycleStart(ws0) {                                                 // dimanche qui ouvre le cycle de 13 semaines contenant la semaine ws
+  const ws = plgWS(ws0), base0 = plgAdd(PLG.cfg.debut_cycle || plgSun(plgThu(ws).slice(0, 4) + '-01-01'), plgOff());   // le cycle commence le dimanche (ou le lundi suivant si la semaine commence le lundi) ; une fenêtre qui commence en cours de semaine compte pour sa semaine
   const n = Math.floor(plgWk(base0, ws) / 13); return { start: plgAdd(base0, n * 13 * 7), n: ((n % 4) + 4) % 4 + 1, base: base0 };
 }
 const plgCan = () => !!PLG.rights && ['directeur', 'superviseur', 'franchise', 'owner'].includes(PLG.rights.role);
@@ -9278,7 +9313,6 @@ async function plgLoad() {
   const f = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto };
   const rc = await plgApi('/rest/v1/planning_resto?' + plgQ(f)), r0 = rc.ok && rc.j && rc.j[0];
   PLG.cfg = r0 ? { modulation: !!r0.modulation, debut_cycle: r0.debut_cycle || null, seuils: r0.seuils || {}, lundi: +r0.semaine_planning === 1 } : { modulation: false, debut_cycle: null, seuils: {}, lundi: false };
-  if (plgD(PLG.ws).getUTCDay() !== plgOff()) PLG.ws = plgWS(plgAdd(PLG.ws, 3));         // la semaine affichée commence le jour choisi pour ce restaurant
   const cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 14);
   const rs = await Promise.all([
     PLG.def ? null : plgApi('/rest/v1/planning_codes_defaut?' + plgQ({ franchise: 'eq.' + PLG.FR, order: 'ordre.asc' })),
@@ -9286,6 +9320,7 @@ async function plgLoad() {
     rc,
     plgApi('/rest/v1/planning_codes?' + plgQ(Object.assign({ order: 'ordre.asc' }, f))),
     plgFetchWeeks(from, to)]);
+  PLG.rng = { resto: PLG.resto, from, to };
   if (rs[0]) PLG.def = rs[0].ok && Array.isArray(rs[0].j) ? rs[0].j : [];
   if (!rs[1].ok) { PLG.busy = false; card.innerHTML = '<div class="plg-box plg-alert">Impossible de charger l\'équipe : ' + plgE((rs[1].j && rs[1].j.message) || 'le planning n\'est pas encore installé côté base.') + '</div>'; return; }
   PLG.team = rs[1].j || [];
@@ -9357,8 +9392,8 @@ function plgView(ws, pid) {                                                  // 
     set(t, k, v) { if (typeof k === 'string' && /^[0-6]$/.test(k)) { const a = at(+k), w = plgW(a[0]); if (!Array.isArray(w[pid])) w[pid] = ['', '', '', '', '', '', '']; w[pid][a[1]] = v; PLG.dirty = true; PLG.dk.add(a[0]); return true; } return Reflect.set(t, k, v); }
   });
 }
-const plgRow = (ws, pid) => { if (plgOff()) return plgView(ws, pid); const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
-const plgPeek = (ws, pid) => { if (plgOff()) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
+const plgRow = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) return plgView(ws, pid); const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
+const plgPeek = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
 function plgEvList(ws) { const out = []; for (let j = 0; j < 7; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); } return out; }   // événements de la semaine affichée, avec leur jour et leur place dans la semaine enregistrée
 // ── analyse d'une personne pour la semaine affichée ──
 function plgAnalyse(p, codes) {
@@ -9403,9 +9438,9 @@ function plgRender() {
   let h = '<div class="plg-bar"><div class="plg-tabs">' + PLG.restos.map(k => { const cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, kk = plgE(k);
       return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
     + '<label class="plg-mod"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
-  h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgGo(-1)" aria-label="Semaine précédente">‹</button><b>Semaine du ' + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgGo(1)" aria-label="Semaine suivante">›</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button></div>'
-    + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Réglage du restaurant : il change l\'affichage des semaines pour tous ceux qui ouvrent ce planning (le planning enregistré ne change pas)"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, ws) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
-  h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la semaine' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
+  h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgStep(-7)" title="Reculer de 7 jours">« 7 j</button><button class="plg-btn" onclick="plgStep(-1)" title="Reculer d\'un jour : la veille et les jours précédents restent à l\'écran">‹ 1 j</button><b>' + (plgD(ws).getUTCDay() === plgOff() ? 'Semaine du ' : 'Du ') + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgStep(1)" title="Avancer d\'un jour">1 j ›</button><button class="plg-btn" onclick="plgStep(7)" title="Avancer de 7 jours">7 j »</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button><input type="date" class="plg-in" value="' + ws + '" onchange="plgJump(this.value)" title="Afficher 7 jours à partir de cette date" aria-label="Aller à une date"></div>'
+    + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Réglage du restaurant : il change l\'affichage des semaines pour tous ceux qui ouvrent ce planning (le planning enregistré ne change pas)"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, plgWS(ws)) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
+  h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la période' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
   if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
   else {
     const lanes = []; const bars = camps.slice().sort((a, b) => (a.periode < b.periode ? -1 : 1)).map(e => { const s0 = Math.max(0, dd(ws, e.periode)), e0 = Math.min(6, dd(ws, e.fin || e.periode)); let ln = lanes.findIndex(end => end < s0); if (ln < 0) { ln = lanes.length; lanes.push(-1); } lanes[ln] = e0;
@@ -9427,7 +9462,7 @@ function plgRender() {
     });
     h += '</tbody></table></div><datalist id="plgCodes">' + list.map(c => '<option value="' + plgE(c.code) + '">' + plgE(c.libelle) + '</option>').join('') + '</datalist>';
   }
-  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExp" onclick="plgExport()" title="Classeur au format du modèle MODULATION : 4 cycles de 13 semaines et la synthèse">Exporter en Excel</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
   if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
   h += alerts.length ? '<div class="plg-box plg-alert"><b>À vérifier : règles sociales (' + alerts.length + ')</b><ul style="margin:4px 0 0 16px;padding:0">' + alerts.slice(0, 8).map(t => '<li>' + plgE(t) + '</li>').join('') + '</ul></div>' : (T.length ? '<div class="plg-box plg-ok">Aucune alerte sociale cette semaine.</div>' : '');
   if (rems.length) h += '<div class="plg-box plg-rem"><b style="color:var(--text)">Remarques (non bloquantes)</b><ul style="margin:4px 0 0 16px;padding:0">' + rems.map(t => '<li>' + plgE(t) + '</li>').join('') + '</ul></div>';
@@ -9442,7 +9477,7 @@ function plgSummary(codes) {
   const T = PLG.team; if (!T.length) return '<div style="color:var(--muted);font-size:.8rem">Rien à résumer : l\'équipe est vide.</div>';
   const th = 'style="padding:5px 3px"', fmt = h => plgH(h);
   if (PLG.cfg.modulation) {
-    const cy = plgCycleStart(PLG.ws), weeks = Array.from({ length: 13 }, (_, i) => plgAdd(cy.start, i * 7)), cur = Math.min(12, Math.max(0, plgWk(cy.start, PLG.ws)));
+    const cy = plgCycleStart(PLG.ws), weeks = Array.from({ length: 13 }, (_, i) => plgAdd(cy.start, i * 7)), cur = Math.min(12, Math.max(0, plgWk(cy.start, plgWS(PLG.ws))));
     let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:6px">Cycle ' + cy.n + ' : du ' + plgFr(cy.start) + ' au ' + plgFr(plgAdd(cy.start, 90)) + '/' + plgAdd(cy.start, 90).slice(0, 4) + ' · objectif = 13 × heures du contrat (455 h à temps plein ; 1 820 h sur les 4 cycles)</div><div class="plg-wrap"><table class="plg plg-sum" style="min-width:900px"><thead><tr><th style="text-align:left;width:120px">Personne</th>' + weeks.map((w, i) => '<th class="' + (i === cur ? 'plg-now' : '') + '">S' + (i + 1) + '<br><span style="font-weight:400">' + plgFr(w) + '</span></th>').join('') + '<th>Total</th><th>Objectif</th><th>Écart</th></tr></thead><tbody>';
     T.forEach(p => { let tot = 0; const fj = plgFj(p), cible = 13 * (+p.heures_hebdo || 35), asof = (+p.heures_hebdo || 35) * (cur + 1);
       const cells = weeks.map((w, i) => { const r = plgPeek(w, p.id), hh = r ? r.reduce((a, v) => { const x = plgInfo(v, codes); return a + (fj ? plgJ(x) : x.h); }, 0) : null; if (hh != null && i <= cur) tot += hh; else if (hh != null) tot += hh; return '<td class="' + (i === cur ? 'plg-now' : '') + '" style="' + (hh == null ? 'color:var(--muted)' : '') + '">' + (hh == null ? '·' : (+hh.toFixed(2)).toString().replace('.', ',') + (fj ? ' j' : '')) + '</td>'; }).join('');
@@ -9567,8 +9602,15 @@ function plgPal(ev, pid, j) {
 }
 document.addEventListener('click', e => { if (!(e.target.closest && e.target.closest('#plgPalBox'))) plgPalClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') plgPalClose(); });
-function plgGo(d) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer de semaine les perdrait. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgAdd(PLG.ws, 7 * d); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
-function plgToday() { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgIso(new Date())); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
+async function plgEnsure() {                                                 // charge seulement les semaines enregistrées qui manquent pour la fenêtre affichée
+  const cy = plgCycleStart(PLG.ws), from = plgAdd([cy.start, plgAdd(PLG.ws, -77)].sort()[0], -7), to = plgAdd(PLG.ws, 14), R = PLG.rng, same = R && R.resto === PLG.resto;
+  if (same && R.from <= from && R.to >= to) return;
+  const f2 = same ? [R.from < from ? R.from : from, R.to > to ? R.to : to] : [from, to];
+  await plgFetchWeeks(f2[0], f2[1]); PLG.rng = { resto: PLG.resto, from: f2[0], to: f2[1] };
+}
+async function plgGoto(d) { if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return; PLG.ws = d; PLG.month = d.slice(0, 7); PLG.conflict = null; await plgEnsure(); plgRender(); }
+const plgStep = n => plgGoto(plgAdd(PLG.ws, n)), plgJump = v => plgGoto(v), plgGo = d => plgStep(7 * d);
+const plgToday = () => plgGoto(plgWS(plgIso(new Date())));
 function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
 async function plgSetMod(v) {
   const r = await plgApi('/rest/v1/rpc/planning_resto_save', 'POST', { f: PLG.FR, resto: PLG.resto, p_modulation: !!v, p_debut: PLG.cfg.debut_cycle, p_seuils: PLG.cfg.seuils || {} });
@@ -9645,15 +9687,115 @@ function plgWorkbook(base) {
   X.book_append_sheet(wb, sy, '35H OU MODULATION');
   return wb;
 }
-async function plgExport() {
-  const b = document.getElementById('plgExp'); if (b) { b.disabled = true; b.textContent = 'Préparation du classeur…'; }
+// ══ EXPORT / IMPRESSION : même visuel que la grille (lettre colorée, horaires dessous, campagnes, événements), pour les dates choisies ══
+const plgIsoW = iso => { const d = plgD(iso), dow = (d.getUTCDay() + 6) % 7, th = new Date(d.getTime() + (3 - dow) * 864e5), j1 = new Date(Date.UTC(th.getUTCFullYear(), 0, 1)); return 1 + Math.floor((th - j1) / 864e5 / 7); };
+const plgDay = (pid, iso) => { const r = (plgRaw(plgSun(iso)) || {})[pid]; return Array.isArray(r) ? (r[plgD(iso).getUTCDay()] || '') : ''; };   // lecture sans effet de bord
+const plgNomResto = () => (typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto) || '';
+const plgCampsDe = (ws, we) => (typeof pcAll === 'function' ? pcAll() : []).filter(e => e.type === 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === 'FRANCHISE' || e.restaurant === PLG.resto));
+function plgBlocks(from, to, o) {                                             // une « semaine » de 7 jours à partir de la date de début, autant que nécessaire
+  const codes = plgCodes(), out = [];
+  for (let ws = from; ws <= to; ws = plgAdd(ws, 7)) {
+    const we = plgAdd(ws, 6), days = Array.from({ length: 7 }, (_, i) => plgAdd(ws, i)), dd = (a, b) => Math.round((plgD(b) - plgD(a)) / 864e5), lanes = [];
+    const bars = o.camps ? plgCampsDe(ws, we).sort((a, b) => (a.periode < b.periode ? -1 : 1)).map(e => { const s0 = Math.max(0, dd(ws, e.periode)), e0 = Math.min(6, dd(ws, e.fin || e.periode)); let ln = lanes.findIndex(x => x < s0); if (ln < 0) { ln = lanes.length; lanes.push(-1); } lanes[ln] = e0; return { s: s0, e: e0, ln, l: e.periode < ws, r: (e.fin || e.periode) > we, txt: e.detail || 'Campagne' }; }) : [];
+    const evs = o.evs ? plgEvList(ws).map(x => ({ j: x.j, txt: (x.e.h ? x.e.h + ' ' : '') + x.e.x })) : [];
+    const rows = PLG.team.map(p => {
+      let tot = 0, jours = 0; const fj = plgFj(p);
+      const cells = days.map(d => { const v = plgDay(p.id, d), x = plgInfo(v, codes), P = plgParts(v), g = P.h ? plgRng(P.h) : null; tot += x.h; jours += plgJ(x);
+        const h = P.h ? (g ? plgFmtH(g.d) + '-' + plgFmtH(g.f) : P.h) : (x.t === 'code' && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : '');
+        return { l: P.l, h, bg: x.bg || '', fg: x.fg || '' }; });
+      return { p, fj, cells, tot: fj ? jours + ' j' : (tot ? plgH(tot) : '') };
+    });
+    out.push({ ws, we, days, wk: plgIsoW(ws), bars, nl: lanes.length, evs, rows });
+  }
+  return out;
+}
+function plgPrintHtml(blocks, R) {
+  const fr = iso => plgFr(iso) + '/' + iso.slice(0, 4), we = iso => { const g = plgD(iso).getUTCDay(); return g === 0 || g === 6; };
+  let h = '<div class="pp-top"><div class="pp-t">Planning EDG · ' + plgE(plgNomResto()) + '</div><div class="pp-s">Du ' + fr(R.from) + ' au ' + fr(R.to) + ' · imprimé le ' + new Date().toLocaleDateString('fr-FR') + '</div></div>';
+  blocks.forEach(b => {
+    h += '<div class="pp-block"><table class="pp"><colgroup><col style="width:15%"><col span="7" style="width:11.5%"><col style="width:6.5%"></colgroup><thead><tr><th class="pp-wk">SEMAINE ' + b.wk + '</th>' + b.days.map(d => '<th class="pp-d' + (we(d) ? ' we' : '') + '"><span>' + PLG_J[plgD(d).getUTCDay()] + '</span><b>' + plgFr(d) + '</b></th>').join('') + '<th class="pp-d"><span>Total</span></th></tr>';
+    if (b.bars.length) h += '<tr><th class="pp-l">Campagnes</th><th colspan="7" class="pp-lane"><div class="pp-gr">' + b.bars.map(x => '<span class="pp-cb' + (x.l ? ' l' : '') + (x.r ? ' r' : '') + '" style="grid-column:' + (x.s + 1) + '/' + (x.e + 2) + ';grid-row:' + (x.ln + 1) + '">' + (x.l ? '‹ ' : '') + plgE(x.txt) + (x.r ? ' ›' : '') + '</span>').join('') + '</div></th><th></th></tr>';
+    if (b.evs.length) h += '<tr><th class="pp-l">Événements</th>' + b.days.map((d, i) => '<th class="pp-e">' + b.evs.filter(e => e.j === i).map(e => '<span>' + plgE(e.txt) + '</span>').join('') + '</th>').join('') + '<th></th></tr>';
+    h += '</thead><tbody>' + b.rows.map(r => '<tr><td class="pp-n"><b>' + plgE(r.p.prenom) + '</b><small>' + plgE(PLG_FN[r.p.fonction] || r.p.fonction) + (r.fj ? ' · 218 j' : '') + '</small></td>' + r.cells.map(c => '<td><div class="pp-c" style="' + (c.bg ? 'background:' + c.bg + ';color:' + c.fg + ';' : '') + '">' + plgE(c.l) + '</div><div class="pp-h">' + plgE(c.h) + '</div></td>').join('') + '<td class="pp-tot">' + plgE(r.tot) + '</td></tr>').join('') + '</tbody></table></div>';
+  });
+  return h;
+}
+function plgXMsg(t, k) { const m = document.getElementById('plgXm'); if (m) { m.textContent = t || ''; m.style.color = k === 'err' ? '#c0392b' : (k === 'ok' ? '#1e8449' : ''); } else plgMsg(t, k); }
+function plgXRange() {
+  const a = (document.getElementById('plgXd1') || {}).value, b = (document.getElementById('plgXd2') || {}).value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(a || '') || !/^\d{4}-\d{2}-\d{2}$/.test(b || '')) { plgXMsg('Choisissez la date de début et la date de fin.', 'err'); return null; }
+  if (b < a) { plgXMsg('La date de fin est avant la date de début.', 'err'); return null; }
+  if (plgWk(a, b) > 13) { plgXMsg('92 jours au maximum (13 semaines) : réduisez la période.', 'err'); return null; }
+  return { from: a, to: b, camps: !!(document.getElementById('plgXc') || {}).checked, evs: !!(document.getElementById('plgXe') || {}).checked };
+}
+function plgXq(n) {                                                           // périodes rapides à partir de la date de début
+  const a = document.getElementById('plgXd1').value || PLG.ws; let b;
+  if (n === 0) { const m = a.slice(0, 7); document.getElementById('plgXd1').value = m + '-01'; b = plgIso(new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0))); } else b = plgAdd(a, n - 1);
+  document.getElementById('plgXd2').value = b;
+}
+function plgExpClose() { const o = document.getElementById('plgExpOv'); if (o) o.remove(); }
+function plgExpOpen() {
+  plgExpClose(); const host = document.getElementById('espace-planning'); if (!host) return;
+  const o = document.createElement('div'); o.id = 'plgExpOv'; o.className = 'plg-ov'; o.onclick = e => { if (e.target === o) plgExpClose(); };
+  o.innerHTML = '<div class="plg-md" role="dialog" aria-label="Exporter ou imprimer le planning"><div class="plg-mh"><b>Exporter / imprimer le planning</b><button class="plg-btn" onclick="plgExpClose()" aria-label="Fermer">✕</button></div>'
+    + '<div class="plg-mr"><label>Du <input type="date" class="plg-in" id="plgXd1" value="' + PLG.ws + '"></label><label>au <input type="date" class="plg-in" id="plgXd2" value="' + plgAdd(PLG.ws, 13) + '"></label></div>'
+    + '<div class="plg-mq"><button class="plg-btn" onclick="plgXq(7)">7 jours</button><button class="plg-btn" onclick="plgXq(14)">2 semaines</button><button class="plg-btn" onclick="plgXq(28)">4 semaines</button><button class="plg-btn" onclick="plgXq(91)">13 semaines</button><button class="plg-btn" onclick="plgXq(0)">Le mois</button></div>'
+    + '<div class="plg-mr"><label><input type="checkbox" id="plgXc" checked> Campagnes</label><label><input type="checkbox" id="plgXe" checked> Événements</label></div>'
+    + '<div class="plg-ma"><button class="plg-btn pri" onclick="plgPrint()">Imprimer / enregistrer en PDF</button><button class="plg-btn" onclick="plgExportVisuel()">Excel (même visuel)</button><button class="plg-btn" id="plgExpModel" onclick="plgExport()" title="Classeur au format du modèle MODULATION : 4 cycles de 13 semaines et la synthèse">Excel modèle (cycles)</button></div>'
+    + '<div id="plgXm" class="plg-mm">Choisissez les dates (92 jours au maximum). Pour un PDF : « Imprimer / enregistrer en PDF », puis « Enregistrer au format PDF » dans la fenêtre d\'impression. Les modifications non enregistrées sont incluses.</div></div>';
+  host.appendChild(o);
+}
+async function plgPrint() {
+  const R = plgXRange(); if (!R) return; plgXMsg('Préparation de l\'impression…');
+  await plgFetchWeeks(plgAdd(R.from, -7), plgAdd(R.to, 7));
+  const blocks = plgBlocks(R.from, R.to, R); let a = document.getElementById('plgPrintArea'); if (a) a.remove();
+  a = document.createElement('div'); a.id = 'plgPrintArea'; a.innerHTML = plgPrintHtml(blocks, R); document.body.appendChild(a);
+  if (window.__PLG_NOPRINT) { plgXMsg('(test) zone d\'impression prête', 'ok'); return; }
+  document.body.classList.add('plg-printing');
+  const fin = () => { document.body.classList.remove('plg-printing'); const x = document.getElementById('plgPrintArea'); if (x) x.remove(); window.removeEventListener('afterprint', fin); };
+  window.addEventListener('afterprint', fin); plgExpClose(); setTimeout(() => window.print(), 200);
+}
+async function plgExportVisuel() {
+  const R = plgXRange(); if (!R) return; plgXMsg('Préparation du classeur…');
+  try {
+    await _loadXlsx(); await plgFetchWeeks(plgAdd(R.from, -7), plgAdd(R.to, 7));
+    const wb = plgWorkbookVisuel(plgBlocks(R.from, R.to, R), R), nm = plgNomResto().replace(/[^A-Za-z0-9À-ÿ]+/g, '_'), file = 'Planning_EDG_' + nm + '_' + R.from + '_au_' + R.to + '.xlsx';
+    if (window.__PLG_CAPTURE) { window.__PLG_CAPTURE(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }), file); } else XLSX.writeFile(wb, file);
+    plgXMsg('✓ ' + file + ' exporté.', 'ok');
+  } catch (e) { plgXMsg('Export impossible : ' + e.message, 'err'); }
+}
+function plgWorkbookVisuel(blocks, R) {                                       // un bloc de 7 jours par semaine : campagnes, événements, puis 2 lignes par personne (lettre colorée / horaires)
+  const X = XLSX.utils, wb = X.book_new(), sh = {}, merges = [], rowsH = [], thin = { style: 'thin', color: { rgb: 'BFBFBF' } }, bd = { top: thin, bottom: thin, left: thin, right: thin }, ctr = { horizontal: 'center', vertical: 'center', wrapText: true };
+  let mr = 0, mc = 9;
+  const put = (r, c, v, st) => { const a = X.encode_cell({ r: r - 1, c: c - 1 }); sh[a] = { v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' }; if (st) sh[a].s = st; if (r > mr) mr = r; };
+  const mg = (r1, c1, r2, c2) => merges.push({ s: { r: r1 - 1, c: c1 - 1 }, e: { r: r2 - 1, c: c2 - 1 } });
+  const HEAD = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '203864' } }, alignment: ctr, border: bd }, DAY = we => ({ font: { bold: true, color: { rgb: we ? 'B45309' : '1A1D2E' } }, fill: { fgColor: { rgb: 'EDEDED' } }, alignment: ctr, border: bd }), LBL = { font: { bold: true, sz: 9, color: { rgb: '6B7280' } }, alignment: { vertical: 'center', wrapText: true }, border: bd };
+  put(1, 1, 'Planning EDG · ' + plgNomResto(), { font: { bold: true, sz: 14 } }); put(2, 1, 'Du ' + plgFr(R.from) + '/' + R.from.slice(0, 4) + ' au ' + plgFr(R.to) + '/' + R.to.slice(0, 4), { font: { color: { rgb: '6B7280' } } });
+  let r = 4;
+  blocks.forEach(b => {
+    put(r, 1, 'SEMAINE ' + b.wk, HEAD); b.days.forEach((d, i) => { const g = plgD(d).getUTCDay(); put(r, 2 + i, PLG_J[g] + ' ' + plgFr(d), DAY(g === 0 || g === 6)); }); put(r, 9, 'Total', DAY(false)); r++;
+    for (let ln = 0; ln < b.nl; ln++) { put(r, 1, ln === 0 ? 'Campagnes' : '', LBL); for (let i = 0; i < 7; i++) put(r, 2 + i, '', { border: bd }); b.bars.filter(x => x.ln === ln).forEach(x => { put(r, 2 + x.s, (x.l ? '‹ ' : '') + x.txt + (x.r ? ' ›' : ''), { font: { bold: true, sz: 9, color: { rgb: '9A3412' } }, fill: { fgColor: { rgb: 'FBE5D6' } }, alignment: ctr, border: bd }); if (x.e > x.s) mg(r, 2 + x.s, r, 2 + x.e); }); put(r, 9, '', { border: bd }); r++; }
+    if (b.evs.length) { put(r, 1, 'Événements', LBL); b.days.forEach((d, i) => put(r, 2 + i, b.evs.filter(e => e.j === i).map(e => e.txt).join('\n'), { font: { sz: 9, color: { rgb: '0E7490' } }, fill: b.evs.some(e => e.j === i) ? { fgColor: { rgb: 'D6F1F7' } } : undefined, alignment: ctr, border: bd })); put(r, 9, '', { border: bd }); rowsH[r - 1] = 30; r++; }
+    b.rows.forEach(row => {
+      put(r, 1, row.p.prenom + '\n' + (PLG_FN[row.p.fonction] || row.p.fonction) + (row.fj ? ' · 218 j' : ''), { font: { bold: true }, alignment: { vertical: 'center', wrapText: true }, border: bd }); put(r + 1, 1, '', { border: bd }); mg(r, 1, r + 1, 1);
+      row.cells.forEach((c, i) => { put(r, 2 + i, c.l, c.bg ? { fill: { fgColor: { rgb: plgRgb(c.bg) } }, font: { bold: true, color: { rgb: plgRgb(c.fg || '#1a1d2e') } }, alignment: ctr, border: bd } : { font: { bold: true }, alignment: ctr, border: bd }); put(r + 1, 2 + i, c.h, { font: { sz: 9, color: { rgb: '595959' } }, alignment: ctr, border: bd }); });
+      put(r, 9, row.tot, { font: { bold: true }, alignment: ctr, border: bd }); put(r + 1, 9, '', { border: bd }); mg(r, 9, r + 1, 9); rowsH[r - 1] = 22; rowsH[r] = 14; r += 2;
+    });
+    r++;
+  });
+  sh['!ref'] = X.encode_range({ s: { r: 0, c: 0 }, e: { r: mr - 1, c: mc - 1 } }); sh['!merges'] = merges; sh['!cols'] = [{ wch: 24 }, ...Array(7).fill({ wch: 15 }), { wch: 10 }]; sh['!rows'] = rowsH.map(h => h ? { hpt: h } : undefined);
+  sh['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 }; sh['!margins'] = { left: .3, right: .3, top: .4, bottom: .4, header: .2, footer: .2 };
+  X.book_append_sheet(wb, sh, 'Planning'); return wb;
+}
+async function plgExport() {                                                 // classeur au format du modèle MODULATION (4 cycles de 13 semaines + synthèse)
+  const b = document.getElementById('plgExpModel'); if (b) { b.disabled = true; b.textContent = 'Préparation…'; }
   try {
     await _loadXlsx(); const base = plgCycleStart(PLG.ws).base; await plgFetchWeeks(plgAdd(base, -7), plgAdd(base, 54 * 7));
     const nm = ((typeof _rtab === 'function' ? _rtab(PLG.resto) : PLG.resto) || '').replace(/[^A-Za-z0-9À-ÿ]+/g, '_'), file = 'Planning_EDG_' + nm + '_' + plgThu(base).slice(0, 4) + '.xlsx', wb = plgWorkbook(base);
     if (window.__PLG_CAPTURE) { window.__PLG_CAPTURE(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }), file); } else XLSX.writeFile(wb, file);
-    plgMsg('✓ ' + file + ' exporté (4 cycles de 13 semaines + synthèse).', 'ok');
-  } catch (e) { plgMsg('Export impossible : ' + e.message, 'err'); }
-  finally { const b2 = document.getElementById('plgExp'); if (b2) { b2.disabled = false; b2.textContent = 'Exporter en Excel'; } }
+    plgXMsg('✓ ' + file + ' exporté (4 cycles de 13 semaines + synthèse).', 'ok');
+  } catch (e) { plgXMsg('Export impossible : ' + e.message, 'err'); }
+  finally { const b2 = document.getElementById('plgExpModel'); if (b2) { b2.disabled = false; b2.textContent = 'Excel modèle (cycles)'; } }
 }
 document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 's' && typeof currentEspace !== 'undefined' && currentEspace === 'planning') { e.preventDefault(); if (PLG.dirty && plgCan()) plgSave(); } });
 window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -10150,7 +10292,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261104-175904';
+const BUILD_VERSION = '20261104-190815';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
