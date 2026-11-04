@@ -1651,6 +1651,7 @@ function renderFormationList() {
   });
   h += '</div>';
   body.innerHTML = h;
+  if (typeof crewPolyRender === 'function') crewPolyRender();
 }
 </script>
 
@@ -8408,6 +8409,74 @@ setInterval(esbTick, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) esbTick(); });
 </script>
 
+<style>
+#crewPoly{margin-top:22px}
+#crewPoly .cp-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px;margin:0 0 4px}
+#crewPoly .cp-h{font-size:1.02rem;font-weight:800;color:var(--text)}
+#crewPoly .cp-sub{font-size:.76rem;color:var(--muted);line-height:1.45;margin:0 0 12px}
+#crewPoly .cp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+#crewPoly .cp-tile{--ac:var(--muted);background:var(--card);border:1.5px solid var(--border);border-left:5px solid var(--ac);border-radius:16px;padding:14px 16px;cursor:pointer;transition:transform .15s,box-shadow .15s}
+#crewPoly .cp-tile:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.10)}
+#crewPoly .cp-tile.ok{--ac:#1e8449}#crewPoly .cp-tile.mid{--ac:#d68910}#crewPoly .cp-tile.low{--ac:#c0392b}#crewPoly .cp-tile.none{--ac:var(--border);cursor:default}#crewPoly .cp-tile.fr{--ac:#6d28d9}
+#crewPoly .cp-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#crewPoly .cp-name{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.9rem;color:var(--text)}
+#crewPoly .cp-big{font-size:2rem;font-weight:900;letter-spacing:-.03em;color:var(--ac);line-height:1}
+#crewPoly .cp-lab{font-size:.7rem;font-weight:700;color:var(--ac);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 8px}
+#crewPoly .cp-row{display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--muted);margin:5px 0}
+#crewPoly .cp-row b{width:70px;font-weight:700;color:var(--text);flex-shrink:0}
+#crewPoly .cp-tr{flex:1;height:7px;border-radius:99px;background:var(--card2);overflow:hidden}
+#crewPoly .cp-fl{height:100%;border-radius:99px;background:var(--ac)}
+#crewPoly .cp-val{width:42px;text-align:right;font-weight:700;color:var(--text)}
+#crewPoly .cp-foot{font-size:.7rem;color:var(--muted);margin-top:8px}
+#crewPoly .cp-det{display:none;margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}
+#crewPoly .cp-tile.open .cp-det{display:block}
+#crewPoly .cp-note{font-size:.76rem;color:var(--muted);padding:10px 12px;border:1.5px dashed var(--border);border-radius:12px}
+</style>
+<script>
+// ══ CREW ACADEMY : niveaux de polyvalence par restaurant (tuiles de l'espace Formation) ══
+// Chiffres agrégés (aucun nom) lus par l'Apps Script dans le service du Crew Academy ; la page ne connaît ni l'adresse ni la clé de ce service.
+const CPOLY = { data: null, err: '', at: 0, busy: null };
+const CPOLY_OK = 0.8, CPOLY_MID = 0.6;                                         // ≥ 80 % : vert · 60 à 80 % : orange · en dessous : rouge
+const cpEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const cpPct = x => (x * 100).toFixed(0) + ' %';
+const cpCls = x => x >= CPOLY_OK ? 'ok' : (x >= CPOLY_MID ? 'mid' : 'low');
+const cpLab = x => x >= CPOLY_OK ? 'Polyvalence solide' : (x >= CPOLY_MID ? 'À consolider' : 'À renforcer');
+function crewPolyLoad() {
+  if (!CPOLY.busy) CPOLY.busy = (async () => {
+    try { const r = await fetch(SHEET_URL + '?action=crew_poly&_=' + Date.now()), j = await r.json(); CPOLY.data = j && j.ok && Array.isArray(j.restaurants) ? j : null; CPOLY.err = CPOLY.data ? '' : (j && j.ok === false ? (j.error || 'erreur') : 'non configuré'); }       // ancien script (action inconnue) ou clé absente : section invisible
+    catch (e) { CPOLY.err = 'hors ligne'; }
+    CPOLY.at = Date.now(); CPOLY.busy = null;
+  })();
+  return CPOLY.busy;
+}
+function cpBar(lab, v) { return '<div class="cp-row"><b>' + lab + '</b><div class="cp-tr"><div class="cp-fl" style="width:' + Math.round(v * 100) + '%"></div></div><span class="cp-val">' + cpPct(v) + '</span></div>'; }
+function cpToggle(el) { el.classList.toggle('open'); }
+async function crewPolyRender() {
+  const body = document.getElementById('formationBody'); if (!body) return;
+  if (!CPOLY.at || Date.now() - CPOLY.at > 300000) await crewPolyLoad();
+  let box = document.getElementById('crewPoly'); if (!box) { box = document.createElement('div'); box.id = 'crewPoly'; body.appendChild(box); }
+  if (!CPOLY.data) { box.innerHTML = CPOLY.err && CPOLY.err !== 'non configuré' ? '<div class="cp-note">Les niveaux de polyvalence du Crew Academy ne sont pas disponibles pour le moment (' + cpEsc(CPOLY.err) + ').</div>' : ''; return; }   // « non configuré » : section invisible
+  const by = {}; CPOLY.data.restaurants.forEach(x => { by[x.key] = x; });
+  const keys = (typeof RESTOS !== 'undefined' ? RESTOS.slice() : []).filter(k => k !== 'FRANCHISE');
+  const link = (typeof FORMATION_LINKS !== 'undefined' && FORMATION_LINKS[0]) ? FORMATION_LINKS[0].url : '';
+  const tot = CPOLY.data.restaurants.filter(x => keys.includes(x.key) && x.equipiers > 0), sumE = tot.reduce((a, x) => a + x.equipiers, 0);
+  let h = '<div class="cp-head"><span class="cp-h">Polyvalence · Crew Academy</span>' + (link ? '<a href="' + cpEsc(link) + '" target="_blank" rel="noopener" style="font-size:.76rem;color:var(--gold);font-weight:700">Ouvrir le suivi ↗</a>' : '') + '</div>'
+    + '<div class="cp-sub">Part des équipiers formés, en moyenne sur les postes Production et Service (même calcul que le site Crew Academy). Mise à jour : ' + cpEsc(CPOLY.data.maj ? new Date(CPOLY.data.maj).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—') + ' · cliquez une tuile pour voir les postes.</div><div class="cp-grid">';
+  if (tot.length > 1) { const g = tot.reduce((a, x) => a + x.global * x.equipiers, 0) / sumE, pr = tot.reduce((a, x) => a + x.production * x.equipiers, 0) / sumE, sv = tot.reduce((a, x) => a + x.service * x.equipiers, 0) / sumE;
+    h += '<div class="cp-tile fr" onclick="cpToggle(this)"><div class="cp-top"><span class="cp-name">Moyenne ' + (tot.length === keys.length ? 'franchise' : 'des restaurants') + '</span><span class="cp-big">' + cpPct(g) + '</span></div><div class="cp-lab">pondérée par l\'effectif</div>' + cpBar('Production', pr) + cpBar('Service', sv) + '<div class="cp-foot">' + sumE + ' équipiers · ' + tot.length + ' restaurants</div></div>'; }
+  keys.forEach(k => {
+    const x = by[k], cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, nm = typeof _rtab === 'function' ? _rtab(k) : k;
+    const av = '<span class="tab-avatar" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>';
+    if (!x) { h += '<div class="cp-tile none"><div class="cp-top"><span class="cp-name">' + av + cpEsc(nm) + '</span></div><div class="cp-foot" style="margin-top:10px">Pas encore suivi dans le Crew Academy.</div></div>'; return; }
+    const det = x.postes.slice().sort((a, b) => a.pct - b.pct).map(p => cpBar(cpEsc(p.poste).slice(0, 24), p.pct)).join('');
+    h += '<div class="cp-tile ' + cpCls(x.global) + '" onclick="cpToggle(this)"><div class="cp-top"><span class="cp-name">' + av + cpEsc(nm) + '</span><span class="cp-big">' + cpPct(x.global) + '</span></div><div class="cp-lab">' + cpLab(x.global) + '</div>'
+      + cpBar('Production', x.production) + cpBar('Service', x.service) + cpBar('Autres', x.autres)
+      + '<div class="cp-foot">' + x.equipiers + ' équipier' + (x.equipiers > 1 ? 's' : '') + '</div><div class="cp-det">' + det + '</div></div>';
+  });
+  box.innerHTML = h + '</div>';
+}
+</script>
+
 <!-- ════════ SUIVI DES INTERVENTIONS : FIL DE COMMENTAIRES (style messages) SUR CHAQUE DEMANDE ════════ -->
 <style>
 .suivi-xl { font-family:inherit; font-size:.72rem; font-weight:700; color:#0f766e; background:rgba(15,118,110,.08); border:1.5px solid rgba(15,118,110,.35); border-radius:9px; padding:6px 11px; cursor:pointer; white-space:nowrap; } .suivi-xl:hover { background:rgba(15,118,110,.16); } .suivi-xl:disabled { opacity:.6; cursor:wait; }
@@ -9116,6 +9185,15 @@ function igGo() {
 #espace-planning .plg-h::placeholder{color:var(--muted);opacity:.9}
 #espace-planning .plg-h:not([readonly]):hover,#espace-planning .plg-h:not([readonly]):focus{border-color:var(--gold);outline:0;background:var(--card)}
 #espace-planning .plg-h.cu{color:#b45309}
+#espace-planning td.plg-cell{position:relative}
+#espace-planning .plg-pal{position:absolute;top:1px;right:3px;width:13px;height:13px;padding:0;border-radius:50%;border:1.5px solid var(--border);background:conic-gradient(#ff8787,#ffd43b,#69dB7c,#4dabf7,#9775fa,#ff8787);opacity:0;cursor:pointer;transition:opacity .12s}
+#espace-planning td.plg-cell:hover .plg-pal,#espace-planning td.plg-cell:focus-within .plg-pal,#espace-planning .plg-pal.on{opacity:.95}
+@media (hover:none){#espace-planning .plg-pal{opacity:.55}}
+.plg-palbox{position:fixed;z-index:9999;display:grid;grid-template-columns:repeat(6,26px);gap:6px;padding:10px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.22)}
+.plg-palbox button{width:26px;height:26px;border-radius:8px;border:1.5px solid rgba(0,0,0,.12);cursor:pointer;padding:0}
+.plg-palbox .plg-pc{grid-column:1/4;display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--muted)}
+.plg-palbox .plg-pc input{width:30px;height:24px;padding:0;border:0;background:none}
+.plg-palbox .plg-p0{grid-column:4/7;width:auto;height:26px;font-size:.7rem;font-weight:700;color:var(--text);background:var(--card2)}
 #espace-planning .plg-sec{box-shadow:0 1px 3px rgba(0,0,0,.04)}
 #espace-planning .plg-sec>summary:hover{color:var(--gold)}
 #espace-planning table.plg{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.78rem;min-width:760px}
@@ -9233,7 +9311,7 @@ const PLG_ABS = /^(CP|AM|CSS|NT|OFF)$/i;
 const PLG_AV = { directeur: '#7030A0', directeur_adjoint: '#203864', assistant_direction: '#385724', manager: '#D08E39', responsable_zone: '#0e7490' };
 const plgAv = p => '<span class="plg-av" style="background:' + (PLG_AV[p.fonction] || '#6b7280') + '">' + plgE(String(p.prenom || '?').trim().charAt(0).toUpperCase()) + '</span>';
 const plgFj = p => p.fonction === 'directeur' || p.fonction === 'directeur_adjoint';       // forfait 218 jours : pas de cible hebdomadaire, ni plafonds d'heures (les repos de 11 h et de 35 h restent contrôlés)
-const plgJ = x => x.h > 0 && !x.abs ? 1 : 0;
+const plgJ = x => x.work ? 1 : 0;
 function plgShiftOf(d, f, codes) {                                           // plage tapée à la main : ouverture si elle commence à l'heure de O, fermeture si elle finit à l'heure de F, sinon autre shift
   const o = codes.get('O'), c = codes.get('F'), fin = c && c.debut && c.fin ? (plgTm(c.fin) <= plgTm(c.debut) ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null;
   if (o && o.debut && d <= plgTm(o.debut) + .01) return 'ouverture';
@@ -9244,15 +9322,33 @@ const PLG_RE = /^(\d{1,2})\s*(?:[:hH]\s*(\d{0,2}))?\s*(?:-|–|—|à|a)\s*(\d{1
 const plgRng = s => { const m = String(s).trim().match(PLG_RE); if (!m || +m[1] > 24 || +m[3] > 24 || +(m[2] || 0) > 59 || +(m[4] || 0) > 59) return null; const a = +(m[2] || 0), b = +(m[4] || 0), d = +m[1] + a / 60, f0 = +m[3] + b / 60, f = f0 <= d ? f0 + 24 : f0, p = x => String(x).padStart(2, '0'); return { d, f, h: f - d, norm: p(m[1]) + ':' + p(a) + '-' + p(m[3]) + ':' + p(b) }; };
 const plgSplit = v => { v = String(v || '').trim(); const m = v.match(/^(\S+)\s+(\d.*)$/); return m && plgRng(m[2]) ? { code: m[1], range: plgRng(m[2]).norm } : (plgRng(v) ? { code: '', range: plgRng(v).norm } : { code: v, range: '' }); };
 const plgFmtH = h => { const m = Math.round((h % 24) * 60), H = Math.floor(m / 60), M = m % 60; return H + 'h' + (M ? String(M).padStart(2, '0') : ''); };
-function plgInfo(v, codes) {                                                  // une case = une lettre, ou des horaires « 08:00-16:00 », ou une lettre avec ses horaires du jour « O 08:30-17:00 »
-  v = String(v || '').trim(); if (!v) return { t: '', h: 0, d: null, f: null, shift: null, abs: false };
-  const c = codes.get(v.toUpperCase());
-  if (c) { const d = c.debut ? plgTm(c.debut) : null, f = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null, ab = PLG_ABS.test(c.code); return { t: 'code', code: c.code, h: plgDur(c), d: ab ? null : d, f: ab ? null : f, shift: c.shift, abs: ab, bg: c.fond, fg: c.texte }; }
-  const g = plgRng(v);
-  if (g) return { t: 'range', h: g.h, d: g.d, f: g.f, shift: plgShiftOf(g.d, g.f, codes), abs: false, norm: g.norm };
-  const sp = plgSplit(v), cc = sp.code && sp.range ? codes.get(sp.code.toUpperCase()) : null;
-  if (cc && !PLG_ABS.test(cc.code)) { const r = plgRng(sp.range); return { t: 'code', code: cc.code, custom: r.norm, h: r.h, d: r.d, f: r.f, shift: cc.shift, abs: false, bg: cc.fond, fg: cc.texte, norm: cc.code + ' ' + r.norm }; }
-  return { t: 'bad', h: 0, d: null, f: null, shift: null, abs: false };
+const PLG_SEP = '§';                                                          // séparateur des cases à texte libre ou colorées : « lettre § horaires § #couleur » (les formes d'avant : « O », « 08:00-16:00 », « O 08:30-17:00 » restent lues)
+const PLG_ABSW = /^(OFF|CP|AM|CSS|NT|RTT|REPOS|CONG[ÉE]S?|ABSENT[E]?|ABS)(?![A-Za-zÀ-ÿ0-9])/i;   // texte libre compté comme une absence : ni heures, ni jour travaillé
+const plgInk = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); if (!m) return null; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150 ? '#1a1d2e' : '#ffffff'; };
+function plgParts(v) {                                                        // une case → { l : lettre (texte libre), h : horaires (texte libre), c : couleur #rrggbb ou '' }
+  v = String(v == null ? '' : v);
+  if (v.indexOf(PLG_SEP) >= 0) { const a = v.split(PLG_SEP); return { l: (a[0] || '').trim(), h: (a[1] || '').trim(), c: /^#[0-9a-f]{6}$/i.test((a[2] || '').trim()) ? a[2].trim() : '' }; }
+  const sp = plgSplit(v); return { l: sp.code, h: sp.range, c: '' };
+}
+function plgJoin(l, h, c) {                                                   // l'inverse : forme simple si possible (lisible par l'ancien format et l'export), sinon « lettre § horaires § couleur »
+  l = String(l || '').split(PLG_SEP).join('').trim().slice(0, 30); h = String(h || '').split(PLG_SEP).join('').trim().slice(0, 24); c = /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
+  const g = h ? plgRng(h) : null;
+  if (!c && (!h || g) && !/\s/.test(l)) return l + (g ? (l ? ' ' : '') + g.norm : '');
+  return l + PLG_SEP + (g ? g.norm : h) + PLG_SEP + c;
+}
+function plgInfo(v, codes) {
+  const P = plgParts(v), l = P.l, hr = P.h, g = hr ? plgRng(hr) : null, paint = o => { if (P.c) { o.bg = P.c; o.fg = plgInk(P.c); } return o; };
+  if (!l && !hr) return paint({ t: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
+  const c = l ? codes.get(l.toUpperCase()) : null;
+  if (c) {                                                                    // lettre préprogrammée du restaurant : couleurs, horaires et type de shift de la lettre
+    const ab = PLG_ABS.test(c.code);
+    if (g && !ab) return paint({ t: 'code', code: c.code, custom: g.norm, h: g.h, d: g.d, f: g.f, shift: c.shift, abs: false, work: g.h > 0, bg: c.fond, fg: c.texte, norm: c.code + ' ' + g.norm });
+    const d = c.debut ? plgTm(c.debut) : null, f = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null, h = plgDur(c);
+    return paint({ t: 'code', code: c.code, h, d: ab ? null : d, f: ab ? null : f, shift: c.shift, abs: ab, work: !ab && h > 0, bg: c.fond, fg: c.texte });
+  }
+  if (!l) return g ? paint({ t: 'range', h: g.h, d: g.d, f: g.f, shift: plgShiftOf(g.d, g.f, codes), abs: false, work: g.h > 0, norm: g.norm }) : paint({ t: 'free', label: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
+  const ab = PLG_ABSW.test(l);                                                // texte libre : compté comme jour travaillé (sauf absence), les heures ne comptent que si les horaires sont lisibles (8h-17h)
+  return paint({ t: 'free', label: l, h: g && !ab ? g.h : 0, d: g && !ab ? g.d : null, f: g && !ab ? g.f : null, shift: g && !ab ? plgShiftOf(g.d, g.f, codes) : null, abs: ab, work: !ab, norm: g ? g.norm : '' });
 }
 function plgView(ws, pid) {                                                  // semaine affichée commençant un lundi : les 7 jours viennent de deux semaines enregistrées (dimanche → samedi)
   const at = j => { const d = plgAdd(ws, j); return [plgSun(d), plgD(d).getUTCDay()]; };
@@ -9267,15 +9363,15 @@ function plgEvList(ws) { const out = []; for (let j = 0; j < 7; j++) { const dat
 // ── analyse d'une personne pour la semaine affichée ──
 function plgAnalyse(p, codes) {
   const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], se = k => plgSeuil(k);
-  const jours = inf.filter(x => x.h > 0 && !x.abs).length, shifts = inf.filter(x => x.shift).length;
+  const jours = inf.filter(x => x.work).length, shifts = inf.filter(x => x.shift).length;
   const fj = plgFj(p);
-  inf.forEach((x, j) => { if (x.t === 'bad') al.push('case « ' + row[j] + ' » inconnue (' + plgJL(j) + ')'); else if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + plgJL(j) + ' (' + plgH(x.h) + ')'); });
+  inf.forEach((x, j) => { if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + plgJL(j) + ' (' + plgH(x.h) + ')'); });
   const iv = [], add = (ws2, j, x) => { if (x.d != null && x.f != null) iv.push([plgWk(ws, ws2) * 168 + j * 24 + x.d, plgWk(ws, ws2) * 168 + j * 24 + x.f]); };
   const pr = plgPeek(plgAdd(ws, -7), p.id), nx = plgPeek(plgAdd(ws, 7), p.id);
   if (pr) pr.forEach((v, j) => add(plgAdd(ws, -7), j, plgInfo(v, codes))); inf.forEach((x, j) => add(ws, j, x)); if (nx) nx.forEach((v, j) => add(plgAdd(ws, 7), j, plgInfo(v, codes)));   // semaines voisines lues en entier : un OFF en bord de semaine est du repos
   iv.sort((a, b) => a[0] - b[0]);
-  for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + plgJL(Math.floor(iv[k][0] / 24)) + ' (' + se('repos_jour') + ' h minimum)'); }
-  if (iv.some(x => x[0] >= 0 && x[0] < 168)) {                                // repos hebdomadaire : plus long creux sans travail touchant la semaine ; semaine voisine non planifiée = on ne peut pas conclure (pas d'alerte)
+  if (!fj) for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + plgJL(Math.floor(iv[k][0] / 24)) + ' (' + se('repos_jour') + ' h minimum)'); }
+  if (!fj && iv.some(x => x[0] >= 0 && x[0] < 168)) {                        // repos hebdomadaire : plus long creux sans travail touchant la semaine ; semaine voisine non planifiée = on ne peut pas conclure (pas d'alerte)
     const gaps = [[pr ? -168 : -Infinity, iv[0][0]]]; for (let k = 1; k < iv.length; k++) gaps.push([iv[k - 1][1], iv[k][0]]); gaps.push([iv[iv.length - 1][1], nx ? 336 : Infinity]);
     let best = 0; gaps.forEach(g => { if (g[1] > 0 && g[0] < 168) best = Math.max(best, g[1] - g[0]); });
     if (best < se('repos_hebdo')) al.push('pas de repos hebdomadaire de ' + se('repos_hebdo') + ' h d\'affilée (24 h + 11 h) : le plus long repos relevé est de ' + plgH(Math.max(0, best)));
@@ -9321,11 +9417,12 @@ function plgRender() {
       const a = plgAnalyse(p, codes), cible = +p.heures_hebdo || 35, b = plgOF(p, codes), d = b[0] - b[1], bc = Math.abs(d) <= 1 ? ['#e8f6ee', '#1e8449', 'équilibré'] : (Math.abs(d) === 2 ? ['#fdf3e1', '#b9770e', d > 0 ? 'plus d\'ouvertures' : 'plus de fermetures'] : ['#fdecea', '#a93226', d > 0 ? 'trop d\'ouvertures' : 'trop de fermetures']);
       const fj = plgFj(p), diff = a.tot - cible, cl = !fj && a.tot > plgSeuil('semaine_max') ? '#c0392b' : (fj || mod ? 'inherit' : (Math.abs(diff) < .01 ? '#1e8449' : '#b9770e'));
       h += '<tr><td class="n"><div class="plg-pn">' + plgAv(p) + '<div><b style="font-size:.8rem">' + plgE(p.prenom) + '</b><br><span class="plg-tag">' + plgE(PLG_FN[p.fonction] || p.fonction) + (fj ? ' · 218 j' : '') + '</span>' + (b[0] + b[1] > 0 ? '<span class="plg-bal" style="background:' + bc[0] + ';color:' + bc[1] + '" title="Depuis le début du cycle : ' + b[0] + ' ouverture(s), ' + b[1] + ' fermeture(s) — ' + bc[2] + '">O ' + b[0] + ' · F ' + b[1] + '</span>' : '') + '</div></div></td>';
-      a.inf.forEach((x, j) => { const v = plgRow(ws, p.id)[j], sp = plgSplit(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', cod = x.t === 'range' ? '' : sp.code, rg = x.t === 'bad' && sp.range ? plgRng(sp.range) : null;
-        const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : ''), own = x.t === 'range' || x.custom ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (rg ? plgFmtH(rg.d) + '-' + plgFmtH(rg.f) : ''), roH = !can || x.abs || (x.t === 'bad' && !rg) || (x.t === 'code' && !x.custom && x.d == null);
-        h += '<td class="plg-cell"><input class="plg-c' + (x.t === 'bad' ? ' bad' : '') + '" list="plgCodes" style="' + st + '" value="' + plgE(cod) + '" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + j + ',this)" aria-label="Lettre, ' + plgE(p.prenom) + ', ' + PLG_JL[j] + '" title="' + (x.t === 'bad' ? 'Lettre inconnue : choisissez dans la liste ou saisissez des horaires : 8h-16h, 8h30-17h ou 08:00-16:00' : '') + '">'
-          + '<input class="plg-h' + (own ? ' cu' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" ' + (roH ? 'readonly tabindex="-1"' : '') + ' onchange="plgSetH(\'' + p.id + '\',' + j + ',this)" aria-label="Horaires, ' + plgE(p.prenom) + ', ' + PLG_JL[j] + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : (def && !roH ? 'Horaires de la lettre : tapez d\'autres horaires pour ce jour (ex. 8h30-17h)' : '')) + '"></td>'; });
-      h += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">' + (a.inf.some(x => !x.abs && x.h > 0) ? plgH(a.inf.reduce((n, x) => n + (x.abs ? 0 : x.h), 0)) : 'forfait 218 j') + '</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
+      a.inf.forEach((x, j) => { const v = plgRow(ws, p.id)[j], P = plgParts(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', gh = P.h ? plgRng(P.h) : null, own = P.h ? (gh ? plgFmtH(gh.d) + '-' + plgFmtH(gh.f) : P.h) : '';
+        const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : '');
+        h += '<td class="plg-cell"><input class="plg-c" list="plgCodes" style="' + st + '" value="' + plgE(P.l) + '" maxlength="30" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + j + ',this)" aria-label="Lettre ou texte libre, ' + plgE(p.prenom) + ', ' + plgJL(j) + '" title="Texte libre, ou une lettre du restaurant (O, F, OFF…) qui remplit couleur et horaires">'
+          + (can ? '<button type="button" class="plg-pal' + (P.c ? ' on' : '') + '" style="' + (P.c ? 'background:' + P.c : '') + '" aria-label="Couleur de la case" title="Choisir une couleur" onclick="plgPal(event,\'' + p.id + '\',' + j + ')"></button>' : '')
+          + '<input class="plg-h' + (own ? ' cu' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" maxlength="24" ' + (can ? '' : 'readonly tabindex="-1"') + ' onchange="plgSetH(\'' + p.id + '\',' + j + ',this)" aria-label="Horaires ou texte libre, ' + plgE(p.prenom) + ', ' + plgJL(j) + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : 'Horaires libres : 8h-17h est compté en heures, un autre texte est seulement affiché') + '"></td>'; });
+      h += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">forfait 218 j</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
       a.al.forEach(t => alerts.push(t)); a.rem.forEach(t => rems.push(t));
     });
     h += '</tbody></table></div><datalist id="plgCodes">' + list.map(c => '<option value="' + plgE(c.code) + '">' + plgE(c.libelle) + '</option>').join('') + '</datalist>';
@@ -9445,20 +9542,31 @@ async function plgTeamAdd() {
 }
 async function plgTeamOff(id) { const p = PLG.team.find(x => x.id === id); if (!p || !confirm('Retirer ' + p.prenom + ' de l\'équipe ? Ses plannings passés restent enregistrés.')) return; const r = await plgApi('/rest/v1/equipe?id=eq.' + id, 'PATCH', { actif: false }, { Prefer: 'return=representation' }); if (!r.ok || (Array.isArray(r.j) && !r.j.length)) { plgMsg('Retrait refusé', 'err'); return; } PLG.team = PLG.team.filter(x => x.id !== id); plgRender(); plgMsg('✓ ' + p.prenom + ' retiré(e) de l\'équipe.', 'ok'); }
 // ── actions ──
-function plgSet(pid, j, el) {
-  const codes = plgCodes(), x = plgInfo(el.value, codes), row = plgRow(PLG.ws, pid);
-  const sp = plgSplit(row[j]);
-  const lettre = String(el.value).trim();
-  if (x.t === 'code') row[j] = x.custom ? x.norm : (sp.range && !x.abs ? x.code + ' ' + sp.range : x.code);     // la lettre ne change jamais les horaires déjà saisis (lettre d'absence : OFF, CP… efface les horaires)
-  else if (x.t === 'range') row[j] = (sp.code && !PLG_ABS.test(sp.code) && plgCodes().has(sp.code.toUpperCase()) ? sp.code + ' ' : '') + x.norm;   // horaires tapés dans la case : la lettre déjà choisie reste
-  else row[j] = lettre && sp.range ? lettre + ' ' + sp.range : lettre;                // lettre inconnue : gardée (en rouge) avec les horaires
-  plgTouch(plgAdd(PLG.ws, j)); plgRender();
+function plgSet(pid, j, el) {                                                // case « lettre » : texte libre ou lettre préprogrammée
+  const codes = plgCodes(), row = plgRow(PLG.ws, pid), P = plgParts(row[j]), v = String(el.value).trim().slice(0, 30);
+  let l = v, h = P.h;
+  if (v && plgRng(v)) { l = P.l && !PLG_ABS.test(P.l) && !PLG_ABSW.test(P.l) ? P.l : ''; h = plgRng(v).norm; }   // des horaires tapés dans cette case vont dans les horaires ; la lettre déjà choisie reste (sauf une absence : OFF, CP… est remplacée)
+  else { const sp = plgSplit(v); if (sp.code && sp.range) { l = sp.code; h = sp.range; } }   // « O 8h30-17h » ou « Soir 18h-22h » : lettre + horaires
+  const k = l && codes.get(l.toUpperCase());
+  if (l && (PLG_ABS.test(l) || PLG_ABSW.test(l) || (k && PLG_ABS.test(k.code)))) h = '';     // une absence (OFF, CP, congé…) n'a pas d'horaires ; sinon la lettre ne change jamais les horaires saisis
+  row[j] = plgJoin(l, h, P.c); plgTouch(plgAdd(PLG.ws, j)); plgRender();
 }
-function plgSetH(pid, j, el) {                                               // horaires du jour sous la lettre : vide = horaires de la lettre
-  const row = plgRow(PLG.ws, pid), sp = plgSplit(row[j]), t = String(el.value).trim();
-  if (!t) row[j] = sp.code; else { const g = plgRng(t); if (!g) { plgMsg('Horaires non reconnus : écrivez par exemple 8h-17h, 8h30-17h ou 16h30-1h45.', 'err'); plgRender(); return; } row[j] = (sp.code ? sp.code + ' ' : '') + g.norm; }
-  plgTouch(plgAdd(PLG.ws, j)); plgRender();
+function plgSetH(pid, j, el) {                                               // case « horaires » : 8h-17h est compté, tout autre texte est affiché tel quel ; vide = horaires de la lettre
+  const row = plgRow(PLG.ws, pid), P = plgParts(row[j]), t = String(el.value).trim().slice(0, 24), g = t ? plgRng(t) : null;
+  row[j] = plgJoin(P.l, g ? g.norm : t, P.c); plgTouch(plgAdd(PLG.ws, j)); plgRender();
 }
+function plgSetC(pid, j, c) { plgPalClose(); const row = plgRow(PLG.ws, pid), P = plgParts(row[j]); row[j] = plgJoin(P.l, P.h, c); plgTouch(plgAdd(PLG.ws, j)); plgRender(); }
+const PLG_COLORS = ['#EBDEF8', '#DAE3F3', '#FFEB9C', '#FBE5D6', '#E2F0D9', '#FFF4E0', '#9FEAFC', '#FFDBDE', '#EDEDED', '#BAD897', '#FF8787', '#FFA94D', '#FFD43B', '#69DB7C', '#4DABF7', '#9775FA', '#F783AC', '#ADB5BD'];
+function plgPalClose() { const d = document.getElementById('plgPalBox'); if (d) d.remove(); }
+function plgPal(ev, pid, j) {
+  ev.stopPropagation(); plgPalClose();
+  const r = ev.currentTarget.getBoundingClientRect(), d = document.createElement('div'), a = '\'' + pid + '\',' + j; d.id = 'plgPalBox'; d.className = 'plg-palbox';
+  d.innerHTML = PLG_COLORS.map(c => '<button type="button" style="background:' + c + '" aria-label="' + c + '" onclick="plgSetC(' + a + ',\'' + c + '\')"></button>').join('') + '<label class="plg-pc">Autre <input type="color" onchange="plgSetC(' + a + ',this.value)"></label><button type="button" class="plg-p0" onclick="plgSetC(' + a + ',\'\')">Sans couleur</button>';
+  document.body.appendChild(d); const w = d.offsetWidth, hh = d.offsetHeight;
+  d.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px'; d.style.top = Math.max(8, Math.min(innerHeight - hh - 8, r.bottom + 4)) + 'px';
+}
+document.addEventListener('click', e => { if (!(e.target.closest && e.target.closest('#plgPalBox'))) plgPalClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') plgPalClose(); });
 function plgGo(d) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées : changer de semaine les perdrait. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgAdd(PLG.ws, 7 * d); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
 function plgToday() { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.ws = plgWS(plgIso(new Date())); PLG.month = PLG.ws.slice(0, 7); plgLoad(); }
 function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
@@ -9496,10 +9604,11 @@ function plgWorkbook(base) {
   const thin = { style: 'thin', color: { rgb: 'BFBFBF' } }, bd = { top: thin, bottom: thin, left: thin, right: thin }, ctr = { horizontal: 'center', vertical: 'center' };
   const HEAD = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '44546A' } }, alignment: ctr, border: bd }, SUB = { font: { bold: true }, fill: { fgColor: { rgb: 'D9D9D9' } }, alignment: ctr, border: bd };
   const put = (ws, r, c, v, st, o) => { o = o || {}; const a = X.encode_cell({ r: r - 1, c: c - 1 }), x = { v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' }; if (st) x.s = JSON.parse(JSON.stringify(st)); if (o.f) x.f = o.f; if (o.z) x.z = o.z; ws[a] = x; const R = ws['!ref'] ? X.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }; R.e.r = Math.max(R.e.r, r - 1); R.e.c = Math.max(R.e.c, c - 1); ws['!ref'] = X.encode_range(R); };
+  const plgTxt = (v, x) => x.t === 'code' ? (x.custom ? x.norm : x.code) : (x.t === 'range' ? x.norm : (plgParts(v).l + (x.norm ? ' ' + x.norm : (plgParts(v).h ? ' ' + plgParts(v).h : ''))).trim());
   const cellStyle = x => x.bg ? { fill: { fgColor: { rgb: plgRgb(x.bg) } }, font: { bold: true, color: { rgb: plgRgb(x.fg) } }, alignment: ctr, border: bd } : { font: { bold: x.t !== '' }, alignment: ctr, border: bd };
   const tf = h => h / 24, frac = s => s ? plgTm(s) / 24 : '';
   const legRef = '$AC$5:$AD$' + (4 + list.length), nR = Math.max(T.length, 1), blockH = nR + 3;
-  const hoursOf = (ws0, pid) => { const r = plgPeek(ws0, pid); return r ? r.reduce((a, v) => a + plgInfo(v, codes).h, 0) : 0; };
+  const hoursOf = (ws0, pid, fj) => { const r = plgPeek(ws0, pid); return r ? r.reduce((a, v) => { const x = plgInfo(v, codes); return a + (fj ? plgJ(x) : x.h); }, 0) : 0; };
   for (let k = 1; k <= 4; k++) {
     const ws = {}; ws['!merges'] = [{ s: { r: 1, c: 1 }, e: { r: 1, c: 23 } }]; ws['!cols'] = [{ wch: 2 }, { wch: 14 }, ...Array(7).fill({ wch: 12 }), { wch: 9 }, { wch: 9 }, { wch: 9 }, { wch: 3 }, { wch: 3 }, { wch: 14 }, ...Array(7).fill({ wch: 12 }), { wch: 9 }, { wch: 9 }, { wch: 9 }, { wch: 3 }, { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
     put(ws, 2, 2, 'PLANNING EDG - CYCLE ' + k + ' - ' + nm.toUpperCase() + ' - ' + (PLG.cfg.modulation ? 'MODULATION' : '35 H'), { font: { bold: true, sz: 14 }, alignment: ctr });
@@ -9511,8 +9620,9 @@ function plgWorkbook(base) {
       put(ws, top + 1, c0, (k - 1) * 13 + i + 1, SUB); for (let j = 0; j < 7; j++) put(ws, top + 1, c0 + 1 + j, plgSerial(plgAdd(wsd, j)), SUB, { z: 'dd/mm' }); for (let j = 8; j <= 10; j++) put(ws, top + 1, c0 + j, '', SUB);
       for (let q = 0; q < nR; q++) {
         const p = T[q], r = top + 2 + q; put(ws, r, c0, p ? p.prenom : '', { font: { bold: true }, border: bd });
-        const row = p ? plgPeek(wsd, p.id) : null, refs = []; let hp = 0, hc = 0;
-        for (let j = 0; j < 7; j++) { const v = row ? row[j] : '', x = plgInfo(v, codes); put(ws, r, c0 + 1 + j, v || '', cellStyle(x)); refs.push(plgCol(c0 + 1 + j) + r); if (x.t === 'range' || x.custom) hp += x.h; else if (x.t === 'code') hc += x.h; }
+        const row = p ? plgPeek(wsd, p.id) : null, refs = []; let hp = 0, hc = 0, dj = 0;
+        for (let j = 0; j < 7; j++) { const v = row ? row[j] : '', x = plgInfo(v, codes); put(ws, r, c0 + 1 + j, plgTxt(v, x), cellStyle(x)); refs.push(plgCol(c0 + 1 + j) + r); if (x.t === 'range' || x.custom || (x.t === 'free' && x.norm)) hp += x.h; else if (x.t === 'code') hc += x.h; dj += plgJ(x); }
+        if (p && plgFj(p)) { const rg = plgCol(c0 + 1) + r + ':' + plgCol(c0 + 7) + r; put(ws, r, c0 + 8, '', { alignment: ctr, border: bd }); put(ws, r, c0 + 9, '', { alignment: ctr, border: bd }); put(ws, r, c0 + 10, dj, { font: { bold: true }, alignment: ctr, border: bd }, { f: '7-COUNTBLANK(' + rg + ')-COUNTIF(' + rg + ',"OFF")-COUNTIF(' + rg + ',"CP")-COUNTIF(' + rg + ',"AM")-COUNTIF(' + rg + ',"CSS")-COUNTIF(' + rg + ',"NT")-COUNTIF(' + rg + ',"RTT")-COUNTIF(' + rg + ',"REPOS")-COUNTIF(' + rg + ',"CONGÉ")-COUNTIF(' + rg + ',"CONGE")-COUNTIF(' + rg + ',"ABSENT")', z: '0" j"' }); continue; }
         put(ws, r, c0 + 8, tf(hp), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR(MOD((RIGHT(' + a + ',5)+0)-(MID(' + a + ',LEN(' + a + ')-10,5)+0),1),0)').join('+'), z: '[h]:mm' });
         put(ws, r, c0 + 9, tf(hc), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR(VLOOKUP(' + a + ',' + legRef + ',2,FALSE),0)').join('+'), z: '[h]:mm' });
         put(ws, r, c0 + 10, tf(hp + hc), { font: { bold: true }, alignment: ctr, border: bd }, { f: plgCol(c0 + 8) + r + '+' + plgCol(c0 + 9) + r, z: '[h]:mm' });
@@ -9523,13 +9633,13 @@ function plgWorkbook(base) {
   // feuille de synthèse : mois (35 h) puis cycles (modulation), comme « 35H OU MODULATION »
   const sy = {}, yr = +plgThu(base).slice(0, 4); sy['!cols'] = [{ wch: 2 }, { wch: 24 }, { wch: 18 }, ...Array(13).fill({ wch: 11 }), { wch: 3 }, { wch: 24 }, { wch: 9 }, { wch: 10 }, { wch: 9 }, { wch: 9 }];
   put(sy, 2, 2, '35H - TEMPS PARTIEL', HEAD); put(sy, 2, 3, '', HEAD); PLG_MOIS.forEach((m, i) => put(sy, 2, 4 + i, m.toUpperCase(), HEAD)); put(sy, 2, 16, 'TOTAL', HEAD);
-  T.forEach((p, q) => { put(sy, 3 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
-    for (let m = 0; m < 12; m++) { let h = 0; const last = new Date(Date.UTC(yr, m + 1, 0)).getUTCDate(); for (let d = 1; d <= last; d++) { const day = yr + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'), r = (plgRaw(plgSun(day)) || {})[p.id]; if (Array.isArray(r)) h += plgInfo(r[plgD(day).getUTCDay()], codes).h; } tot += h; put(sy, 3 + q, 4 + m, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
-    put(sy, 3 + q, 16, tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: '[h]:mm' }); });
+  T.forEach((p, q) => { put(sy, 3 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0; const fjp = plgFj(p);
+    for (let m = 0; m < 12; m++) { let h = 0; const last = new Date(Date.UTC(yr, m + 1, 0)).getUTCDate(); for (let d = 1; d <= last; d++) { const day = yr + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'), r = (plgRaw(plgSun(day)) || {})[p.id]; if (Array.isArray(r)) { const x = plgInfo(r[plgD(day).getUTCDay()], codes); h += fjp ? plgJ(x) : x.h; } } tot += h; put(sy, 3 + q, 4 + m, fjp ? h : tf(h), { alignment: ctr, border: bd }, { z: fjp ? '0" j"' : '[h]:mm' }); }
+    put(sy, 3 + q, 16, fjp ? tot : tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: fjp ? '0" j"' : '[h]:mm' }); });
   const m0 = 3 + T.length + 2; put(sy, m0, 2, 'MODULATION', HEAD); put(sy, m0, 3, '', HEAD); ['1ER CYCLE', '2e CYCLE', '3e CYCLE', '4e CYCLE', 'TOTAL', 'CIBLE', 'ÉCART'].forEach((t, i) => put(sy, m0, 5 + i, t, HEAD));
-  T.forEach((p, q) => { put(sy, m0 + 1 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0;
-    for (let k = 0; k < 4; k++) { let h = 0; for (let i = 0; i < 13; i++) h += hoursOf(plgAdd(base, (k * 13 + i) * 7), p.id); tot += h; put(sy, m0 + 1 + q, 5 + k, tf(h), { alignment: ctr, border: bd }, { z: '[h]:mm' }); }
-    const cible = 52 * (+p.heures_hebdo || 35); put(sy, m0 + 1 + q, 9, tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: '[h]:mm' }); if (plgFj(p)) { put(sy, m0 + 1 + q, 10, 'Forfait 218 j', { alignment: ctr, border: bd }); put(sy, m0 + 1 + q, 11, '', { alignment: ctr, border: bd }); } else { put(sy, m0 + 1 + q, 10, tf(cible), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(sy, m0 + 1 + q, 11, (tot - cible) / 24, { alignment: ctr, border: bd }, { z: '[h]:mm;-[h]:mm' }); } });
+  T.forEach((p, q) => { put(sy, m0 + 1 + q, 3, p.prenom, { font: { bold: true }, border: bd }); let tot = 0; const fjp = plgFj(p);
+    for (let k = 0; k < 4; k++) { let h = 0; for (let i = 0; i < 13; i++) h += hoursOf(plgAdd(base, (k * 13 + i) * 7), p.id, fjp); tot += h; put(sy, m0 + 1 + q, 5 + k, fjp ? h : tf(h), { alignment: ctr, border: bd }, { z: fjp ? '0" j"' : '[h]:mm' }); }
+    const cible = 52 * (+p.heures_hebdo || 35); put(sy, m0 + 1 + q, 9, fjp ? tot : tf(tot), { font: { bold: true }, alignment: ctr, border: bd }, { z: fjp ? '0" j"' : '[h]:mm' }); if (fjp) { put(sy, m0 + 1 + q, 10, 'Forfait 218 j', { alignment: ctr, border: bd }); put(sy, m0 + 1 + q, 11, '', { alignment: ctr, border: bd }); } else { put(sy, m0 + 1 + q, 10, tf(cible), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(sy, m0 + 1 + q, 11, (tot - cible) / 24, { alignment: ctr, border: bd }, { z: '[h]:mm;-[h]:mm' }); } });
   put(sy, 2, 19, 'TABLEAU DES VALEURS', HEAD); put(sy, 2, 20, 'CODE', HEAD); put(sy, 2, 21, 'DURÉE', HEAD); put(sy, 2, 22, 'DÉBUT', HEAD); put(sy, 2, 23, 'FIN', HEAD);
   list.forEach((c, i) => { const st = c.fond ? { fill: { fgColor: { rgb: plgRgb(c.fond) } }, font: { bold: true, color: { rgb: plgRgb(c.texte) } }, alignment: ctr, border: bd } : { alignment: ctr, border: bd }; put(sy, 3 + i, 19, c.libelle, { border: bd }); put(sy, 3 + i, 20, c.code, st); put(sy, 3 + i, 21, tf(plgDur(c)), { alignment: ctr, border: bd }, { z: '[h]:mm' }); put(sy, 3 + i, 22, frac(c.debut), { alignment: ctr, border: bd }, { z: 'hh:mm' }); put(sy, 3 + i, 23, frac(c.fin), { alignment: ctr, border: bd }, { z: 'hh:mm' }); });
   X.book_append_sheet(wb, sy, '35H OU MODULATION');
@@ -10040,7 +10150,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261103-205443';
+const BUILD_VERSION = '20261104-072755';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
