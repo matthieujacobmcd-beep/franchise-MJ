@@ -9396,29 +9396,34 @@ const plgRow = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) return plgView(ws,
 const plgPeek = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
 function plgEvList(ws) { const out = []; for (let j = 0; j < 7; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); } return out; }   // événements de la semaine affichée, avec leur jour et leur place dans la semaine enregistrée
 // ── analyse d'une personne pour la semaine affichée ──
-function plgAnalyse(p, codes) {
-  const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], se = k => plgSeuil(k);
+function plgAnalyse(p, codes) {                                              // règles sociales : toutes sont évaluées EN CONTINU (jours voisins, semaines civiles) et non sur les seuls 7 jours affichés
+  const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], rem = [], se = k => plgSeuil(k), fj = plgFj(p);
   const jours = inf.filter(x => x.work).length, shifts = inf.filter(x => x.shift).length;
-  const fj = plgFj(p);
   inf.forEach((x, j) => { if (!fj && x.h > se('jour_max') && !x.abs) al.push('plus de ' + se('jour_max') + ' h le ' + plgJL(j) + ' (' + plgH(x.h) + ')'); });
-  const iv = [], add = (ws2, j, x) => { if (x.d != null && x.f != null) iv.push([plgWk(ws, ws2) * 168 + j * 24 + x.d, plgWk(ws, ws2) * 168 + j * 24 + x.f]); };
-  const pr = plgPeek(plgAdd(ws, -7), p.id), nx = plgPeek(plgAdd(ws, 7), p.id);
-  if (pr) pr.forEach((v, j) => add(plgAdd(ws, -7), j, plgInfo(v, codes))); inf.forEach((x, j) => add(ws, j, x)); if (nx) nx.forEach((v, j) => add(plgAdd(ws, 7), j, plgInfo(v, codes)));   // semaines voisines lues en entier : un OFF en bord de semaine est du repos
+  const O0 = -49, O1 = 55, I = []; for (let o = O0; o <= O1; o++) I[o - O0] = plgInfo(plgDay(p.id, plgAdd(ws, o)), codes);   // lecture continue : 7 semaines avant et 8 après la fenêtre (semaines enregistrées voisines)
+  const at = o => I[o - O0], planned = o => Array.isArray((plgRaw(plgSun(plgAdd(ws, o))) || {})[p.id]), fr = o => plgFr(plgAdd(ws, o)), dn = o => PLG_JL[plgD(plgAdd(ws, o)).getUTCDay()];
+  const off0 = -((plgD(ws).getUTCDay() - plgOff() + 7) % 7), weeks = off0 < 0 ? [off0, off0 + 7] : [off0];   // semaines civiles (début choisi pour ce restaurant) qui touchent la fenêtre
+  const iv = []; for (let o = O0; o <= O1; o++) { const x = at(o); if (x.d != null && x.f != null) iv.push([o * 24 + x.d, o * 24 + x.f]); }
   iv.sort((a, b) => a[0] - b[0]);
-  if (!fj) for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (iv[k][0] >= 0 && iv[k][0] < 168 && g < se('repos_jour')) al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + plgJL(Math.floor(iv[k][0] / 24)) + ' (' + se('repos_jour') + ' h minimum)'); }
-  if (!fj && iv.some(x => x[0] >= 0 && x[0] < 168)) {                        // repos hebdomadaire : plus long creux sans travail touchant la semaine ; semaine voisine non planifiée = on ne peut pas conclure (pas d'alerte)
-    const gaps = [[pr ? -168 : -Infinity, iv[0][0]]]; for (let k = 1; k < iv.length; k++) gaps.push([iv[k - 1][1], iv[k][0]]); gaps.push([iv[iv.length - 1][1], nx ? 336 : Infinity]);
-    let best = 0; gaps.forEach(g => { if (g[1] > 0 && g[0] < 168) best = Math.max(best, g[1] - g[0]); });
-    if (best < se('repos_hebdo')) al.push('pas de repos hebdomadaire de ' + se('repos_hebdo') + ' h d\'affilée (24 h + 11 h) : le plus long repos relevé est de ' + plgH(Math.max(0, best)));
+  if (!fj) {
+    for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (g < se('repos_jour') && iv[k][0] > 0 && iv[k - 1][1] < 168) { const o = Math.floor(iv[k][0] / 24); al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + dn(o) + ' ' + fr(o) + ' (' + se('repos_jour') + ' h minimum)'); } }   // repos quotidien : aussi entre la dernière journée affichée et la suivante
+    const lo = planned(O0) ? O0 * 24 : -Infinity, hi = planned(O1) ? (O1 + 1) * 24 : Infinity;   // jour voisin non planifié : on ne peut pas conclure (pas d'alerte)
+    weeks.forEach(a => {                                                       // repos hebdomadaire : par semaine civile, plus long creux sans travail (un OFF en bord de semaine est du repos)
+      const A = a * 24, B = (a + 7) * 24; if (!iv.some(x => x[0] >= A && x[0] < B)) return;
+      const gaps = [[lo, iv[0][0]]]; for (let k = 1; k < iv.length; k++) gaps.push([iv[k - 1][1], iv[k][0]]); gaps.push([iv[iv.length - 1][1], hi]);
+      let best = 0; gaps.forEach(g => { if (g[1] > A && g[0] < B) best = Math.max(best, g[1] - g[0]); });
+      if (best < se('repos_hebdo')) al.push('pas de repos hebdomadaire de ' + se('repos_hebdo') + ' h d\'affilée la semaine du ' + fr(a) + ' (24 h + 11 h) : le plus long repos relevé est de ' + plgH(Math.max(0, best)));
+    });
+    weeks.forEach(a => { let h = 0; for (let o = a; o < a + 7; o++) { const x = at(o); if (!x.abs) h += x.h; } if (h > se('semaine_max')) al.push('plus de ' + se('semaine_max') + ' h la semaine du ' + fr(a) + ' (' + plgH(h) + ')'); });   // durée maximale : par semaine civile, même si la fenêtre affichée la coupe
+    { const aL = weeks[weeks.length - 1]; let sum = 0, n = 0; for (let w = 0; w < 12; w++) { const s0 = aL - 7 * w; if (!planned(s0 + 3)) continue; n++; for (let o = s0; o < s0 + 7; o++) { const x = plgInfo(plgDay(p.id, plgAdd(ws, o)), codes); if (!x.abs) sum += x.h; } }
+      if (n === 12 && sum / 12 > se('moyenne12')) al.push('moyenne de ' + plgH(sum / 12) + ' sur 12 semaines (' + se('moyenne12') + ' h maximum)'); }
   }
-  if (!fj && tot > se('semaine_max')) al.push('plus de ' + se('semaine_max') + ' h dans la semaine (' + plgH(tot) + ')');
-  if (jours > se('jours_max')) al.push(jours + ' jours travaillés (' + se('jours_max') + ' maximum)');
-  let sum = 0, n = 0; for (let w = 0; w < 12; w++) { const r = plgPeek(plgAdd(ws, -7 * w), p.id); if (r) { n++; sum += r.reduce((a, v) => a + plgInfo(v, codes).h, 0); } }
-  if (!fj && n === 12 && sum / 12 > se('moyenne12')) al.push('moyenne de ' + plgH(sum / 12) + ' sur 12 semaines (' + se('moyenne12') + ' h maximum)');
-  const rem = [];
-  if (jours > 0) { const need = se('assistant_direction_shifts'), min = se('directeur_adjoint_shifts_min');
-    if (p.fonction === 'assistant_direction' && shifts !== need) rem.push(p.prenom + ' (assistant de direction) : ' + shifts + ' shift' + (shifts > 1 ? 's' : '') + ' cette semaine, ' + need + ' attendus');
-    if (p.fonction === 'directeur_adjoint' && shifts < min) rem.push(p.prenom + ' (directeur adjoint) : ' + (shifts ? shifts + ' shift' : 'aucun shift') + ' cette semaine, ' + min + ' au moins attendu'); }
+  { const lim = se('jours_max'); for (let o = 0; o < 7; o++) if (at(o).work) { let a = o, b = o; while (a > O0 && at(a - 1).work) a--; while (b < O1 && at(b + 1).work) b++;      // jours travaillés d'AFFILÉE : la série est suivie au-delà de la fenêtre, avec ses vraies dates
+      if (b - a + 1 > lim) al.push((b - a + 1) + ' jours travaillés d\'affilée du ' + fr(a) + ' au ' + fr(b) + ' (' + lim + ' maximum)'); o = b; } }
+  weeks.forEach(a => { let j = 0, sh = 0; for (let o = a; o < a + 7; o++) { const x = at(o); if (x.work) j++; if (x.shift) sh++; } if (!j) return;       // remarques (non bloquantes) : par semaine civile
+    const need = se('assistant_direction_shifts'), min = se('directeur_adjoint_shifts_min');
+    if (p.fonction === 'assistant_direction' && sh !== need) rem.push(p.prenom + ' (assistant de direction) : ' + sh + ' shift' + (sh > 1 ? 's' : '') + ' la semaine du ' + fr(a) + ', ' + need + ' attendus');
+    if (p.fonction === 'directeur_adjoint' && sh < min) rem.push(p.prenom + ' (directeur adjoint) : ' + (sh ? sh + ' shift' : 'aucun shift') + ' la semaine du ' + fr(a) + ', ' + min + ' au moins attendu'); });
   return { inf, tot, jours, shifts, al: al.map(t => p.prenom + ' : ' + t), rem };
 }
 function plgOF(p, codes) {                                                   // ouvertures et fermetures depuis le début du cycle
@@ -10292,7 +10297,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261104-190815';
+const BUILD_VERSION = '20261104-193228';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
