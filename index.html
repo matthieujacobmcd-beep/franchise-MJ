@@ -8163,6 +8163,7 @@ function PLANCOM_SET(rows) {                                  // appelé à chaq
   if (typeof currentEspace !== 'undefined' && currentEspace === 'plancom') pcRender();
   const sm = pcSeen(); if (sm) { let ch = false; for (const e of PC.rows) if (sm[e.id] === '*' && e.maj) { sm[e.id] = e.maj; ch = true; } const live = new Set(pcAll().flatMap(e => e.ids || [e.id])); if (ch || Object.keys(sm).some(k => !live.has(k))) pcSeenSave(); }   // mes propres ajouts : on retient la date de modification confirmée par le serveur
   pcBadge(); pcRenderUpcoming();
+  try { if (typeof plgOnPc === 'function') plgOnPc(); } catch (e) {}
 }
 function pcGroup(list) {                                        // anciennes saisies « tous les restaurants » (une ligne par restaurant, identiques) = un seul événement franchise
   const key = e => [e.periode, e.fin, e.type, e.detail, e.heure, e.lieu, e.note].join('|'), g = {}, drop = new Set(), out = [];
@@ -9406,7 +9407,21 @@ function plgView(ws, pid) {                                                  // 
 }
 const plgRow = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) return plgView(ws, pid); const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
 const plgPeek = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
-function plgEvList(ws) { const out = []; for (let j = 0; j < 7; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); } return out; }   // événements de la semaine affichée, avec leur jour et leur place dans la semaine enregistrée
+function plgEvList(ws) {                                                         // événements de la semaine affichée : ceux du Plan de communication (hors campagnes, déjà en bandeau) + les anciens événements propres au planning
+  const out = [], we = plgAdd(ws, 6);
+  if (typeof pcAll === 'function') pcAll().filter(e => e.type !== 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === PLG.resto || e.restaurant === 'FRANCHISE')).sort((a, b) => (a.periode < b.periode ? -1 : 1)).forEach(e => { for (let j = 0; j < 7; j++) { const d = plgAdd(ws, j); if (e.periode <= d && (e.fin || e.periode) >= d) out.push({ pc: e, j, e: { t: pcT(e.type).l, x: e.detail || pcT(e.type).l, h: e.heure || '' } }); } });
+  for (let j = 0; j < 7; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); }
+  return out;
+}
+const plgEvSig = ws => JSON.stringify(plgEvList(ws).map(x => [x.pc ? x.pc.id : 'l', x.j, x.e.x, x.e.h]));
+function plgOnPc() {                                                             // appelé quand le Plan de communication vient d'être relu : le planning affiché se met à jour si ses événements ont changé
+  try {
+    if (typeof currentEspace === 'undefined' || currentEspace !== 'planning' || !PLG.resto || !PLG.ws) return;
+    const sig = plgEvSig(PLG.ws); if (sig === PLG.pcSig) return; PLG.pcSig = sig;
+    const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest('#espace-planning')) return;
+    plgRender();
+  } catch (e) {}
+}
 // ── analyse d'une personne pour la semaine affichée ──
 function plgAnalyse(p, codes) {                                              // règles sociales : toutes sont évaluées EN CONTINU (jours voisins, semaines civiles) et non sur les seuls 7 jours affichés
   const ws = PLG.ws, row = plgRow(ws, p.id), inf = row.map(v => plgInfo(v, codes)), tot = inf.reduce((a, x) => a + x.h, 0), al = [], rem = [], se = k => plgSeuil(k), fj = plgFj(p);
@@ -9450,7 +9465,7 @@ function plgRender() {
   if (PLG.busy) { card.innerHTML = '<div style="color:var(--muted);font-size:.84rem">Chargement…</div>'; return; }
   const codes = plgCodes(), ws = PLG.ws, we = plgAdd(ws, 6), cy = plgCycleStart(ws), mod = PLG.cfg.modulation, can = plgCan(), T = PLG.team, list = [...codes.values()].sort((a, b) => a.ordre - b.ordre);
   const camps = (typeof pcAll === 'function' ? pcAll() : []).filter(e => e.type === 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === 'FRANCHISE' || e.restaurant === PLG.resto));
-  const evs = plgEvList(ws), alerts = [], rems = [];
+  const evs = plgEvList(ws), alerts = [], rems = []; PLG.pcSig = plgEvSig(ws);
   const today = plgIso(new Date()), dd = (a, b) => Math.round((plgD(b) - plgD(a)) / 864e5);
   let h = '<div class="plg-bar"><div class="plg-tabs">' + PLG.restos.map(k => { const cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, kk = plgE(k);
       return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
@@ -9511,14 +9526,58 @@ function plgSummary(codes) {
   return h + '</tbody></table></div><div style="font-size:.7rem;color:var(--muted);margin-top:6px">Heures des jours du mois seulement (une semaine à cheval sur deux mois est répartie jour par jour). Théorique = heures du contrat × 52 ÷ 12 (directeur et directeur adjoint, au forfait 218 jours : jours travaillés). Le « · » signale une semaine pas encore planifiée.</div>';
 }
 async function plgMonth(d) { const [Y, M] = PLG.month.split('-').map(Number), n = new Date(Date.UTC(Y, M - 1 + d, 1)); PLG.month = plgIso(n).slice(0, 7); const f = plgSun(PLG.month + '-01'), t = plgAdd(plgSun(plgIso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)))), 0); await plgFetchWeeks(plgAdd(f, -7), plgAdd(t, 7)); plgRender(); }
-// ── événements propres au planning (la lecture du Plan de communication ne reprend que les campagnes) ──
+// ── événements du planning : enregistrés dans le Plan de communication (source unique) ; les anciens événements propres au planning restent affichés et peuvent être publiés ──
+const PLG_EVK = { Réunion: 'reunion', Formation: 'formation', Audit: 'audit', Évaluation: 'evaluation', Festif: 'festif', Autre: 'libre' };      // anciens libellés → catégories du Plan de communication
+function plgEvSubs() { const k = (document.getElementById('plgEt') || {}).value, t = typeof PC_TYPES !== 'undefined' && PC_TYPES.find(x => x.k === k), d = document.getElementById('plgEvSubs'); if (d) d.innerHTML = ((t && t.subs) || []).map(x => '<option value="' + plgE(x) + '">').join(''); }
 function plgEvForm(can) {
-  const ws = PLG.ws, evs = plgEvList(ws);
-  return (evs.length ? evs.map((x, k) => '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(plgJL(x.j)) + ' ' + plgFr(plgAdd(ws, x.j)) + '</b> · ' + plgE(x.e.t) + ' · ' + plgE(x.e.x) + (x.e.h ? ' · ' + plgE(x.e.h) : '') + '</span>' + (can ? '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>' : '') + '</div>').join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement cette semaine.</div>')
-    + (can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><select class="plg-in" id="plgEd">' + Array.from({ length: 7 }, (_, i) => '<option value="' + i + '">' + plgJL(i) + ' ' + plgFr(plgAdd(ws, i)) + '</option>').join('') + '</select><select class="plg-in" id="plgEt"><option>Réunion</option><option>Formation</option><option>Audit</option><option>Évaluation</option><option>Festif</option><option>Autre</option></select><input class="plg-in" id="plgEx" maxlength="60" placeholder="Titre (ex. Réunion managers)" style="width:200px"><input class="plg-in" id="plgEh" type="time"><button class="plg-btn" onclick="plgAddEv()">Ajouter</button></div>' : '');
+  const ws = PLG.ws, evs = plgEvList(ws), old = evs.filter(x => !x.pc), cats = (typeof PC_TYPES !== 'undefined' ? PC_TYPES : []).filter(t => t.k !== 'campagne');
+  const row = (x, k) => { const fr = x.pc && x.pc.restaurant === 'FRANCHISE';
+    return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(plgJL(x.j)) + ' ' + plgFr(plgAdd(ws, x.j)) + '</b> · ' + plgE(x.e.t) + ' · ' + plgE(x.e.x) + (x.e.h ? ' · ' + plgE(x.e.h) : '') + (x.pc ? ' <span style="color:#0e7490;font-size:.68rem;font-weight:700" title="Enregistré dans le Plan de communication">📅 Plan de com' + (fr ? ' · toute la franchise' : '') + '</span>' : ' <span style="color:#b45309;font-size:.68rem;font-weight:700" title="Ancien événement : propre au planning, absent du Plan de communication">⚠ pas dans le Plan de com</span>') + '</span>'
+      + (can ? '<span style="white-space:nowrap">' + (x.pc ? (fr ? '' : '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>') : '<button class="plg-btn pri" style="padding:2px 8px" onclick="plgPubEv(' + k + ')" title="Enregistre cet événement dans le Plan de communication">Publier dans le Plan de com</button> <button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>') + '</span>' : '') + '</div>'; };
+  return (evs.length ? evs.map(row).join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement cette semaine.</div>')
+    + (can && old.length ? '<div style="margin-top:6px"><button class="plg-btn" onclick="plgPubAll()" title="Publie dans le Plan de communication tous les anciens événements de ce restaurant (périodes déjà chargées)">Publier tous les anciens événements dans le Plan de com</button></div>' : '')
+    + (can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><select class="plg-in" id="plgEd">' + Array.from({ length: 7 }, (_, i) => '<option value="' + i + '">' + plgJL(i) + ' ' + plgFr(plgAdd(ws, i)) + '</option>').join('') + '</select><select class="plg-in" id="plgEt" onchange="plgEvSubs()">' + cats.map(t => '<option value="' + t.k + '">' + t.i + ' ' + plgE(t.l) + '</option>').join('') + '</select><input class="plg-in" id="plgEx" list="plgEvSubs" maxlength="60" placeholder="Titre ou type (ex. Réunion MANAGERS)" style="width:230px"><datalist id="plgEvSubs"></datalist><input class="plg-in" id="plgEh" type="time"><button class="plg-btn pri" id="plgEvBtn" onclick="plgAddEv()">Ajouter</button></div><div style="font-size:.7rem;color:var(--muted);margin-top:4px">L\'événement est enregistré dans le <b>Plan de communication</b> : il y apparaît tout de suite (et dans le planning, l\'impression et l\'export).</div>' : '');
 }
-function plgAddEv() { const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; } const date = plgAdd(PLG.ws, +document.getElementById('plgEd').value), w = plgW(plgSun(date)); (w._ev = w._ev || []).push({ d: plgD(date).getUTCDay(), t: document.getElementById('plgEt').value, x: x.slice(0, 60), h: document.getElementById('plgEh').value || '' }); plgTouch(date); plgRender(); }
-function plgDelEv(k) { const x = plgEvList(PLG.ws)[k]; if (!x) return; plgW(x.sun)._ev.splice(x.i, 1); PLG.dirty = true; PLG.dk.add(x.sun); plgRender(); }
+const plgEvSave = async rows => { if (typeof pcPost !== 'function') return { ok: false, error: 'Plan de communication indisponible' }; const j = await pcPost({ action: 'ev_save', rows }); if (j.ok) { rows.forEach((r, i) => { const e = pcNorm(Object.assign({}, r, { id: (j.ids || [])[i] || r.id })); if (e) PC.adds.push(e); }); try { const sm = pcSeen(); if (sm) { rows.forEach((r, i) => { const id = (j.ids || [])[i] || r.id; if (id) sm[id] = '*'; }); pcSeenSave(); } } catch (e) {} } return j; };
+async function plgAddEv() {
+  const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; }
+  const date = plgAdd(PLG.ws, +document.getElementById('plgEd').value), type = document.getElementById('plgEt').value, heure = document.getElementById('plgEh').value || '', b = document.getElementById('plgEvBtn');
+  if (b) b.disabled = true; plgMsg('Enregistrement de l\'événement…', '');
+  const j = await plgEvSave([{ restaurant: PLG.resto, periode: date, fin: '', type, detail: x.slice(0, 60), heure, lieu: '', note: '' }]);
+  if (!j.ok) { if (b) b.disabled = false; plgMsg('Événement non enregistré : ' + (j.error || 'refusé') + (/action inconnue|mot de passe/.test(j.error || '') ? ' — l\'Apps Script doit être mis à jour / reconnecte-toi.' : ''), 'err'); return; }
+  plgRender(); plgMsg('✓ Événement enregistré dans le Plan de communication.', 'ok');
+  try { pcBadge(); pcRenderUpcoming(); } catch (e) {}
+}
+async function plgDelEv(k) {
+  const x = plgEvList(PLG.ws)[k]; if (!x) return;
+  if (x.pc) {
+    if (x.pc.restaurant === 'FRANCHISE' || !confirm('Retirer « ' + x.e.x + ' » du Plan de communication ?\nIl disparaît aussi du Plan de communication pour tout le monde.')) return;
+    const ids = x.pc.ids || [x.pc.id], j = await pcPost({ action: 'ev_delete', ids });
+    if (!j.ok) { plgMsg('Suppression refusée : ' + (j.error || 'erreur'), 'err'); return; }
+    ids.forEach(id => { PC.dels.add(id); PC.adds = PC.adds.filter(a => a.id !== id); }); plgRender(); plgMsg('✓ Événement retiré du Plan de communication.', 'ok');
+    try { pcBadge(); pcRenderUpcoming(); } catch (e) {} return;
+  }
+  plgW(x.sun)._ev.splice(x.i, 1); PLG.dirty = true; PLG.dk.add(x.sun); plgRender();
+}
+const plgOldRow = (sun, e) => ({ restaurant: PLG.resto, periode: plgAdd(sun, e.d), fin: '', type: PLG_EVK[e.t] || 'libre', detail: String(e.x || '').slice(0, 60), heure: e.h || '', lieu: '', note: '' });
+async function plgPubEv(k) {                                                    // un ancien événement du planning → Plan de communication (puis retiré du planning)
+  const x = plgEvList(PLG.ws)[k]; if (!x || x.pc) return;
+  plgMsg('Publication dans le Plan de communication…', ''); const j = await plgEvSave([plgOldRow(x.sun, x.e)]);
+  if (!j.ok) { plgMsg('Publication refusée : ' + (j.error || 'erreur'), 'err'); return; }
+  plgW(x.sun)._ev.splice(x.i, 1); PLG.dirty = true; PLG.dk.add(x.sun); plgRender(); plgMsg('✓ Publié dans le Plan de communication. Clique sur « Enregistrer la semaine » pour retirer l\'ancienne copie du planning.', 'ok');
+  try { pcBadge(); pcRenderUpcoming(); } catch (e) {}
+}
+async function plgPubAll() {                                                    // tous les anciens événements des semaines chargées de ce restaurant
+  const R = PLG.rng, rows = [], where = []; if (!R || R.resto !== PLG.resto) return;
+  for (let sun = R.from; sun <= R.to; sun = plgAdd(sun, 7)) { const w = plgRaw(sun); ((w && w._ev) || []).forEach(e => { rows.push(plgOldRow(sun, e)); where.push(sun); }); }
+  if (!rows.length) { plgMsg('Aucun ancien événement à publier.', ''); return; }
+  if (!confirm('Publier ' + rows.length + ' ancien(s) événement(s) de ce restaurant dans le Plan de communication ?\nIls seront ensuite retirés du planning après « Enregistrer la semaine ».')) return;
+  plgMsg('Publication dans le Plan de communication…', ''); const j = await plgEvSave(rows);
+  if (!j.ok) { plgMsg('Publication refusée : ' + (j.error || 'erreur'), 'err'); return; }
+  [...new Set(where)].forEach(sun => { const w = plgW(sun); w._ev = []; PLG.dk.add(sun); }); PLG.dirty = true; plgRender();
+  plgMsg('✓ ' + rows.length + ' événement(s) publié(s) dans le Plan de communication. Clique sur « Enregistrer la semaine » pour retirer les anciennes copies du planning.', 'ok');
+  try { pcBadge(); pcRenderUpcoming(); } catch (e) {}
+}
 // ── horaires des lettres, par restaurant ──
 function plgCodesTable(list, can) {
   const sel = (c, v) => '<select class="plg-in" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c) + '\',\'shift\',this.value)">' + [['', 'Pas un shift'], ['ouverture', 'Ouverture'], ['fermeture', 'Fermeture'], ['autre', 'Autre shift']].map(o => '<option value="' + o[0] + '" ' + (o[0] === (v || '') ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
@@ -10352,7 +10411,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261104-211623';
+const BUILD_VERSION = '20261104-212554';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
