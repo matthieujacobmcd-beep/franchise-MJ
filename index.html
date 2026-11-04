@@ -9155,6 +9155,18 @@ function igGo() {
 #espace-planning .plg-wrap{overflow-x:auto}
 #espace-planning .plg-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:100%}
 #espace-planning .plg-nav b{flex:1 1 190px;min-width:0;text-align:center;font-size:1rem;letter-spacing:-.01em}
+#espace-planning .plg-grid .plg-dh,#espace-planning .plg-grid td.n{cursor:grab}
+#espace-planning .plg-wrap.pan{overflow:hidden;cursor:grabbing;-webkit-user-select:none;user-select:none}
+#espace-planning .plg-wrap.pan *{cursor:grabbing!important}
+#espace-planning .plg-wrap.pan input,#espace-planning .plg-wrap.pan button{pointer-events:none}
+#espace-planning .plg-wrap.pan table.plg-grid tr>:first-child,#espace-planning .plg-wrap.pan table.plg-grid tr>:last-child{position:relative;z-index:3;background:var(--card)}
+#espace-planning .plg-wrap.pan table.plg-grid tr>:not(:first-child):not(:last-child){position:relative;z-index:1;will-change:transform}
+#espace-planning .plg-nav .plg-btn,#espace-planning .plg-nav .plg-in{flex:0 0 auto;white-space:nowrap}
+#espace-planning .plg-nav input[type=date]{width:10.5em;min-width:10.5em;box-sizing:border-box}
+@media (min-width:900px){
+ #espace-planning .plg-nav{flex-wrap:nowrap}
+ #espace-planning .plg-nav b{flex:0 0 auto;width:17.5em;white-space:nowrap;font-variant-numeric:tabular-nums}
+}
 #espace-planning .plg-tabs{display:flex;gap:6px;flex-wrap:wrap}
 #espace-planning .plg-tabs .tab{padding:6px 13px}
 #espace-planning .plg-mod{display:flex;gap:8px;align-items:center;font-size:.78rem;font-weight:700;padding:7px 12px;border:1.5px solid var(--border);border-radius:12px;background:var(--card);cursor:pointer}
@@ -9443,14 +9455,14 @@ function plgRender() {
   let h = '<div class="plg-bar"><div class="plg-tabs">' + PLG.restos.map(k => { const cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, kk = plgE(k);
       return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
     + '<label class="plg-mod"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
-  h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgStep(-7)" title="Reculer de 7 jours">« 7 j</button><button class="plg-btn" onclick="plgStep(-1)" title="Reculer d\'un jour : la veille et les jours précédents restent à l\'écran">‹ 1 j</button><b>' + (plgD(ws).getUTCDay() === plgOff() ? 'Semaine du ' : 'Du ') + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgStep(1)" title="Avancer d\'un jour">1 j ›</button><button class="plg-btn" onclick="plgStep(7)" title="Avancer de 7 jours">7 j »</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button><input type="date" class="plg-in" value="' + ws + '" onchange="plgJump(this.value)" title="Afficher 7 jours à partir de cette date" aria-label="Aller à une date"></div>'
+  h += '<div class="plg-tool"><div class="plg-bar" style="margin:0"><div class="plg-nav"><button class="plg-btn" onclick="plgStep(-7)" title="Reculer de 7 jours">« 7 j</button><button class="plg-btn" onclick="plgStep(-1)" title="Reculer d\'un jour : la veille et les jours précédents restent à l\'écran">‹ 1 j</button><b>' + 'Semaine du ' + plgFr(ws) + ' au ' + plgFr(we) + '/' + we.slice(0, 4) + '</b><button class="plg-btn" onclick="plgStep(1)" title="Avancer d\'un jour">1 j ›</button><button class="plg-btn" onclick="plgStep(7)" title="Avancer de 7 jours">7 j »</button><button class="plg-btn" onclick="plgToday()">Aujourd\'hui</button><input type="date" class="plg-in" value="' + ws + '" onchange="plgJump(this.value)" title="Afficher 7 jours à partir de cette date" aria-label="Aller à une date"></div>'
     + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Réglage du restaurant : il change l\'affichage des semaines pour tous ceux qui ouvrent ce planning (le planning enregistré ne change pas)"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, plgWS(ws)) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div></div>';
   h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la période' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
   if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
   else {
     const lanes = []; const bars = camps.slice().sort((a, b) => (a.periode < b.periode ? -1 : 1)).map(e => { const s0 = Math.max(0, dd(ws, e.periode)), e0 = Math.min(6, dd(ws, e.fin || e.periode)); let ln = lanes.findIndex(end => end < s0); if (ln < 0) { ln = lanes.length; lanes.push(-1); } lanes[ln] = e0;
       return '<span class="plg-cb' + (e.periode < ws ? ' l' : '') + ((e.fin || e.periode) > we ? ' r' : '') + '" style="grid-column:' + (s0 + 1) + '/' + (e0 + 2) + ';grid-row:' + (ln + 1) + '" title="' + plgE((e.detail || 'Campagne') + ' · du ' + plgFr(e.periode) + ' au ' + plgFr(e.fin || e.periode)) + '">' + (e.periode < ws ? '‹ ' : '📣 ') + plgE(e.detail || 'Campagne') + ((e.fin || e.periode) > we ? ' ›' : '') + '</span>'; }).join('');
-    h += '<div class="plg-wrap"><table class="plg"><colgroup><col style="width:168px"><col span="7"><col style="width:84px"></colgroup><thead><tr><th></th>' + Array.from({ length: 7 }, (_, i) => { const dy = plgAdd(ws, i), dw = plgD(dy).getUTCDay(); return '<th class="plg-dh' + (dy === today ? ' now' : '') + (dw === 0 || dw === 6 ? ' we' : '') + '"><div class="plg-dn">' + PLG_J[dw] + '</div><div class="plg-dd">' + plgFr(dy) + '</div></th>'; }).join('') + '<th>Total</th></tr>'
+    h += '<div class="plg-wrap"><table class="plg plg-grid"><colgroup><col style="width:168px"><col span="7"><col style="width:84px"></colgroup><thead><tr><th></th>' + Array.from({ length: 7 }, (_, i) => { const dy = plgAdd(ws, i), dw = plgD(dy).getUTCDay(); return '<th title="Glissez avec la souris (ou deux doigts sur le pavé tactile) pour faire défiler les jours" class="plg-dh' + (dy === today ? ' now' : '') + (dw === 0 || dw === 6 ? ' we' : '') + '"><div class="plg-dn">' + PLG_J[dw] + '</div><div class="plg-dd">' + plgFr(dy) + '</div></th>'; }).join('') + '<th>Total</th></tr>'
       + (camps.length ? '<tr><th class="plg-lh">Campagnes</th><th colspan="7" class="plg-lane"><div class="plg-gr">' + bars + '</div></th><th class="plg-lane"></th></tr>' : '')
       + '<tr><th class="plg-lh">Événements</th>' + Array.from({ length: 7 }, (_, i) => '<th style="vertical-align:top;border-top:1px solid var(--border)">' + evs.map((x, k) => x.j === i ? '<span class="plg-ev" title="' + (can ? 'Cliquer pour retirer' : '') + '" ' + (can ? 'onclick="plgDelEv(' + k + ')" style="cursor:pointer"' : '') + '>' + (x.e.h ? plgE(x.e.h) + ' ' : '') + plgE(x.e.x) + '</span>' : '').join('') + '</th>').join('') + '<th style="border-top:1px solid var(--border)"></th></tr></thead><tbody>';
     T.forEach(p => {
@@ -9616,6 +9628,49 @@ async function plgEnsure() {                                                 // 
 async function plgGoto(d) { if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return; PLG.ws = d; PLG.month = d.slice(0, 7); PLG.conflict = null; await plgEnsure(); plgRender(); }
 const plgStep = n => plgGoto(plgAdd(PLG.ws, n)), plgJump = v => plgGoto(v), plgGo = d => plgStep(7 * d);
 const plgToday = () => plgGoto(plgWS(plgIso(new Date())));
+// Glissement à la souris (ou au pavé tactile) : les jours suivent le pointeur en continu, la fenêtre avance d'un jour à chaque largeur de colonne franchie, puis la grille se cale sur le jour le plus proche.
+const PLGP = { s: null, on: false, busy: false, dx: 0, wt: null, sup: false };
+const plgPanGrid = () => { const t = document.querySelector('#espace-planning table.plg-grid'); return t && t.parentElement.scrollWidth <= t.parentElement.clientWidth + 1 ? t : null; };
+const plgPanW = () => { const th = document.querySelector('#espace-planning table.plg-grid th.plg-dh'); return th ? th.getBoundingClientRect().width : 0; };
+function plgPanApply(tr) {
+  const t = document.querySelector('#espace-planning table.plg-grid'); if (!t) return; const v = PLGP.dx ? 'translateX(' + PLGP.dx + 'px)' : '';
+  [...t.rows].forEach(r => [...r.cells].slice(1, -1).forEach(c => { c.style.transition = tr || 'none'; c.style.transform = v; }));
+}
+function plgPanMark() { const t = document.querySelector('#espace-planning table.plg-grid'); if (t && PLGP.on) { t.parentElement.classList.add('pan'); plgPanApply(); } }
+function plgPanStart() { if (PLGP.on) return true; if (!plgPanGrid()) return false; PLGP.on = true; PLGP.dx = 0; plgPanMark(); try { getSelection().removeAllRanges(); } catch (e) { } return true; }
+async function plgPanFlush() {
+  if (PLGP.busy) return; PLGP.busy = true;
+  try { for (;;) { const w = plgPanW(), n = w ? Math.trunc(PLGP.dx / w) : 0; if (!n) break; PLGP.dx -= n * w; await plgStep(-n); plgPanMark(); } }
+  finally { PLGP.busy = false; }
+  plgPanApply();
+}
+async function plgPanEnd() {
+  if (!PLGP.on) return; while (PLGP.busy) await new Promise(r => setTimeout(r, 16));
+  const w = plgPanW();
+  const n = w ? Math.round(PLGP.dx / w) : 0;
+  if (n) { PLGP.dx -= n * w; PLGP.busy = true; try { await plgStep(-n); } finally { PLGP.busy = false; } plgPanMark(); }
+  plgPanApply(); const t = document.querySelector('#espace-planning table.plg-grid');
+  if (t) { void t.offsetWidth; PLGP.dx = 0; plgPanApply('transform .2s ease-out'); }
+  PLGP.on = false; PLGP.dx = 0;
+  setTimeout(() => { if (PLGP.on) return; const g = document.querySelector('#espace-planning table.plg-grid'); if (g) { g.parentElement.classList.remove('pan'); [...g.rows].forEach(r => [...r.cells].forEach(c => { c.style.transition = ''; c.style.transform = ''; })); } }, 230);
+}
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.pointerType === 'touch' || !e.target.closest || !e.target.closest('#espace-planning table.plg-grid')) return;
+  PLGP.s = { x: e.clientX, y: e.clientY, lx: e.clientX, on: false };
+});
+document.addEventListener('pointermove', e => {
+  const s = PLGP.s; if (!s) return;
+  if (!s.on) { const dx = e.clientX - s.x, dy = e.clientY - s.y; if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return; if (!plgPanStart()) { PLGP.s = null; return; } s.on = true; s.lx = e.clientX; }
+  PLGP.dx += e.clientX - s.lx; s.lx = e.clientX; plgPanApply(); plgPanFlush();
+});
+const plgPanUp = () => { const s = PLGP.s; PLGP.s = null; if (!s || !s.on) return; PLGP.sup = true; setTimeout(() => { PLGP.sup = false; }, 0); plgPanEnd(); };
+document.addEventListener('pointerup', plgPanUp); document.addEventListener('pointercancel', plgPanUp);
+document.addEventListener('click', e => { if (PLGP.sup) { e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('wheel', e => {
+  if (!e.target.closest || !e.target.closest('#espace-planning table.plg-grid') || e.ctrlKey || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  if (PLGP.s && PLGP.s.on) return; if (!plgPanStart()) return; e.preventDefault();
+  PLGP.dx -= e.deltaX; plgPanApply(); plgPanFlush(); clearTimeout(PLGP.wt); PLGP.wt = setTimeout(plgPanEnd, 150);
+}, { passive: false });
 function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
 async function plgSetMod(v) {
   const r = await plgApi('/rest/v1/rpc/planning_resto_save', 'POST', { f: PLG.FR, resto: PLG.resto, p_modulation: !!v, p_debut: PLG.cfg.debut_cycle, p_seuils: PLG.cfg.seuils || {} });
@@ -10297,7 +10352,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261104-193228';
+const BUILD_VERSION = '20261104-210525';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
