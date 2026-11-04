@@ -3282,8 +3282,9 @@ function eqForm() {
     <div style="font-weight:800;margin-bottom:10px">${isNew ? 'Ajouter une personne' : 'Modifier ' + escH(e.nom)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
       <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
-      <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" ${isNew ? '' : 'disabled'} placeholder="prenom@entreprise.fr"></label>
+      <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" placeholder="prenom@entreprise.fr"></label>
       <label style="font-size:.78rem;color:var(--muted)">Fonction<select id="eqRole" style="${inp}" onchange="eqRoleChanged(this.value)">${(isNew || eqRolesFor().includes(e.role) ? eqRolesFor() : [e.role, ...eqRolesFor()]).map(k => `<option value="${k}" ${k === e.role ? 'selected' : ''}>${escH(eqLabel(k))}</option>`).join('')}</select></label></div>
+    ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin:-6px 0 12px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
       ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
@@ -3323,15 +3324,17 @@ function eqRead() {
 async function eqSave() {
   const e = EQ.edit, o = eqRead(), b = document.getElementById('eqGo');
   if (!o.nom) return eqSet('Indiquez le prénom et l\'initiale', 'err');
-  if (e.isNew && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
-  if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');
   const orig = e.isNew ? null : EQ.rows.find(r => r.id === e.id);
+  if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length && (e.isNew || (orig && ((orig.restos_planning || []).length || orig.role !== 'directeur')))) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');   // obligatoire pour un nouveau directeur ; un directeur existant « à affecter » peut être enregistré sans (transition)
   if (orig && orig.role !== o.role && !confirm('Passer ' + o.nom + ' de « ' + eqLabel(orig.role) + ' » à « ' + eqLabel(o.role) + ' » ?\n\nSes accès seront ceux affichés dans le formulaire.')) return;
-  const inv = e.isNew && !!(document.getElementById('eqInv') || {}).checked;
+  const mailChanged = !!orig && o.email !== String(orig.email).toLowerCase();
+  if (mailChanged && !confirm('Changer l\'adresse de ' + o.nom + ' ?\n\nAncienne : ' + orig.email + '\nNouvelle : ' + o.email + '\n\n' + (orig.user_id ? 'Son ancien compte perdra l\'accès tout de suite : elle devra cliquer sur « Première connexion ou mot de passe oublié » avec la nouvelle adresse (une invitation lui est envoyée).' : 'Une invitation est envoyée à la nouvelle adresse.'))) return;
+  const inv = (e.isNew && !!(document.getElementById('eqInv') || {}).checked) || mailChanged;
   if (b) b.disabled = true; eqSet('Enregistrement…');
-  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : { nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can };
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : Object.assign({ nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can }, mailChanged ? Object.assign({ email: o.email }, orig.user_id ? { user_id: null } : {}) : {});
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
