@@ -9271,6 +9271,19 @@ function igGo() {
 #espace-planning .plg-dc .plg-mod{padding:3px 8px;font-weight:600}
 #espace-planning .plg-h4{margin:14px 0 0;font-size:.8rem}
 @media (max-width:520px){#espace-planning .plg-ts.plg-w2{grid-column:span 1}}
+#espace-planning .plg-tb{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin:0 0 10px}
+#espace-planning .plg-tile{font-family:inherit;text-align:left;background:var(--card);color:var(--text);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;transition:border-color .15s,box-shadow .15s,transform .15s}
+#espace-planning .plg-tile:hover{border-color:var(--gold);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.08)}
+#espace-planning .plg-tile .t1{font-size:.78rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#espace-planning .plg-tile .t2{font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#espace-planning .plg-tile.on{border-color:var(--gold);background:var(--card2);box-shadow:0 0 0 2px rgba(184,134,11,.18)}
+#espace-planning .plg-tile.al{background:#fdecea;border-color:#f1b0a8}#espace-planning .plg-tile.al .t1,#espace-planning .plg-tile.al .t2{color:#a93226}
+#espace-planning .plg-tile.wa{background:#fff7ed;border-color:#fed3a3}#espace-planning .plg-tile.wa .t1,#espace-planning .plg-tile.wa .t2{color:#9a3412}
+#espace-planning .plg-tile.ok .t2{color:#1e8449}
+#espace-planning .plg-tile.al.on,#espace-planning .plg-tile.wa.on{box-shadow:0 0 0 2px rgba(184,134,11,.35)}
+#espace-planning .plg-tp{display:none;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px 12px;margin:0 0 10px}
+#espace-planning .plg-tp.on{display:block}
+#espace-planning .plg-tph{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:.84rem}
 #espace-planning .plg-rl{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;padding:5px 0;border-top:1px solid var(--border)}
 </style>
 <style>
@@ -9330,7 +9343,7 @@ function igGo() {
 <script>
 // ══ PLANNING EDG : équipe, horaires des lettres par restaurant, grille hebdomadaire, résumés (mois / cycle de 13 semaines) ══
 // Données dans Supabase (tables equipe, planning_*) lues et écrites avec le jeton de la personne ; campagnes lues dans le Plan de communication.
-const PLG = { dk: new Set(), editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null, nw: 1, vz: ['A', 'B', 'C'], fer: true, newCol: null };
+const PLG = { dk: new Set(), editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null, nw: 1, vz: ['A', 'B', 'C'], fer: true, newCol: null, tile: null };
 // préférences d'affichage de CET appareil : jours fériés et zones de vacances scolaires affichés (le nombre de semaines affichées n'est PAS mémorisé : on repart toujours en défilement)
 try { const pr = JSON.parse(localStorage.getItem('fmj_plgprefs') || '{}'); if (Array.isArray(pr.vz)) PLG.vz = pr.vz.filter(z => z === 'A' || z === 'B' || z === 'C'); if (typeof pr.fer === 'boolean') PLG.fer = pr.fer; } catch (e) { }
 const plgPrefsSave = () => { try { localStorage.setItem('fmj_plgprefs', JSON.stringify({ vz: PLG.vz, fer: PLG.fer })); } catch (e) { } };
@@ -9663,27 +9676,39 @@ function plgRender() {
     + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><label class="plg-mod" style="padding:4px 10px;font-weight:600" title="Réglage du restaurant : il change l\'affichage des semaines pour tous ceux qui ouvrent ce planning (le planning enregistré ne change pas)"><input type="checkbox" ' + (plgOff() ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgWkSet(this.checked)"> Semaine commençant le lundi</label><span>' + (mod ? '<b>Modulation</b> · cycle ' + cy.n + ', semaine ' + (Math.min(13, plgWk(cy.start, plgWS(ws)) + 1)) + '/13 · 455 h par personne sur le cycle' : 'Planning à 35 h par semaine') + '</span></div></div>'
     + '<div class="plg-bar" style="margin:8px 0 0"><label class="plg-mod" style="padding:3px 10px;font-weight:600" title="Défilement : 7 jours qui glissent jour par jour (réglage habituel). Plusieurs semaines : pratique pour construire le planning ; rien n\'est modifié dans les données enregistrées">Affichage <select class="plg-in" style="padding:3px 6px" onchange="plgSetNw(+this.value)" aria-label="Nombre de semaines affichées">' + [[1, 'Défilement (7 jours)'], [2, '2 semaines'], [3, '3 semaines'], [4, '4 semaines'], [6, '6 semaines']].map(o => '<option value="' + o[0] + '"' + (o[0] === N ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>'
     + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)"><span>Calendrier :</span>' + chip(PLG.fer, ['#fee2e2', '#b91c1c'], 'plgToggleCal(\'F\')', 'Jours fériés', 'Afficher les jours fériés sous la date') + ['A', 'B', 'C'].map(z => chip(PLG.vz.includes(z), PLG_ZC[z], 'plgToggleCal(\'' + z + '\')', 'Zone ' + z, 'Vacances scolaires de la zone ' + z + ' (A : Lyon, Grenoble · B : Marseille, Nice… · C : Paris, Toulouse…)')).join('') + (PLG.vz.length && we > PLG_VAC_FIN ? '<span title="Le calendrier officiel n\'est pas encore publié au-delà">(calendrier scolaire publié jusqu\'au ' + plgFr(PLG_VAC_FIN) + '/' + PLG_VAC_FIN.slice(0, 4) + ')</span>' : '') + '</div></div></div>';
-  h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Événements de la période' + (evs.length ? ' (' + evs.length + ')' : '') + '</summary><div>' + plgEvForm(can) + '</div></details>';
-  if (can) h += '<details class="plg-sec" style="margin:0 0 10px"><summary>Congés et absences (CP) : poser dans le planning</summary><div>' + plgCpForm(can) + '</div></details>';
-  if (!T.length) h += '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans « Équipe du restaurant » ci-dessous.' : '') + '</div>';
+  let gridH = '';                                                              // la grille est construite d'abord : ses alertes alimentent les tuiles
+  if (!T.length) gridH = '<div class="plg-box plg-rem">Aucune personne dans l\'équipe de ce restaurant.' + (can ? ' Ajoutez-les dans la tuile « Équipe ».' : '') + '</div>';
   else {
     WK = plgWE(codes); const COV = plgCoverage(codes, ws, 7 * N);
-    h += plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod);
+    gridH = plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod);
     Object.keys(COV).forEach(d => COV[d].al.forEach(t => covAl.push(t))); WK.al.forEach(t => covAl.push(t));
   }
+  const uq = a => { const s = new Set(); return a.filter(x => { const k = x.t + '|' + x.x; if (s.has(k)) return false; s.add(k); return true; }); }, al = uq(alerts), cv = uq(covAl), rm = uq(rems), runs = plgCpRuns();
+  const tl = (a, kind, ico, n) => '<div class="plg-tg">' + a.slice(0, n).map(x => '<div class="plg-tl ' + kind + '"><div class="plg-tt">' + ico + ' ' + plgE(x.t) + '</div><div class="plg-tx">' + plgE(x.x) + '</div></div>').join('') + (a.length > n ? '<div class="plg-tl more"><div class="plg-tt">+ ' + (a.length - n) + ' autre' + (a.length - n > 1 ? 's' : '') + '</div></div>' : '') + '</div>';
+  const alBody = (al.length ? '<div class="plg-box plg-alert"><b>Règles sociales (' + al.length + ')</b>' + tl(al, 'al', '⏱️', 24) + '</div>' : '<div class="plg-box plg-ok">Aucune alerte sociale ' + (sem ? 'sur la période affichée' : 'cette semaine') + '.</div>')
+    + (cv.length ? '<div class="plg-box plg-warn"><b>Ouvertures, fermetures et week-ends (' + cv.length + ')</b>' + tl(cv, 'wa', '📅', 24) + '</div>' : '<div class="plg-box plg-ok">Ouvertures, fermetures et équilibre des week-ends : rien à signaler.</div>');
+  const S = (n, un, pl) => n + ' ' + (n > 1 ? pl : un);
+  const defs = [
+    ['ev', '🗓️', 'Événements de la période', evs.length ? S(evs.length, 'événement', 'événements') : 'Aucun', '', plgEvForm(can), 'Événements'],
+    ['cp', '🏖️', 'Congés et absences', runs.length ? S(runs.length, 'période', 'périodes') : 'Aucun', '', plgCpForm(can), 'Congés / absences']];
+  if (T.length) defs.push(['al', '⚠️', 'À vérifier', al.length + cv.length ? S(al.length + cv.length, 'alerte', 'alertes') : '✓ Rien à signaler', al.length ? 'al' : (cv.length ? 'wa' : 'ok'), alBody, 'À vérifier']);
+  if (rm.length) defs.push(['rm', '💬', 'Remarques', S(rm.length, 'remarque', 'remarques'), '', '<div class="plg-mm" style="margin:0">Non bloquantes.</div>' + tl(rm, 'rm', '💬', 24), 'Remarques']);
+  defs.push(['sum', '📊', mod ? 'Résumé du cycle' : 'Résumé du mois', mod ? '13 semaines' : 'Heures et week-ends', '', '<div id="plgSum">' + plgSummary(codes) + plgWeTable(WK) + '</div>', mod ? 'Résumé du cycle' : 'Résumé du mois'],
+    ['let', '🕘', 'Horaires des lettres', S(list.length, 'lettre', 'lettres') + ' et horaires', '', plgCodesTable(list, can), 'Lettres'],
+    ['cfg', '🔔', 'Alertes du restaurant', 'Réglages et mes alertes' + (plgCfgA().regles.length ? ' (' + plgCfgA().regles.length + ')' : ''), '', plgAlertBox(), 'Alertes'],
+    ['team', '👥', 'Équipe du restaurant', S(T.length, 'personne', 'personnes'), '', plgTeamBox(can), 'Équipe']);
+  if (!defs.some(d => d[0] === PLG.tile)) PLG.tile = null;
+  h += '<div class="plg-tb">' + defs.map(d => '<button type="button" class="plg-tile ' + d[4] + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '" aria-expanded="' + (PLG.tile === d[0]) + '" title="' + plgE(d[2]) + '" onclick="plgTile(\'' + d[0] + '\')"><span class="t1">' + d[1] + ' ' + (d[6] || d[2]) + '</span><span class="t2">' + plgE(d[3]) + '</span></button>').join('') + '</div>';
+  h += defs.map(d => '<div class="plg-tp' + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '"><div class="plg-tph"><b>' + d[1] + ' ' + d[2] + '</b><button type="button" class="plg-btn" style="padding:2px 10px" onclick="plgTile(\'' + d[0] + '\')" aria-label="Fermer">✕</button></div>' + d[5] + '</div>').join('');
+  h += gridH;
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
   if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
-  const uq = a => { const s = new Set(); return a.filter(x => { const k = x.t + '|' + x.x; if (s.has(k)) return false; s.add(k); return true; }); }, al = uq(alerts), cv = uq(covAl), rm = uq(rems);
-  const tiles = (a, kind, ico, n) => '<div class="plg-tg">' + a.slice(0, n).map(x => '<div class="plg-tl ' + kind + '"><div class="plg-tt">' + ico + ' ' + plgE(x.t) + '</div><div class="plg-tx">' + plgE(x.x) + '</div></div>').join('') + (a.length > n ? '<div class="plg-tl more"><div class="plg-tt">+ ' + (a.length - n) + ' autre' + (a.length - n > 1 ? 's' : '') + '</div></div>' : '') + '</div>';
-  h += al.length ? '<div class="plg-box plg-alert"><b>À vérifier : règles sociales (' + al.length + ')</b>' + tiles(al, 'al', '⏱️', 12) + '</div>' : (T.length ? '<div class="plg-box plg-ok">Aucune alerte sociale ' + (sem ? 'sur la période affichée' : 'cette semaine') + '.</div>' : '');
-  h += cv.length ? '<div class="plg-box plg-warn"><b>À vérifier : ouvertures, fermetures et week-ends (' + cv.length + ')</b>' + tiles(cv, 'wa', '📅', 12) + '</div>' : (T.length ? '<div class="plg-box plg-ok">Ouvertures, fermetures et équilibre des week-ends : rien à signaler.</div>' : '');
-  if (rm.length) h += '<div class="plg-box plg-rem"><b style="color:var(--text)">Remarques (non bloquantes)</b>' + tiles(rm, 'rm', '💬', 12) + '</div>';
-  h += '<details class="plg-sec" open><summary>' + (mod ? 'Résumé du cycle (13 semaines)' : 'Résumé du mois') + '</summary><div id="plgSum">' + plgSummary(codes) + plgWeTable(WK) + '</div></details>';
-  h += '<details class="plg-sec"><summary>Horaires des lettres de ce restaurant</summary><div>' + plgCodesTable(list, can) + '</div></details>';
-  h += '<details class="plg-sec"><summary>Alertes du restaurant (ouverture / fermeture, week-ends, vos propres alertes)</summary><div>' + plgAlertBox() + '</div></details>';
-  h += '<details class="plg-sec"><summary>Équipe du restaurant (' + T.length + ')</summary><div>' + plgTeamBox(can) + '</div></details>';
-  const was = {}; card.querySelectorAll('details.plg-sec').forEach(d => { was[d.firstElementChild.textContent.slice(0, 10)] = d.open; });   // les sections restent ouvertes ou fermées comme l'utilisateur les a laissées
-  card.innerHTML = h; card.querySelectorAll('details.plg-sec').forEach(d => { const k = d.firstElementChild.textContent.slice(0, 10); if (k in was) d.open = was[k]; }); plgMsg(PLG.msg[0], PLG.msg[1]);
+  card.innerHTML = h; plgMsg(PLG.msg[0], PLG.msg[1]);
+}
+function plgTile(k) {                                                          // un clic sur une tuile ouvre son contenu (un seul à la fois) ; un second clic le referme ; aucune ré-écriture de la page (les saisies en cours sont conservées)
+  PLG.tile = PLG.tile === k ? null : k;
+  document.querySelectorAll('#plgCard .plg-tile').forEach(b => { const on = b.dataset.k === PLG.tile; b.classList.toggle('on', on); b.setAttribute('aria-expanded', on ? 'true' : 'false'); });
+  document.querySelectorAll('#plgCard .plg-tp').forEach(p => p.classList.toggle('on', p.dataset.k === PLG.tile));
 }
 // ── résumés : mois (35 h) ou cycle de 13 semaines (modulation), comme la feuille « 35H OU MODULATION » ──
 function plgSummary(codes) {
@@ -10726,7 +10751,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261105-155023';
+const BUILD_VERSION = '20261105-203646';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
