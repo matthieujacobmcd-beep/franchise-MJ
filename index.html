@@ -8010,7 +8010,7 @@ function qhInitChart(canvas) {
       <label id="pcSubL">Type</label><select id="pcSub" onchange="pcSubChange()"></select>
       <input id="pcDetail" maxlength="120" autocomplete="off" style="margin-top:4px">
       <label id="pcRestoL">Restaurant(s)</label><div class="pc-restos" id="pcMRestos" onchange="pcCampWarn()"></div>
-      <div class="pc-row"><div><label>Début</label><input type="date" id="pcStart" onchange="pcCampWarn()"></div><div><label>Fin (facultatif)</label><input type="date" id="pcEnd" onchange="pcCampWarn()"></div><div><label>Heure (facultatif)</label><input id="pcTime" maxlength="30" placeholder="ex. 09:00 – 12:00"></div></div>
+      <div class="pc-row"><div><label>Début</label><input type="date" id="pcStart" onchange="pcCampWarn()"></div><div><label>Fin (facultatif)</label><input type="date" id="pcEnd" onchange="pcCampWarn()"></div><div><label>Heure (facultatif)</label><input id="pcTime" maxlength="30" placeholder="ex. 9h-12h ou 14h30"></div></div>
       <div class="pc-warn" id="pcWarn"></div>
       <label>Lieu (facultatif)</label><input id="pcPlace" maxlength="80" placeholder="ex. Salle de réunion Chambéry, Teams, Siège, restaurant de Belley…">
       <label>Note (champ libre)</label><textarea id="pcNote" maxlength="500" placeholder="Participants, ordre du jour, précisions…"></textarea>
@@ -8035,7 +8035,7 @@ const PC_TYPES = [                                          // catégories (coul
   { k: 'libre', l: 'Autre (champ libre)', c: '#64748b', i: '📌', subs: [] },
 ];
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
-const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE';          // PC_FR : événement pour toute la franchise (une seule ligne)
+const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE', PC_NONE = 'SANS RESTAURANT';          // PC_FR : événement pour toute la franchise (une seule ligne)
 const PC_FERKEY = 'fmj_pcfer';                                  // afficher les jours fériés (préférence de l'appareil)
 const PC = { fer: (() => { try { return localStorage.getItem(PC_FERKEY) !== '0'; } catch (e) { return true; } })(), rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
 const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -8045,6 +8045,18 @@ const pcT = k => PC_TYPES.find(t => t.k === k) || PC_TYPES[PC_TYPES.length - 1];
 const pcFree = k => k === 'libre' || k === 'campagne';                  // catégories sans liste de types : on saisit un titre
 const pcNeed = t => t === 'campagne' ? 'Donne un nom à la campagne.' : pcFree(t) ? 'Donne un titre à l’événement.' : 'Précise le type.';
 const pcIso = d => d.toISOString().slice(0, 10);
+function pcHeure(v) {                                           // heure d'un événement au format français : « 9h », « 14h30 », « 9h-12h » (le Sheet peut renvoyer une vraie valeur d'heure : « 1899-12-30T13:21:39.000Z » ou un nombre)
+  if (v == null || v === '') return '';
+  const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mi = m % 60; return h + 'h' + (mi ? String(mi).padStart(2, '0') : ''); };
+  if (typeof v === 'number') return v >= 0 && v < 1 ? hm(v * 1440) : String(v);
+  let s = String(v).trim(); let m = s.match(/^(\d{4})-\d{2}-\d{2}T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/);
+  if (m) {                                                      // valeur d'heure d'une cellule du Sheet : date de référence 1899, décalage d'avant 1911 (Paris : +0 h 09 min 21 s) à remettre
+    if (+m[1] < 1912) return hm((+m[2] * 3600 + +m[3] * 60 + +m[4] + 561) / 60);
+    try { const d = new Date(s); return hm(+d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', hour12: false }) * 60 + +d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', minute: '2-digit' })); } catch (e) { return s; }
+  }
+  s = s.replace(/(\d{1,2})\s*(?::|[hH])(\d{2})?(?::\d{2})?/g, (x, h, mi) => (+h) + 'h' + (mi && mi !== '00' ? mi : ''));
+  return s.replace(/(\d+h(?:\d{2})?)\s*[-–—]\s*(?=\d)/g, '$1-').replace(/\s{2,}/g, ' ');
+}
 const pcFmt = iso => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const pcDow = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
 const _pcFer = {};                                              // jours fériés français : fixes + Pâques, Ascension, Pentecôte (même règle que le calendrier de prévision CA)
@@ -8063,7 +8075,7 @@ const pcFerMonth = ym => Object.entries(pcFeries(+ym.slice(0, 4))).filter(([d]) 
 const pcAdd = (iso, n) => pcIso(new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 86400000));
 const pcTimes = t => { const m = [...String(t || '').matchAll(/(\d{1,2})\s*(?:h|H|:)\s*(\d{2})?/g)].map(x => [+x[1], +(x[2] || 0)]).filter(x => x[0] < 24 && x[1] < 60); return m.length ? { s: m[0], e: m[1] || null } : null; };
 function pcCalBuild(o) {                                          // o = { type, detail, periode, fin, heure, lieu, note, restos[] }
-  const t = pcT(o.type), main = o.type === 'formation' ? 'Formation' + (o.detail ? ' · ' + o.detail : '') : (o.detail || t.l), rs = (o.restos || []).filter(Boolean);
+  const t = pcT(o.type), main = o.type === 'formation' ? 'Formation' + (o.detail ? ' · ' + o.detail : '') : (o.detail || t.l), rs = (o.restos || []).filter(r => r && r !== PC_NONE);
   const names = rs.map(r => r === PC_FR ? 'Toute la franchise' : restoDisplay(r)), where = names.length === 1 ? names[0] : names.length > 1 ? names.length + ' restaurants' : '';
   const fr = (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.title) || 'Franchise', tm = pcTimes(o.heure), d0 = o.periode, d1 = o.fin && o.fin >= d0 ? o.fin : d0, one = d0 === d1;
   const hh = a => String(a[0]).padStart(2, '0') + String(a[1]).padStart(2, '0') + '00', e0 = tm && one ? tm.s : null;
@@ -8111,7 +8123,7 @@ function pcNorm(r) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p) || !r.restaurant) return null;
   let type = String(r.type || 'libre'), detail = String(r.detail || ''); if (PC_ALIAS[type]) { if (!detail) detail = PC_ALIAS[type][1]; type = PC_ALIAS[type][0]; }
   if (!PC_TYPES.some(t => t.k === type)) type = 'libre';
-  return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type, detail, heure: String(r.heure || ''), lieu: String(r.lieu || ''), note: String(r.note || ''), maj: String(r.maj || '') };
+  return { id: String(r.id || ''), periode: p, fin: /^\d{4}-\d{2}-\d{2}$/.test(f) && f >= p ? f : '', restaurant: String(r.restaurant), type, detail, heure: pcHeure(r.heure), lieu: String(r.lieu || ''), note: String(r.note || ''), maj: String(r.maj || '') };
 }
 const pcSame = (a, b) => ['periode', 'fin', 'restaurant', 'type', 'detail', 'heure', 'lieu', 'note'].every(k => (a[k] || '') === (b[k] || ''));
 const PC_SEEN = 'fmj_pcseen2';                                  // { id d'événement : date de modification vue } : propre à l'appareil
@@ -8288,9 +8300,11 @@ function pcOpen(ev) {
   if (d.detail && !pcFree(ty)) subEl.value = inList ? d.detail : PC_OTHER;
   pcSubChange(); document.getElementById('pcDetail').value = d.detail && (pcFree(ty) || !inList) ? d.detail : '';
   const one = !!e, sel = d.restaurant ? [d.restaurant] : (PC.resto !== 'ALL' ? [PC.resto] : []);
-  document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles';
+  document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles, ou aucun';
   document.getElementById('pcMRestos').innerHTML = (one ? `<label><input type="radio" name="pcr" value="${PC_FR}" ${sel.includes(PC_FR) ? 'checked' : ''}> <b>Toute la franchise</b></label>` : `<label style="grid-column:1/-1"><input type="checkbox" id="pcFr" onchange="pcFrToggle(this.checked)"> <b>Toute la franchise</b> — un seul événement pour tous les restaurants</label>`) +
-    RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('');
+    RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('') +
+    (one ? `<label><input type="radio" name="pcr" value="${PC_NONE}" ${sel.includes(PC_NONE) ? 'checked' : ''}> <b>Aucun restaurant</b></label>` : '') +
+    `<div style="grid-column:1/-1;font-size:.7rem;color:var(--muted);line-height:1.4">Aucun restaurant coché = événement général : il reste dans le Plan de communication (« Tous les restaurants ») et n'apparaît dans aucun planning. Un événement n'apparaît dans le planning d'un restaurant que si ce restaurant (ou toute la franchise) est coché.</div>`;
   document.getElementById('pcStart').value = d.periode || pcIso(new Date()); document.getElementById('pcEnd').value = d.fin || '';
   document.getElementById('pcTime').value = d.heure || ''; document.getElementById('pcPlace').value = d.lieu || ''; document.getElementById('pcNote').value = d.note || '';
   document.getElementById('pcMsg').textContent = ''; document.getElementById('pcMsg').className = 'pc-msg';
@@ -8312,12 +8326,12 @@ async function pcPost(body) {
 async function pcSave() {
   if (PC.busy) return;
   const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (pcFree(type) || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
-  const fr = document.getElementById('pcFr'), restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
-  if (!restos.length) return pcMsg('err', 'Choisis au moins un restaurant.');
+  const fr = document.getElementById('pcFr'); let restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
+  if (!restos.length) restos = [PC_NONE];                       // aucun restaurant : événement général (hors plannings)
   if (!start) return pcMsg('err', 'Indique la date de début.');
   if (end && end < start) return pcMsg('err', 'La date de fin est avant le début.');
   if (!detail) return pcMsg('err', pcNeed(type));
-  const base = { periode: start, fin: end, type, detail, heure: document.getElementById('pcTime').value.trim(), lieu: document.getElementById('pcPlace').value.trim(), note: document.getElementById('pcNote').value.trim() };
+  const base = { periode: start, fin: end, type, detail, heure: pcHeure(document.getElementById('pcTime').value.trim()), lieu: document.getElementById('pcPlace').value.trim(), note: document.getElementById('pcNote').value.trim() };
   const baseId = PC.edit ? (PC.edit.ids ? PC.edit.ids[0] : PC.edit.id) : null, rows = restos.map(r => Object.assign({ restaurant: r }, base, baseId ? { id: baseId } : {}));
   PC.busy = true; document.getElementById('pcSaveBtn').disabled = true; pcMsg('', 'Enregistrement…');
   const j = await pcPost({ action: 'ev_save', rows });
@@ -9190,7 +9204,6 @@ function igGo() {
 #espace-planning .plg-cb.r{border-top-right-radius:0;border-bottom-right-radius:0}
 #espace-planning th.plg-lane{padding:0;font-weight:400;text-align:left;border-top:1px solid var(--border)}
 #espace-planning th.plg-lh{text-align:left;font-size:.62rem;padding-left:6px;border-top:1px solid var(--border)}
-#espace-planning .plg-alert b::before{content:'⚠️ '}
 #espace-planning .plg-c{height:32px;border-radius:9px;transition:border-color .12s,box-shadow .12s}
 #espace-planning .plg-c:hover{border-color:var(--gold)}
 #espace-planning td.plg-cell{vertical-align:top;padding-bottom:4px}
@@ -9246,7 +9259,6 @@ function igGo() {
 #espace-planning tbody.plg-nb>tr:first-child>th{border-top:4px solid var(--card2)}
 #espace-planning th.plg-wl{font-size:.64rem;font-weight:800;color:var(--muted);text-align:left;padding-left:8px;white-space:nowrap}
 #espace-planning .plg-warn{background:#fff7ed;border:1px solid #fed3a3;color:#9a3412}
-#espace-planning .plg-warn b::before{content:'⚠️ '}
 #espace-planning button.plg-sw{cursor:pointer;font-family:inherit;background:var(--card);color:var(--text)}
 #espace-planning .plg-al{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;font-size:.78rem;margin:6px 0}
 #espace-planning .plg-al h4{margin:12px 0 2px;font-size:.8rem}
@@ -9271,8 +9283,8 @@ function igGo() {
 #espace-planning .plg-dc .plg-mod{padding:3px 8px;font-weight:600}
 #espace-planning .plg-h4{margin:14px 0 0;font-size:.8rem}
 @media (max-width:520px){#espace-planning .plg-ts.plg-w2{grid-column:span 1}}
-#espace-planning .plg-tb{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin:0 0 10px}
-#espace-planning .plg-tile{font-family:inherit;text-align:left;background:var(--card);color:var(--text);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;transition:border-color .15s,box-shadow .15s,transform .15s}
+#espace-planning .plg-tb{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:8px;margin:0 0 10px}
+#espace-planning .plg-tile{font-family:inherit;text-align:left;background:var(--card);color:var(--text);border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;cursor:pointer;display:flex;flex-direction:row;align-items:center;gap:9px;min-width:0;transition:border-color .15s,box-shadow .15s,transform .15s}
 #espace-planning .plg-tile:hover{border-color:var(--gold);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.08)}
 #espace-planning .plg-tile .t1{font-size:.78rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #espace-planning .plg-tile .t2{font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -9284,6 +9296,14 @@ function igGo() {
 #espace-planning .plg-tp{display:none;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px 12px;margin:0 0 10px}
 #espace-planning .plg-tp.on{display:block}
 #espace-planning .plg-tph{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:.84rem}
+#espace-planning .plg-i{display:inline-block;width:14px;height:14px;vertical-align:-2px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#espace-planning .ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;background:var(--e-bg);color:var(--e-color);flex-shrink:0}
+#espace-planning .ic .plg-i{width:16px;height:16px;vertical-align:0}
+#espace-planning .plg-tile .tx{display:flex;flex-direction:column;min-width:0}
+#espace-planning .plg-tpt{display:flex;align-items:center;gap:8px}
+#espace-planning .plg-tl .plg-tt .plg-i{margin-right:3px}
+#espace-planning .plg-ts .plg-tt .plg-i{color:#0e7490}
+#espace-planning .plg-box>b .plg-i{margin-right:4px}
 #espace-planning .plg-rl{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;padding:5px 0;border-top:1px solid var(--border)}
 </style>
 <style>
@@ -9334,7 +9354,7 @@ function igGo() {
 <div id="espace-planning" style="display:none">
   <div class="main">
     <div class="esp-page-head">
-      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(14,116,144,.14);display:inline-flex;align-items:center;justify-content:center;font-size:16px">🗓️</span>Planning EDG</div>
+      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(14,116,144,.14);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#0e7490" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h3M13 14h3M8 18h3"/></svg></span>Planning EDG</div>
       <div style="font-size:.78rem;color:var(--muted)">Planning de l'équipe de gestion de chaque restaurant : 35 h par semaine, ou modulation par cycles de 13 semaines.</div>
     </div>
     <div class="esp-card" id="plgCard"><div style="color:var(--muted);font-size:.84rem">Chargement…</div></div>
@@ -9346,6 +9366,28 @@ function igGo() {
 const PLG = { dk: new Set(), editId: null, rights: null, FR: '', resto: null, restos: [], ws: null, team: [], cfg: { modulation: false, debut_cycle: null, seuils: {} }, def: null, over: [], weeks: {}, ver: {}, dirty: false, busy: false, msg: ['', ''], conflict: null, month: null, nw: 1, vz: ['A', 'B', 'C'], fer: true, newCol: null, tile: null };
 // préférences d'affichage de CET appareil : jours fériés et zones de vacances scolaires affichés (le nombre de semaines affichées n'est PAS mémorisé : on repart toujours en défilement)
 try { const pr = JSON.parse(localStorage.getItem('fmj_plgprefs') || '{}'); if (Array.isArray(pr.vz)) PLG.vz = pr.vz.filter(z => z === 'A' || z === 'B' || z === 'C'); if (typeof pr.fer === 'boolean') PLG.fer = pr.fer; } catch (e) { }
+const PLG_IC = {                                                              // icônes au trait, comme celles des onglets du site (viewBox 24, trait 1,9, bouts arrondis)
+  cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h3M13 14h3M8 18h3"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
+  msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  chart: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  bell: '<path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  sunrise: '<path d="M12 2v8M4.93 10.93l1.41 1.41M2 18h2M20 18h2M19.07 10.93l-1.41 1.41M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  scale: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  timer: '<path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
+  trend: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
+  bed: '<path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4M12 4v6M2 18h20"/>',
+  coffee: '<path d="M10 2v2M14 2v2M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  plus: '<path d="M5 12h14M12 5v14"/>',
+  pal: '<circle cx="13.5" cy="6.5" r=".6"/><circle cx="17.5" cy="10.5" r=".6"/><circle cx="8.5" cy="7.5" r=".6"/><circle cx="6.5" cy="12.5" r=".6"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.12a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/>',
+  mega: '<path d="m3 11 15-5v12L3 13Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>'
+};
+const plgI = (n, s) => '<svg class="plg-i" viewBox="0 0 24 24" aria-hidden="true"' + (s ? ' style="width:' + s + 'px;height:' + s + 'px"' : '') + '>' + (PLG_IC[n] || '') + '</svg>';
 const plgPrefsSave = () => { try { localStorage.setItem('fmj_plgprefs', JSON.stringify({ vz: PLG.vz, fer: PLG.fer })); } catch (e) { } };
 const PLG_FN = { directeur: 'Directeur', directeur_adjoint: 'Directeur adjoint', assistant_direction: 'Assistant de direction', manager: 'Manager', responsable_zone: 'Responsable de zone' };
 const PLG_SEUILS = { jour_max: 10, semaine_max: 48, moyenne12: 44, repos_jour: 11, repos_hebdo: 35, jours_max: 6, assistant_direction_shifts: 2, directeur_adjoint_shifts_min: 1 };
@@ -9515,10 +9557,11 @@ function plgView(ws, pid) {                                                  // 
 }
 const plgRow = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) return plgView(ws, pid); const w = plgW(ws), r = w[pid]; return Array.isArray(r) ? r : (w[pid] = ['', '', '', '', '', '', '']); };
 const plgPeek = (ws, pid) => { if (plgD(ws).getUTCDay() !== 0) { const a = (plgRaw(plgSun(ws)) || {})[pid], b = (plgRaw(plgSun(plgAdd(ws, 6))) || {})[pid]; return Array.isArray(a) || Array.isArray(b) ? plgView(ws, pid) : null; } const r = (plgRaw(ws) || {})[pid]; return Array.isArray(r) ? r : null; };
+const plgHeure = v => (typeof pcHeure === 'function' ? pcHeure(v) : String(v == null ? '' : v));   // heure au format français (« 9h », « 14h30 », « 9h-12h »), comme le Plan de communication
 function plgEvList(ws, n) {                                                     // événements des n semaines affichées (1 par défaut) : ceux du Plan de communication (hors campagnes, déjà en bandeau) + les anciens événements propres au planning ; j = rang du jour depuis ws
   const L = 7 * (n || 1), out = [], we = plgAdd(ws, L - 1);
-  if (typeof pcAll === 'function') pcAll().filter(e => e.type !== 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === PLG.resto || e.restaurant === 'FRANCHISE')).sort((a, b) => (a.periode < b.periode ? -1 : 1)).forEach(e => { for (let j = 0; j < L; j++) { const d = plgAdd(ws, j); if (e.periode <= d && (e.fin || e.periode) >= d) out.push({ pc: e, j, e: { t: pcT(e.type).l, x: e.detail || pcT(e.type).l, h: e.heure || '' } }); } });
-  for (let j = 0; j < L; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e, j, sun, i }); }); }
+  if (typeof pcAll === 'function') pcAll().filter(e => e.type !== 'campagne' && e.periode <= we && (e.fin || e.periode) >= ws && (e.restaurant === PLG.resto || e.restaurant === 'FRANCHISE')).sort((a, b) => (a.periode < b.periode ? -1 : 1)).forEach(e => { for (let j = 0; j < L; j++) { const d = plgAdd(ws, j); if (e.periode <= d && (e.fin || e.periode) >= d) out.push({ pc: e, j, e: { t: pcT(e.type).l, x: e.detail || pcT(e.type).l, h: plgHeure(e.heure) } }); } });
+  for (let j = 0; j < L; j++) { const date = plgAdd(ws, j), sun = plgSun(date), dow = plgD(date).getUTCDay(), w = plgRaw(sun); ((w && w._ev) || []).forEach((e, i) => { if (e.d === dow) out.push({ e: Object.assign({}, e, { h: plgHeure(e.h) }), j, sun, i }); }); }
   return out;
 }
 const plgEvSig = ws => JSON.stringify(plgEvList(ws, PLG.nw).map(x => [x.pc ? x.pc.id : 'l', x.j, x.e.x, x.e.h]));
@@ -9614,7 +9657,7 @@ function plgWeTable(WK) {                                                     //
   if (!WK || !PLG.team.length) return '';
   const thr = WK.ecart, rows = PLG.team.map(p => {
     const b = WK.by.get(p.id) || { s: 0, d: 0, w: 0 }, ds = b.s - WK.avgS, dd = b.d - WK.avgD, bad = b.w > 0 && WK.n > 1 && thr > 0 && (Math.abs(ds) > thr + 1e-9 || Math.abs(dd) > thr + 1e-9), ec = (b.s + b.d) - (WK.avgS + WK.avgD), sg = x => (x >= 0.05 ? '+' : (x <= -0.05 ? '−' : '')) + plgDec(Math.abs(x));
-    return '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td><td>' + b.s + '</td><td>' + b.d + '</td><td><b>' + (b.s + b.d) + '</b></td><td style="color:' + (!b.w ? 'var(--muted)' : (bad ? '#c0392b' : '#1e8449')) + '">' + (b.w ? sg(ec) + (bad ? ' ⚠' : '') : '—') + '</td></tr>';
+    return '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td><td>' + b.s + '</td><td>' + b.d + '</td><td><b>' + (b.s + b.d) + '</b></td><td style="color:' + (!b.w ? 'var(--muted)' : (bad ? '#c0392b' : '#1e8449')) + '">' + (b.w ? sg(ec) + (bad ? ' ' + plgI('alert', 12) : '') : '—') + '</td></tr>';
   }).join('');
   return '<div style="margin-top:14px;font-weight:800;font-size:.8rem">Samedis et dimanches travaillés · cycle du ' + plgFr(WK.a) + ' au ' + plgFr(WK.z) + '/' + WK.z.slice(0, 4) + '</div><div class="plg-wrap"><table class="plg plg-sum" style="min-width:440px;margin-top:6px"><thead><tr><th style="text-align:left;width:120px">Personne</th><th>Samedis</th><th>Dimanches</th><th>Total</th><th>Écart à la moyenne</th></tr></thead><tbody>' + rows
     + '<tr><td class="n"><i>Moyenne de l\'équipe</i></td><td>' + plgDec(WK.avgS) + '</td><td>' + plgDec(WK.avgD) + '</td><td>' + plgDec(WK.avgS + WK.avgD) + '</td><td></td></tr></tbody></table></div>'
@@ -9627,7 +9670,7 @@ function plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod) {         // g
   for (let k = 0; k < N; k++) {
     const ws = plgAdd(PLG.ws, 7 * k), we = plgAdd(ws, 6), lanes = [], camps = plgCampsDe(ws, we), vac = PLG.vz.length ? plgVacLanes(ws) : { bars: [], nl: 0 };
     const bars = camps.slice().sort((a, b) => (a.periode < b.periode ? -1 : 1)).map(e => { const s0 = Math.max(0, dd(ws, e.periode)), e0 = Math.min(6, dd(ws, e.fin || e.periode)); let ln = lanes.findIndex(end => end < s0); if (ln < 0) { ln = lanes.length; lanes.push(-1); } lanes[ln] = e0;
-      return '<span class="plg-cb' + (e.periode < ws ? ' l' : '') + ((e.fin || e.periode) > we ? ' r' : '') + '" style="grid-column:' + (s0 + 1) + '/' + (e0 + 2) + ';grid-row:' + (ln + 1) + '" title="' + plgE((e.detail || 'Campagne') + ' · du ' + plgFr(e.periode) + ' au ' + plgFr(e.fin || e.periode)) + '">' + (e.periode < ws ? '‹ ' : '📣 ') + plgE(e.detail || 'Campagne') + ((e.fin || e.periode) > we ? ' ›' : '') + '</span>'; }).join('');
+      return '<span class="plg-cb' + (e.periode < ws ? ' l' : '') + ((e.fin || e.periode) > we ? ' r' : '') + '" style="grid-column:' + (s0 + 1) + '/' + (e0 + 2) + ';grid-row:' + (ln + 1) + '" title="' + plgE((e.detail || 'Campagne') + ' · du ' + plgFr(e.periode) + ' au ' + plgFr(e.fin || e.periode)) + '">' + (e.periode < ws ? '‹ ' : plgI('mega', 12) + ' ') + plgE(e.detail || 'Campagne') + ((e.fin || e.periode) > we ? ' ›' : '') + '</span>'; }).join('');
     const lab = N > 1 ? (plgD(ws).getUTCDay() === plgOff() ? 'Sem. ' + plgIsoW(plgThu(ws)) : plgFr(ws) + ' → ' + plgFr(we)) : '';
     let hd = '<tr><th class="plg-wl">' + lab + '</th>' + Array.from({ length: 7 }, (_, i) => {
       const dy = plgAdd(ws, i), dw = plgD(dy).getUTCDay(), fe = PLG.fer ? plgFerie(dy) : '', cv = COV[dy], show = covOn && cv && cv.c && A.jours.includes(dw);
@@ -9685,21 +9728,23 @@ function plgRender() {
   }
   const uq = a => { const s = new Set(); return a.filter(x => { const k = x.t + '|' + x.x; if (s.has(k)) return false; s.add(k); return true; }); }, al = uq(alerts), cv = uq(covAl), rm = uq(rems), runs = plgCpRuns();
   const tl = (a, kind, ico, n) => '<div class="plg-tg">' + a.slice(0, n).map(x => '<div class="plg-tl ' + kind + '"><div class="plg-tt">' + ico + ' ' + plgE(x.t) + '</div><div class="plg-tx">' + plgE(x.x) + '</div></div>').join('') + (a.length > n ? '<div class="plg-tl more"><div class="plg-tt">+ ' + (a.length - n) + ' autre' + (a.length - n > 1 ? 's' : '') + '</div></div>' : '') + '</div>';
-  const alBody = (al.length ? '<div class="plg-box plg-alert"><b>Règles sociales (' + al.length + ')</b>' + tl(al, 'al', '⏱️', 24) + '</div>' : '<div class="plg-box plg-ok">Aucune alerte sociale ' + (sem ? 'sur la période affichée' : 'cette semaine') + '.</div>')
-    + (cv.length ? '<div class="plg-box plg-warn"><b>Ouvertures, fermetures et week-ends (' + cv.length + ')</b>' + tl(cv, 'wa', '📅', 24) + '</div>' : '<div class="plg-box plg-ok">Ouvertures, fermetures et équilibre des week-ends : rien à signaler.</div>');
+  const alBody = (al.length ? '<div class="plg-box plg-alert"><b>' + plgI('alert') + 'Règles sociales (' + al.length + ')</b>' + tl(al, 'al', plgI('timer'), 24) + '</div>' : '<div class="plg-box plg-ok">Aucune alerte sociale ' + (sem ? 'sur la période affichée' : 'cette semaine') + '.</div>')
+    + (cv.length ? '<div class="plg-box plg-warn"><b>' + plgI('alert') + 'Ouvertures, fermetures et week-ends (' + cv.length + ')</b>' + tl(cv, 'wa', plgI('cal'), 24) + '</div>' : '<div class="plg-box plg-ok">Ouvertures, fermetures et équilibre des week-ends : rien à signaler.</div>');
   const S = (n, un, pl) => n + ' ' + (n > 1 ? pl : un);
   const defs = [
-    ['ev', '🗓️', 'Événements de la période', evs.length ? S(evs.length, 'événement', 'événements') : 'Aucun', '', plgEvForm(can), 'Événements'],
-    ['cp', '🏖️', 'Congés et absences', runs.length ? S(runs.length, 'période', 'périodes') : 'Aucun', '', plgCpForm(can), 'Congés / absences']];
-  if (T.length) defs.push(['al', '⚠️', 'À vérifier', al.length + cv.length ? S(al.length + cv.length, 'alerte', 'alertes') : '✓ Rien à signaler', al.length ? 'al' : (cv.length ? 'wa' : 'ok'), alBody, 'À vérifier']);
-  if (rm.length) defs.push(['rm', '💬', 'Remarques', S(rm.length, 'remarque', 'remarques'), '', '<div class="plg-mm" style="margin:0">Non bloquantes.</div>' + tl(rm, 'rm', '💬', 24), 'Remarques']);
-  defs.push(['sum', '📊', mod ? 'Résumé du cycle' : 'Résumé du mois', mod ? '13 semaines' : 'Heures et week-ends', '', '<div id="plgSum">' + plgSummary(codes) + plgWeTable(WK) + '</div>', mod ? 'Résumé du cycle' : 'Résumé du mois'],
-    ['let', '🕘', 'Horaires des lettres', S(list.length, 'lettre', 'lettres') + ' et horaires', '', plgCodesTable(list, can), 'Lettres'],
-    ['cfg', '🔔', 'Alertes du restaurant', 'Réglages et mes alertes' + (plgCfgA().regles.length ? ' (' + plgCfgA().regles.length + ')' : ''), '', plgAlertBox(), 'Alertes'],
-    ['team', '👥', 'Équipe du restaurant', S(T.length, 'personne', 'personnes'), '', plgTeamBox(can), 'Équipe']);
+    ['ev', 'cal', 'Événements de la période', evs.length ? S(evs.length, 'événement', 'événements') : 'Aucun', '', plgEvForm(can), 'Événements'],
+    ['cp', 'sun', 'Congés et absences', runs.length ? S(runs.length, 'période', 'périodes') : 'Aucun', '', plgCpForm(can), 'Congés']];
+  if (T.length) defs.push(['al', 'alert', 'À vérifier', al.length + cv.length ? S(al.length + cv.length, 'alerte', 'alertes') : '✓ Rien à signaler', al.length ? 'al' : (cv.length ? 'wa' : 'ok'), alBody, 'À vérifier']);
+  if (rm.length) defs.push(['rm', 'msg', 'Remarques', S(rm.length, 'remarque', 'remarques'), '', '<div class="plg-mm" style="margin:0">Non bloquantes.</div>' + tl(rm, 'rm', plgI('msg'), 24), 'Remarques']);
+  defs.push(['sum', 'chart', mod ? 'Résumé du cycle' : 'Résumé du mois', mod ? 'Cycle de 13 sem.' : 'Mois et week-ends', '', '<div id="plgSum">' + plgSummary(codes) + plgWeTable(WK) + '</div>', 'Résumé'],
+    ['let', 'clock', 'Horaires des lettres', S(list.length, 'lettre', 'lettres'), '', plgCodesTable(list, can), 'Lettres'],
+    ['cfg', 'bell', 'Alertes du restaurant', 'Réglages' + (plgCfgA().regles.length ? ' · ' + plgCfgA().regles.length + ' perso' : ''), '', plgAlertBox(), 'Alertes'],
+    ['team', 'users', 'Équipe du restaurant', S(T.length, 'personne', 'personnes'), '', plgTeamBox(can), 'Équipe']);
   if (!defs.some(d => d[0] === PLG.tile)) PLG.tile = null;
-  h += '<div class="plg-tb">' + defs.map(d => '<button type="button" class="plg-tile ' + d[4] + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '" aria-expanded="' + (PLG.tile === d[0]) + '" title="' + plgE(d[2]) + '" onclick="plgTile(\'' + d[0] + '\')"><span class="t1">' + d[1] + ' ' + (d[6] || d[2]) + '</span><span class="t2">' + plgE(d[3]) + '</span></button>').join('') + '</div>';
-  h += defs.map(d => '<div class="plg-tp' + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '"><div class="plg-tph"><b>' + d[1] + ' ' + d[2] + '</b><button type="button" class="plg-btn" style="padding:2px 10px" onclick="plgTile(\'' + d[0] + '\')" aria-label="Fermer">✕</button></div>' + d[5] + '</div>').join('');
+  const PLG_TC = { ev: '#0e7490', cp: '#0d9488', rm: '#6b7280', sum: '#2563eb', let: '#7c3aed', cfg: '#ea580c', team: '#b8860b' }, tcol = d => d[0] === 'al' ? (al.length ? '#c0392b' : (cv.length ? '#ea580c' : '#1e8449')) : (PLG_TC[d[0]] || '#0e7490');
+  const tst = d => '--e-color:' + tcol(d) + ';--e-bg:color-mix(in srgb,' + tcol(d) + ' 14%,transparent)';
+  h += '<div class="plg-tb">' + defs.map(d => '<button type="button" class="plg-tile ' + d[4] + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '" aria-expanded="' + (PLG.tile === d[0]) + '" title="' + plgE(d[2]) + '" style="' + tst(d) + '" onclick="plgTile(\'' + d[0] + '\')"><span class="ic">' + plgI(d[1]) + '</span><span class="tx"><span class="t1">' + (d[6] || d[2]) + '</span><span class="t2">' + plgE(d[3]) + '</span></span></button>').join('') + '</div>';
+  h += defs.map(d => '<div class="plg-tp' + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '"><div class="plg-tph"><b class="plg-tpt" style="' + tst(d) + '"><span class="ic">' + plgI(d[1]) + '</span>' + d[2] + '</b><button type="button" class="plg-btn" style="padding:2px 10px" onclick="plgTile(\'' + d[0] + '\')" aria-label="Fermer">✕</button></div>' + d[5] + '</div>').join('');
   h += gridH;
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
   if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
@@ -9738,7 +9783,7 @@ function plgEvSubs() { const k = (document.getElementById('plgEt') || {}).value,
 function plgEvForm(can) {
   const ws = PLG.ws, evs = plgEvList(ws, PLG.nw), old = evs.filter(x => !x.pc), cats = (typeof PC_TYPES !== 'undefined' ? PC_TYPES : []).filter(t => t.k !== 'campagne');
   const row = (x, k) => { const fr = x.pc && x.pc.restaurant === 'FRANCHISE';
-    return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(plgJL(x.j)) + ' ' + plgFr(plgAdd(ws, x.j)) + '</b> · ' + plgE(x.e.t) + ' · ' + plgE(x.e.x) + (x.e.h ? ' · ' + plgE(x.e.h) : '') + (x.pc ? ' <span style="color:#0e7490;font-size:.68rem;font-weight:700" title="Enregistré dans le Plan de communication">📅 Plan de com' + (fr ? ' · toute la franchise' : '') + '</span>' : ' <span style="color:#b45309;font-size:.68rem;font-weight:700" title="Ancien événement : propre au planning, absent du Plan de communication">⚠ pas dans le Plan de com</span>') + '</span>'
+    return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;padding:4px 0;border-top:1px solid var(--border)"><span><b>' + plgE(plgJL(x.j)) + ' ' + plgFr(plgAdd(ws, x.j)) + '</b> · ' + plgE(x.e.t) + ' · ' + plgE(x.e.x) + (x.e.h ? ' · ' + plgE(x.e.h) : '') + (x.pc ? ' <span style="color:#0e7490;font-size:.68rem;font-weight:700" title="Enregistré dans le Plan de communication">' + plgI('cal', 12) + ' Plan de com' + (fr ? ' · toute la franchise' : '') + '</span>' : ' <span style="color:#b45309;font-size:.68rem;font-weight:700" title="Ancien événement : propre au planning, absent du Plan de communication">' + plgI('alert', 12) + ' pas dans le Plan de com</span>') + '</span>'
       + (can ? '<span style="white-space:nowrap">' + (x.pc ? (fr ? '' : '<button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>') : '<button class="plg-btn pri" style="padding:2px 8px" onclick="plgPubEv(' + k + ')" title="Enregistre cet événement dans le Plan de communication">Publier dans le Plan de com</button> <button class="plg-btn" style="padding:2px 8px" onclick="plgDelEv(' + k + ')">Retirer</button>') + '</span>' : '') + '</div>'; };
   return (evs.length ? evs.map(row).join('') : '<div style="font-size:.78rem;color:var(--muted)">Aucun événement sur la période affichée.</div>')
     + (can && old.length ? '<div style="margin-top:6px"><button class="plg-btn" onclick="plgPubAll()" title="Publie dans le Plan de communication tous les anciens événements de ce restaurant (périodes déjà chargées)">Publier tous les anciens événements dans le Plan de com</button></div>' : '')
@@ -9747,7 +9792,7 @@ function plgEvForm(can) {
 const plgEvSave = async rows => { if (typeof pcPost !== 'function') return { ok: false, error: 'Plan de communication indisponible' }; const j = await pcPost({ action: 'ev_save', rows }); if (j.ok) { rows.forEach((r, i) => { const e = pcNorm(Object.assign({}, r, { id: (j.ids || [])[i] || r.id })); if (e) PC.adds.push(e); }); try { const sm = pcSeen(); if (sm) { rows.forEach((r, i) => { const id = (j.ids || [])[i] || r.id; if (id) sm[id] = '*'; }); pcSeenSave(); } } catch (e) {} } return j; };
 async function plgAddEv() {
   const x = document.getElementById('plgEx').value.trim(); if (!x) { document.getElementById('plgEx').focus(); return; }
-  const date = plgAdd(PLG.ws, +document.getElementById('plgEd').value), type = document.getElementById('plgEt').value, heure = document.getElementById('plgEh').value || '', b = document.getElementById('plgEvBtn');
+  const date = plgAdd(PLG.ws, +document.getElementById('plgEd').value), type = document.getElementById('plgEt').value, heure = plgHeure(document.getElementById('plgEh').value || ''), b = document.getElementById('plgEvBtn');
   if (b) b.disabled = true; plgMsg('Enregistrement de l\'événement…', '');
   const j = await plgEvSave([{ restaurant: PLG.resto, periode: date, fin: '', type, detail: x.slice(0, 60), heure, lieu: '', note: '' }]);
   if (!j.ok) { if (b) b.disabled = false; plgMsg('Événement non enregistré : ' + (j.error || 'refusé') + (/action inconnue|mot de passe/.test(j.error || '') ? ' — l\'Apps Script doit être mis à jour / reconnecte-toi.' : ''), 'err'); return; }
@@ -9765,7 +9810,7 @@ async function plgDelEv(k) {
   }
   plgW(x.sun)._ev.splice(x.i, 1); PLG.dirty = true; PLG.dk.add(x.sun); plgRender();
 }
-const plgOldRow = (sun, e) => ({ restaurant: PLG.resto, periode: plgAdd(sun, e.d), fin: '', type: PLG_EVK[e.t] || 'libre', detail: String(e.x || '').slice(0, 60), heure: e.h || '', lieu: '', note: '' });
+const plgOldRow = (sun, e) => ({ restaurant: PLG.resto, periode: plgAdd(sun, e.d), fin: '', type: PLG_EVK[e.t] || 'libre', detail: String(e.x || '').slice(0, 60), heure: plgHeure(e.h), lieu: '', note: '' });
 async function plgPubEv(k) {                                                    // un ancien événement du planning → Plan de communication (puis retiré du planning)
   const x = plgEvList(PLG.ws, PLG.nw)[k]; if (!x || x.pc) return;
   plgMsg('Publication dans le Plan de communication…', ''); const j = await plgEvSave([plgOldRow(x.sun, x.e)]);
@@ -9825,7 +9870,7 @@ async function plgCpDel(i) {
 // ── alertes du restaurant : réglages (franchisé / propriétaire), stockés avec les seuils du restaurant ──
 const PLG_SEUILS_N = { jour_max: ['Durée maximale par jour (h)', 'Code du travail : 10 h'], semaine_max: ['Durée maximale par semaine (h)', 'Code du travail : 48 h'], moyenne12: ['Moyenne maximale sur 12 semaines (h)', 'Code du travail : 44 h'], repos_jour: ['Repos minimum entre deux journées (h)', 'Code du travail : 11 h'], repos_hebdo: ['Repos hebdomadaire minimum (h d\'affilée)', 'Code du travail : 35 h'], jours_max: ['Jours travaillés d\'affilée (maximum)', 'Code du travail : 6'] };
 const PLG_JN = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'], PLG_JORDRE = [1, 2, 3, 4, 5, 6, 0];
-const PLG_SEUILS_I = { jour_max: '☀️', semaine_max: '📆', moyenne12: '📈', repos_jour: '😴', repos_hebdo: '🛌', jours_max: '🔁' };
+const PLG_SEUILS_I = { jour_max: 'timer', semaine_max: 'cal', moyenne12: 'trend', repos_jour: 'bed', repos_hebdo: 'coffee', jours_max: 'repeat' };
 function plgAlertBox() {                                                      // réglages et alertes du restaurant, en tuiles
   const A = plgCfgA(), ok = plgCanCfg(), dis = ok ? '' : ' disabled';
   const days = (sel, id) => '<span id="' + id + '" class="plg-dc">' + PLG_JORDRE.map(d => '<label class="plg-mod"><input type="checkbox" data-d="' + d + '" ' + (sel.includes(d) ? 'checked' : '') + dis + '> ' + PLG_JN[d] + '</label>').join('') + '</span>';
@@ -9833,20 +9878,20 @@ function plgAlertBox() {                                                      //
   const ts = (ico, titre, corps, extra) => '<div class="plg-tl plg-ts' + (extra || '') + '"><div class="plg-tt">' + ico + ' ' + titre + '</div>' + corps + '</div>';
   let h = '<div class="plg-mm" style="margin:0 0 4px">Ces réglages alimentent les alertes « À vérifier » sous la grille. ' + (ok ? 'Mettez 0 pour désactiver une alerte.' : 'Seuls le franchisé et le propriétaire les modifient ; vous les voyez ici.') + '</div>';
   h += '<h4 class="plg-h4">Ouvertures et fermetures</h4><div class="plg-tg">'
-    + ts('🌅', 'Ouvertures', num('plgAo', A.om, 0, 9) + '<div class="plg-tx">minimum par jour</div>')
-    + ts('🌙', 'Fermetures', num('plgAf', A.fm, 0, 9) + '<div class="plg-tx">minimum par jour</div>')
-    + ts('📅', 'Jours contrôlés', days(A.jours, 'plgAJ') + '<label class="plg-tx" style="margin-top:4px"><input type="checkbox" id="plgAn" ' + (A.nofer ? 'checked' : '') + dis + '> Ne pas contrôler les jours fériés</label>', ' plg-w2') + '</div>';
+    + ts(plgI('sunrise'), 'Ouvertures', num('plgAo', A.om, 0, 9) + '<div class="plg-tx">minimum par jour</div>')
+    + ts(plgI('moon'), 'Fermetures', num('plgAf', A.fm, 0, 9) + '<div class="plg-tx">minimum par jour</div>')
+    + ts(plgI('cal'), 'Jours contrôlés', days(A.jours, 'plgAJ') + '<label class="plg-tx" style="margin-top:4px"><input type="checkbox" id="plgAn" ' + (A.nofer ? 'checked' : '') + dis + '> Ne pas contrôler les jours fériés</label>', ' plg-w2') + '</div>';
   h += '<h4 class="plg-h4">Équilibre des week-ends</h4><div class="plg-tg">'
-    + ts('⚖️', 'Écart à la moyenne', num('plgAw', A.ecart, 0, 13) + '<div class="plg-tx">samedi(s) ou dimanche(s) d\'écart maximum avec la moyenne de l\'équipe, sur le cycle</div>', ' plg-w2') + '</div>';
-  h += '<h4 class="plg-h4">Règles sociales</h4><div class="plg-tg">' + Object.keys(PLG_SEUILS_N).map(k => { const mod = plgSeuil(k) !== PLG_SEUILS[k]; return ts(PLG_SEUILS_I[k], PLG_SEUILS_N[k][0], num('plgS_' + k, plgSeuil(k), 1, 99, 0.5) + '<div class="plg-tx">' + plgE(PLG_SEUILS_N[k][1]) + (mod ? ' · <b style="color:#b9770e">modifié</b>' : '') + '</div>'); }).join('') + '</div>';
+    + ts(plgI('scale'), 'Écart à la moyenne', num('plgAw', A.ecart, 0, 13) + '<div class="plg-tx">samedi(s) ou dimanche(s) d\'écart maximum avec la moyenne de l\'équipe, sur le cycle</div>', ' plg-w2') + '</div>';
+  h += '<h4 class="plg-h4">Règles sociales</h4><div class="plg-tg">' + Object.keys(PLG_SEUILS_N).map(k => { const mod = plgSeuil(k) !== PLG_SEUILS[k]; return ts(plgI(PLG_SEUILS_I[k]), PLG_SEUILS_N[k][0], num('plgS_' + k, plgSeuil(k), 1, 99, 0.5) + '<div class="plg-tx">' + plgE(PLG_SEUILS_N[k][1]) + (mod ? ' · <b style="color:#b9770e">modifié</b>' : '') + '</div>'); }).join('') + '</div>';
   if (ok) h += '<div class="plg-ma" style="margin-top:10px"><button class="plg-btn pri" onclick="plgAlertSave()">Enregistrer ces réglages</button><button class="plg-btn" onclick="plgAlertReset()" title="Retour aux valeurs habituelles (Code du travail, 1 ouverture et 1 fermeture par jour)">Valeurs habituelles</button></div>';
   h += '<h4 class="plg-h4">Mes alertes</h4><div class="plg-mm" style="margin:0 0 4px">Créez vos propres alertes de présence : par exemple « le samedi, au moins 3 personnes au travail » ou « le vendredi, 2 fermetures ».</div><div class="plg-tg">';
-  h += A.regles.map((g, i) => '<div class="plg-tl plg-ts' + (g.on === false ? ' off' : '') + '"><div class="plg-tt">🔔 ' + plgE(g.nom || 'Alerte') + '</div><div class="plg-tx">' + (g.jours || []).map(Number).sort((a, b) => PLG_JORDRE.indexOf(a) - PLG_JORDRE.indexOf(b)).map(d => PLG_JN[d]).join(' · ') + '</div><div class="plg-tx"><b>' + (plgNum(g.min, 0) > 0 ? 'au moins ' + g.min : '') + (plgNum(g.min, 0) > 0 && typeof g.max === 'number' ? ' et ' : '') + (typeof g.max === 'number' ? 'au plus ' + g.max : '') + '</b> ' + plgE(plgCibleNom(g.cible || 'travail')) + '</div>'
+  h += A.regles.map((g, i) => '<div class="plg-tl plg-ts' + (g.on === false ? ' off' : '') + '"><div class="plg-tt">' + plgI('bell') + ' ' + plgE(g.nom || 'Alerte') + '</div><div class="plg-tx">' + (g.jours || []).map(Number).sort((a, b) => PLG_JORDRE.indexOf(a) - PLG_JORDRE.indexOf(b)).map(d => PLG_JN[d]).join(' · ') + '</div><div class="plg-tx"><b>' + (plgNum(g.min, 0) > 0 ? 'au moins ' + g.min : '') + (plgNum(g.min, 0) > 0 && typeof g.max === 'number' ? ' et ' : '') + (typeof g.max === 'number' ? 'au plus ' + g.max : '') + '</b> ' + plgE(plgCibleNom(g.cible || 'travail')) + '</div>'
     + (ok ? '<div class="plg-ma" style="margin:4px 0 0"><button class="plg-btn" style="padding:2px 8px" onclick="plgRuleToggle(' + i + ')">' + (g.on === false ? 'Activer' : 'Désactiver') + '</button><button class="plg-btn" style="padding:2px 8px" onclick="plgRuleDel(' + i + ')">Supprimer</button></div>' : '') + '</div>').join('');
   if (!A.regles.length && !ok) h += '<div class="plg-tl plg-ts"><div class="plg-tx">Aucune alerte personnalisée.</div></div>';
   if (ok) {
     const codes = [...plgCodes().values()].sort((a, b) => a.ordre - b.ordre);
-    h += '<div class="plg-tl plg-ts plg-new plg-w2"><div class="plg-tt">➕ Nouvelle alerte</div><input class="plg-in" id="plgRn" maxlength="40" placeholder="Nom de l\'alerte (ex. Renfort samedi)">' + days([], 'plgRj')
+    h += '<div class="plg-tl plg-ts plg-new plg-w2"><div class="plg-tt">' + plgI('plus') + ' Nouvelle alerte</div><input class="plg-in" id="plgRn" maxlength="40" placeholder="Nom de l\'alerte (ex. Renfort samedi)">' + days([], 'plgRj')
       + '<select class="plg-in" id="plgRc" aria-label="Ce qu\'on compte"><option value="travail">Personnes au travail</option><option value="ouverture">Personnes en ouverture</option><option value="fermeture">Personnes en fermeture</option><option value="autre">Personnes sur un autre shift</option>' + codes.map(c => '<option value="L:' + plgE(c.code) + '">Lettre ' + plgE(c.code) + ' · ' + plgE(c.libelle) + '</option>').join('') + '</select>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="plg-tx">au moins <input type="number" class="plg-in" id="plgRm" min="0" max="20" value="1" style="width:58px"></label><label class="plg-tx">au plus <input type="number" class="plg-in" id="plgRx" min="0" max="20" placeholder="—" style="width:58px"></label><button class="plg-btn pri" onclick="plgRuleAdd()">Ajouter l\'alerte</button></div></div>';
   }
@@ -9879,7 +9924,7 @@ function plgCodesTable(list, can) {
   const sel = (c, v) => '<select class="plg-in" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c) + '\',\'shift\',this.value)">' + [['', 'Pas un shift'], ['ouverture', 'Ouverture'], ['fermeture', 'Fermeture'], ['autre', 'Autre shift']].map(o => '<option value="' + o[0] + '" ' + (o[0] === (v || '') ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
   let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">Chaque restaurant règle les horaires de ses lettres. Une lettre modifiée ici ne change rien pour les autres restaurants.</div><div class="plg-wrap"><table class="plg" style="min-width:640px"><colgroup><col style="width:92px"><col><col style="width:84px"><col style="width:84px"><col style="width:96px"><col style="width:120px"><col style="width:150px"></colgroup><thead><tr><th title="Cliquez sur la lettre pour lui choisir une couleur">Lettre · couleur</th><th style="text-align:left">Libellé</th><th>Début</th><th>Fin</th><th>Durée</th><th>Shift</th><th></th></tr></thead><tbody>';
   list.forEach(c => { const st = c.fond ? 'background:' + c.fond + ';color:' + c.texte + ';' : '', noT = !c.debut && !c.fin;
-    h += '<tr><td><' + (can ? 'button type="button" title="Choisir la couleur de cette lettre" onclick="plgCodePal(event,\'' + plgE(c.code) + '\')"' : 'span') + ' class="plg-sw" style="' + st + '">' + plgE(c.code) + (can ? ' 🎨' : '') + '</' + (can ? 'button' : 'span') + '></td><td class="n">' + plgE(c.libelle) + (c.ov ? ' <span class="plg-tag" style="background:rgba(8,145,178,.14);color:#0e7490">propre à ce restaurant</span>' : '') + '</td>'
+    h += '<tr><td><' + (can ? 'button type="button" title="Choisir la couleur de cette lettre" onclick="plgCodePal(event,\'' + plgE(c.code) + '\')"' : 'span') + ' class="plg-sw" style="' + st + '">' + plgE(c.code) + (can ? ' ' + plgI('pal', 11) : '') + '</' + (can ? 'button' : 'span') + '></td><td class="n">' + plgE(c.libelle) + (c.ov ? ' <span class="plg-tag" style="background:rgba(8,145,178,.14);color:#0e7490">propre à ce restaurant</span>' : '') + '</td>'
       + (noT ? '<td colspan="2" style="font-size:.7rem;color:var(--muted)">sans horaire : durée comptée par jour →</td>' : '<td><input type="time" class="plg-in" style="width:80px" value="' + (c.debut || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'debut\',this.value)"></td><td><input type="time" class="plg-in" style="width:80px" value="' + (c.fin || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'fin\',this.value)"></td>')
       + '<td>' + (noT ? '<input type="number" class="plg-in" style="width:64px" min="0" max="24" step="0.25" value="' + c.heures + '" ' + (can ? '' : 'disabled') + ' title="Heures comptées pour un jour avec cette lettre (ex. 5,5 = 5 h 30)" aria-label="Durée en heures" onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'heures\',this.value)"> h' : plgH(plgDur(c))) + '</td><td>' + sel(c.code, c.shift) + '</td><td>' + (c.ov && can && (PLG.def || []).some(d => String(d.code).toUpperCase() === String(c.code).toUpperCase()) ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" onclick="plgCodeReset(\'' + plgE(c.code) + '\')">Défaut</button> ' : '') + (can ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" title="Supprimer cette lettre pour ce restaurant" onclick="plgCodeDel(\'' + plgE(c.code) + '\')">Supprimer</button>' : '') + '</td></tr>'; });
   h += '</tbody></table></div>';
@@ -10751,7 +10796,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261105-203646';
+const BUILD_VERSION = '20261105-210521';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

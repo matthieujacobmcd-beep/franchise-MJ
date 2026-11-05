@@ -2896,6 +2896,18 @@ function pcbLabel(e) {
   const t = String(e.type || 'libre'), d = String(e.detail || '');
   return (PCB_ICO[t] || '📌') + ' ' + (t === 'formation' ? 'Formation' + (d ? ' · ' + d : '') : (d || { reunion_manager: 'Réunion MANAGERS', reunion_directeur: 'Réunion DIRECTEURS' }[t] || 'Rendez-vous'));
 }
+function pcbHeure(v) {                                           // heure d'un événement au format français : « 9h », « 14h30 », « 9h-12h » (le Sheet peut renvoyer une vraie valeur d'heure : « 1899-12-30T13:21:39.000Z » ou un nombre)
+  if (v == null || v === '') return '';
+  const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mi = m % 60; return h + 'h' + (mi ? String(mi).padStart(2, '0') : ''); };
+  if (typeof v === 'number') return v >= 0 && v < 1 ? hm(v * 1440) : String(v);
+  let s = String(v).trim(); let m = s.match(/^(\d{4})-\d{2}-\d{2}T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/);
+  if (m) {                                                      // valeur d'heure d'une cellule du Sheet : date de référence 1899, décalage d'avant 1911 (Paris : +0 h 09 min 21 s) à remettre
+    if (+m[1] < 1912) return hm((+m[2] * 3600 + +m[3] * 60 + +m[4] + 561) / 60);
+    try { const d = new Date(s); return hm(+d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', hour12: false }) * 60 + +d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', minute: '2-digit' })); } catch (e) { return s; }
+  }
+  s = s.replace(/(\d{1,2})\s*(?::|[hH])(\d{2})?(?::\d{2})?/g, (x, h, mi) => (+h) + 'h' + (mi && mi !== '00' ? mi : ''));
+  return s.replace(/(\d+h(?:\d{2})?)\s*[-–—]\s*(?=\d)/g, '$1-').replace(/\s{2,}/g, ' ');
+}
 function pcbShow() {
   const box = document.getElementById('pcBanner'); if (!box) return;
   if (!curResto) { box.innerHTML = ''; return; }
@@ -2903,7 +2915,7 @@ function pcbShow() {
   const evs = PCB.rows.map(e => ({ e, p: String(e.periode || '').slice(0, 10), f: String(e.fin || e.periode || '').slice(0, 10) })).filter(x => x.p && x.f >= today && x.p <= lim && (x.e.restaurant === curResto || x.e.restaurant === 'FRANCHISE')).sort((a, b) => a.p.localeCompare(b.p));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = p => { const d = p < today ? today : p; return J[new Date(d + 'T00:00:00Z').getUTCDay()] + ' ' + d.slice(8) + '/' + d.slice(5, 7); };
-  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + x.e.heure : '') + (x.e.lieu ? '\n📍 ' + x.e.lieu : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.lieu ? ' · 📍 ' + escH(x.e.lieu) : ''}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<span class="pcb-m">+ ${evs.length - 4}</span>` : ''}</div>`;
+  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + pcbHeure(x.e.heure) : '') + (x.e.lieu ? '\n📍 ' + x.e.lieu : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.lieu ? ' · 📍 ' + escH(x.e.lieu) : ''}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<span class="pcb-m">+ ${evs.length - 4}</span>` : ''}</div>`;
 }
 async function pcbPull(force) {
   if (typeof configured === 'function' && !configured()) return;
