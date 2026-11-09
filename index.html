@@ -9237,7 +9237,7 @@ function igGo() {
 #espace-planning .plg-h{display:block;width:100%;box-sizing:border-box;height:16px;margin-top:2px;font-family:inherit;font-size:.64rem;font-weight:700;text-align:center;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--muted);padding:0}
 #espace-planning .plg-h::placeholder{color:var(--muted);opacity:.9}
 #espace-planning .plg-h:not([readonly]):hover,#espace-planning .plg-h:not([readonly]):focus{border-color:var(--gold);outline:0;background:var(--card)}
-#espace-planning .plg-h.cu{color:#b45309}
+#espace-planning .plg-h.cu{color:#b45309} #espace-planning .plg-h.cp{font-size:.56rem;letter-spacing:-.2px}
 #espace-planning td.plg-cell{position:relative}
 #espace-planning .plg-pal{position:absolute;top:1px;right:3px;width:13px;height:13px;padding:0;border-radius:50%;border:1.5px solid var(--border);background:conic-gradient(#ff8787,#ffd43b,#69dB7c,#4dabf7,#9775fa,#ff8787);opacity:0;cursor:pointer;transition:opacity .12s}
 #espace-planning td.plg-cell:hover .plg-pal,#espace-planning td.plg-cell:focus-within .plg-pal,#espace-planning .plg-pal.on{opacity:.95}
@@ -9544,7 +9544,16 @@ function plgShiftOf(d, f, codes) {                                           // 
   return 'autre';
 }
 const PLG_RE = /^(\d{1,2})\s*(?:[:hH]\s*(\d{0,2}))?\s*(?:-|–|—|à|a)\s*(\d{1,2})\s*(?:[:hH]\s*(\d{0,2}))?$/;   // 8h-16h · 8h30-17h · 8-16 · 08:00-16:00 · 8h à 16h
-const plgRng = s => { const m = String(s).trim().match(PLG_RE); if (!m || +m[1] > 24 || +m[3] > 24 || +(m[2] || 0) > 59 || +(m[4] || 0) > 59) return null; const a = +(m[2] || 0), b = +(m[4] || 0), d = +m[1] + a / 60, f0 = +m[3] + b / 60, f = f0 <= d ? f0 + 24 : f0, p = x => String(x).padStart(2, '0'); return { d, f, h: f - d, norm: p(m[1]) + ':' + p(a) + '-' + p(m[3]) + ':' + p(b) }; };
+const plgRng1 = s => { const m = String(s).trim().match(PLG_RE); if (!m || +m[1] > 24 || +m[3] > 24 || +(m[2] || 0) > 59 || +(m[4] || 0) > 59) return null; const a = +(m[2] || 0), b = +(m[4] || 0), d = +m[1] + a / 60, f0 = +m[3] + b / 60, f = f0 <= d ? f0 + 24 : f0, p = x => String(x).padStart(2, '0'); return { d, f, h: f - d, norm: p(m[1]) + ':' + p(a) + '-' + p(m[3]) + ':' + p(b) }; };
+const plgRng = s => {                                                            // une plage (8h-17h) ou une COUPURE : plusieurs plages dans la journée, séparées par « / » (11h30-14h / 18h-21h) ; les heures comptées = somme des plages
+  const parts = String(s).split(/\s*(?:\/|\+|;|·|&|\bet\b|\bpuis\b)\s*/i).map(x => x.trim()).filter(Boolean);
+  if (!parts.length || parts.length > 3) return null;
+  const rs = parts.map(plgRng1); if (rs.some(x => !x)) return null;
+  if (rs.length === 1) return rs[0];
+  for (let i = 1; i < rs.length; i++) if (rs[i].d < rs[i - 1].f - 0.001) return null;                 // les plages se suivent, sans chevauchement
+  return { d: rs[0].d, f: rs[rs.length - 1].f, h: rs.reduce((a, x) => a + x.h, 0), norm: rs.map(x => x.norm).join(' / '), parts: rs.map(x => [x.d, x.f]) };
+};
+const plgDisp = g => g ? (g.parts ? g.parts.map(q => plgFmtH(q[0]) + '-' + plgFmtH(q[1])).join(' · ') : plgFmtH(g.d) + '-' + plgFmtH(g.f)) : '';
 const plgSplit = v => { v = String(v || '').trim(); const m = v.match(/^(\S+)\s+(\d.*)$/); return m && plgRng(m[2]) ? { code: m[1], range: plgRng(m[2]).norm } : (plgRng(v) ? { code: '', range: plgRng(v).norm } : { code: v, range: '' }); };
 const plgFmtH = h => { const m = Math.round((h % 24) * 60), H = Math.floor(m / 60), M = m % 60; return H + 'h' + (M ? String(M).padStart(2, '0') : ''); };
 const PLG_SEP = '§';                                                          // séparateur des cases à texte libre ou colorées : « lettre § horaires § #couleur » (les formes d'avant : « O », « 08:00-16:00 », « O 08:30-17:00 » restent lues)
@@ -9556,7 +9565,7 @@ function plgParts(v) {                                                        //
   const sp = plgSplit(v); return { l: sp.code, h: sp.range, c: '' };
 }
 function plgJoin(l, h, c) {                                                   // l'inverse : forme simple si possible (lisible par l'ancien format et l'export), sinon « lettre § horaires § couleur »
-  l = String(l || '').split(PLG_SEP).join('').trim().slice(0, 30); h = String(h || '').split(PLG_SEP).join('').trim().slice(0, 24); c = /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
+  l = String(l || '').split(PLG_SEP).join('').trim().slice(0, 30); h = String(h || '').split(PLG_SEP).join('').trim().slice(0, 56); c = /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
   const g = h ? plgRng(h) : null;
   if (!c && (!h || g) && !/\s/.test(l)) return l + (g ? (l ? ' ' : '') + g.norm : '');
   return l + PLG_SEP + (g ? g.norm : h) + PLG_SEP + c;
@@ -9567,13 +9576,13 @@ function plgInfo(v, codes) {
   const c = l ? codes.get(l.toUpperCase()) : null;
   if (c) {                                                                    // lettre préprogrammée du restaurant : couleurs, horaires et type de shift de la lettre
     const ab = PLG_ABS.test(c.code);
-    if (g && !ab) return paint({ t: 'code', code: c.code, custom: g.norm, h: g.h, d: g.d, f: g.f, shift: c.shift, abs: false, work: g.h > 0, bg: c.fond, fg: c.texte, norm: c.code + ' ' + g.norm });
+    if (g && !ab) return paint({ t: 'code', code: c.code, custom: g.norm, h: g.h, d: g.d, f: g.f, iv: g.parts, shift: c.shift, abs: false, work: g.h > 0, bg: c.fond, fg: c.texte, norm: c.code + ' ' + g.norm });
     const d = c.debut ? plgTm(c.debut) : null, f = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null, h = plgDur(c);
     return paint({ t: 'code', code: c.code, h, d: ab ? null : d, f: ab ? null : f, shift: c.shift, abs: ab, work: !ab && h > 0, bg: c.fond, fg: c.texte });
   }
-  if (!l) return g ? paint({ t: 'range', h: g.h, d: g.d, f: g.f, shift: plgShiftOf(g.d, g.f, codes), abs: false, work: g.h > 0, norm: g.norm }) : paint({ t: 'free', label: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
+  if (!l) return g ? paint({ t: 'range', h: g.h, d: g.d, f: g.f, iv: g.parts, shift: plgShiftOf(g.d, g.f, codes), abs: false, work: g.h > 0, norm: g.norm }) : paint({ t: 'free', label: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
   const ab = PLG_ABSW.test(l);                                                // texte libre : compté comme jour travaillé (sauf absence), les heures ne comptent que si les horaires sont lisibles (8h-17h)
-  return paint({ t: 'free', label: l, h: g && !ab ? g.h : 0, d: g && !ab ? g.d : null, f: g && !ab ? g.f : null, shift: g && !ab ? plgShiftOf(g.d, g.f, codes) : null, abs: ab, work: !ab, norm: g ? g.norm : '' });
+  return paint({ t: 'free', label: l, h: g && !ab ? g.h : 0, d: g && !ab ? g.d : null, f: g && !ab ? g.f : null, iv: g && !ab ? g.parts : undefined, shift: g && !ab ? plgShiftOf(g.d, g.f, codes) : null, abs: ab, work: !ab, norm: g ? g.norm : '' });
 }
 function plgView(ws, pid) {                                                  // semaine affichée commençant un lundi : les 7 jours viennent de deux semaines enregistrées (dimanche → samedi)
   const at = j => { const d = plgAdd(ws, j); return [plgSun(d), plgD(d).getUTCDay()]; };
@@ -9608,10 +9617,10 @@ function plgAnalyse(p, codes, wsA) {                                         // 
   const O0 = -49, O1 = 55, I = []; for (let o = O0; o <= O1; o++) I[o - O0] = plgInfo(plgDay(p.id, plgAdd(ws, o)), codes);   // lecture continue : 7 semaines avant et 8 après la fenêtre (semaines enregistrées voisines)
   const at = o => I[o - O0], planned = o => Array.isArray((plgRaw(plgSun(plgAdd(ws, o))) || {})[p.id]), fr = o => plgFr(plgAdd(ws, o)), dn = o => PLG_JL[plgD(plgAdd(ws, o)).getUTCDay()];
   const off0 = -((plgD(ws).getUTCDay() - plgOff() + 7) % 7), weeks = off0 < 0 ? [off0, off0 + 7] : [off0];   // semaines civiles (début choisi pour ce restaurant) qui touchent la fenêtre
-  const iv = []; for (let o = O0; o <= O1; o++) { const x = at(o); if (x.d != null && x.f != null) iv.push([o * 24 + x.d, o * 24 + x.f]); }
+  const iv = []; for (let o = O0; o <= O1; o++) { const x = at(o); if (x.d != null && x.f != null) (x.iv && x.iv.length > 1 ? x.iv : [[x.d, x.f]]).forEach(q => iv.push([o * 24 + q[0], o * 24 + q[1], o])); }       // une coupure = plusieurs intervalles le même jour
   iv.sort((a, b) => a[0] - b[0]);
   if (!fj) {
-    for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (g < se('repos_jour') && iv[k][0] > 0 && iv[k - 1][1] < 168) { const o = Math.floor(iv[k][0] / 24); al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + dn(o) + ' ' + fr(o) + ' (' + se('repos_jour') + ' h minimum)'); } }   // repos quotidien : aussi entre la dernière journée affichée et la suivante
+    for (let k = 1; k < iv.length; k++) { const g = iv[k][0] - iv[k - 1][1]; if (g < se('repos_jour') && iv[k][0] > 0 && iv[k - 1][1] < 168 && iv[k][2] !== iv[k - 1][2]) { const o = Math.floor(iv[k][0] / 24); al.push('repos de ' + plgH(Math.max(0, g)) + ' avant le ' + dn(o) + ' ' + fr(o) + ' (' + se('repos_jour') + ' h minimum)'); } }   // repos quotidien : aussi entre la dernière journée affichée et la suivante
     const lo = planned(O0) ? O0 * 24 : -Infinity, hi = planned(O1) ? (O1 + 1) * 24 : Infinity;   // jour voisin non planifié : on ne peut pas conclure (pas d'alerte)
     weeks.forEach(a => {                                                       // repos hebdomadaire : par semaine civile, plus long creux sans travail (un OFF en bord de semaine est du repos)
       const A = a * 24, B = (a + 7) * 24; if (!iv.some(x => x[0] >= A && x[0] < B)) return;
@@ -9716,11 +9725,11 @@ function plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod) {         // g
       }
       rows += '<tr><td class="n"><div class="plg-pn">' + plgAv(p) + '<div><b style="font-size:.8rem">' + plgE(p.prenom) + '</b><br><span class="plg-tag">' + plgE(PLG_FN[p.fonction] || p.fonction) + (fj ? ' · 218 j' : '') + '</span>' + (bd ? '<div style="margin-top:3px;line-height:1.7">' + bd + '</div>' : '') + '</div></div></td>';
       a.inf.forEach((x, j) => {
-        const off = 7 * k + j, day = plgAdd(ws, j), v = plgDay(p.id, day), P = plgParts(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', gh = P.h ? plgRng(P.h) : null, own = P.h ? (gh ? plgFmtH(gh.d) + '-' + plgFmtH(gh.f) : P.h) : '', jn = PLG_JL[plgD(day).getUTCDay()];
+        const off = 7 * k + j, day = plgAdd(ws, j), v = plgDay(p.id, day), P = plgParts(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', gh = P.h ? plgRng(P.h) : null, own = P.h ? (gh ? plgDisp(gh) : P.h) : '', jn = PLG_JL[plgD(day).getUTCDay()];
         const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : '');
         rows += '<td class="plg-cell"><input class="plg-c" list="plgCodes" style="' + st + '" value="' + plgE(P.l) + '" maxlength="30" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + off + ',this)" aria-label="Lettre ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="Texte libre, ou une lettre du restaurant (O, F, OFF…) qui remplit couleur et horaires">'
           + (can ? '<button type="button" class="plg-pal' + (P.c ? ' on' : '') + '" style="' + (P.c ? 'background:' + P.c : '') + '" aria-label="Couleur de la case" title="Choisir une couleur" onclick="plgPal(event,\'' + p.id + '\',' + off + ')"></button>' : '')
-          + '<input class="plg-h' + (own ? ' cu' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" maxlength="24" ' + (can ? '' : 'readonly tabindex="-1"') + ' onchange="plgSetH(\'' + p.id + '\',' + off + ',this)" aria-label="Horaires ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : 'Horaires libres : 8h-17h est compté en heures, un autre texte est seulement affiché') + '"></td>'; });
+          + '<input class="plg-h' + (own ? ' cu' : '') + (gh && gh.parts ? ' cp' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" maxlength="56" ' + (can ? '' : 'readonly tabindex="-1"') + ' onchange="plgSetH(\'' + p.id + '\',' + off + ',this)" aria-label="Horaires ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : (gh && gh.parts ? 'Coupure : ' + gh.norm + ' (' + plgH(gh.h) + ' comptées)' : 'Horaires libres : 8h-17h est compté en heures ; coupure : 11h30-14h / 18h-21h (plages séparées par « / ») ; un autre texte est seulement affiché')) + '"></td>'; });
       rows += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">forfait 218 j</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
       a.al.forEach(t => alerts.push(t)); a.rem.forEach(t => rems.push(t));
     });
@@ -10048,7 +10057,7 @@ function plgSet(pid, j, el) {                                                // 
   plgCellSet(pid, j, plgJoin(l, h, P.c)); plgRender();
 }
 function plgSetH(pid, j, el) {                                               // case « horaires » : 8h-17h est compté, tout autre texte est affiché tel quel ; vide = horaires de la lettre
-  const P = plgParts(plgCellGet(pid, j)), t = String(el.value).trim().slice(0, 24), g = t ? plgRng(t) : null;
+  const P = plgParts(plgCellGet(pid, j)), t = String(el.value).trim().slice(0, 56), g = t ? plgRng(t) : null;
   plgCellSet(pid, j, plgJoin(P.l, g ? g.norm : t, P.c)); plgRender();
 }
 function plgSetC(pid, j, c) { plgPalClose(); const P = plgParts(plgCellGet(pid, j)); plgCellSet(pid, j, plgJoin(P.l, P.h, c)); plgRender(); }
@@ -10906,7 +10915,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261109-144440';
+const BUILD_VERSION = '20261109-145542';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

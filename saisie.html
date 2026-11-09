@@ -126,6 +126,9 @@
   .pv-day.fer{ background:#fef2f2; border-color:#fca5a5; border-width:2px; } .pv-day.fer .pv-dn{ color:#b91c1c; } .pv-fer{ font-size:.62rem; font-weight:800; color:#b91c1c; margin:1px 0 2px; }
   .pv-ref small{ display:block; font-size:.58rem; color:#94a3b8; line-height:1.15; margin-bottom:2px; }
   .pv-ref em{ font-style:normal; font-size:.58rem; background:#fde9c8; color:#7a4a00; border-radius:4px; padding:0 4px; margin-left:3px; }
+  .pv-rf{ display:flex; align-items:center; gap:4px; flex-wrap:wrap; } .pv-rx{ margin-left:4px; border:0; background:transparent; color:#94a3b8; cursor:pointer; font-size:.8rem; line-height:1; padding:0 2px; } .pv-rx:hover{ color:#dc2626; }
+  .pv-ru{ font:inherit; font-size:.62rem; font-weight:800; border:1px solid #7c3aed; background:rgba(124,58,237,.08); color:#6d28d9; border-radius:6px; padding:1px 6px; cursor:pointer; }
+  .pv-ra{ display:block; margin-top:3px; font:inherit; font-size:.58rem; font-weight:700; border:1px dashed var(--border); background:transparent; color:var(--muted); border-radius:6px; padding:1px 6px; cursor:pointer; } .pv-ra:hover{ border-color:#7c3aed; color:#6d28d9; }
   .pv-wk{ border:1.5px solid #c4b5fd; background:#f5f3ff; border-radius:10px; padding:9px 10px; display:flex; flex-direction:column; min-width:0; }
   .pv-wkh{ font-size:.7rem; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:.4px; } .pv-wkv{ font-size:1.3rem; font-weight:800; color:#4c1d95; margin:4px 0; line-height:1.1; } .pv-wks{ font-size:.66rem; color:var(--muted); line-height:1.55; } .pv-wks b.up{ color:var(--green); } .pv-wks b.down{ color:var(--red); }
   .pv-wd{ display:none; }
@@ -1012,11 +1015,15 @@ let PREVJ = null, PREVT = null, ALIMM = null;              // prévisions enregi
 const PV = { ym: null, resto: null, vals: {}, objU: 'e', w: '7030', coef: 1.01 };
 const PV_MIN = '2026-11', PV_YMAX = new Date().getFullYear() + 6, PV_MAX = PV_YMAX + '-12';   // saisie à partir de novembre 2026 et jusqu'à 6 ans après l'année en cours (glisse avec le temps)
 // ── Brouillons : les prévisions saisies mais pas encore enregistrées ne se perdent plus quand on change de mois, de restaurant ou qu'on recharge la page ──
-const PV_DKEY = 'mj_pvdraft', PV_RKEY = 'mj_pvround';
+const PV_DKEY = 'mj_pvdraft', PV_RKEY = 'mj_pvround', PV_RFKEY = 'mj_pvrefs';
 PV.step = (() => { try { const v = +localStorage.getItem(PV_RKEY); return [1, 10, 50, 100].includes(v) ? v : 10; } catch (e) { return 10; } })();   // arrondi appliqué à chaque jour
 PV.unit = 'e';                                               // unité de saisie des cases (€, % N-1, % du mois, TAC'S × PM)
 PV.drafts = (() => { try { const d = JSON.parse(localStorage.getItem(PV_DKEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();
 const pvKey = (r, ym) => r + '|' + ym;
+// ── Jours de référence : en plus du N-1 / N-2 (jours équivalents, toujours affichés), on peut ajouter un ou plusieurs jours de son choix ; « Utiliser » prend la moyenne de leur CA ──
+PV.refs = (() => { try { const d = JSON.parse(localStorage.getItem(PV_RFKEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; } })();   // { 'RESTAURANT|AAAA-MM-JJ' : [dates de référence] }
+function pvRefsPersist() { try { if (Object.keys(PV.refs).length) localStorage.setItem(PV_RFKEY, JSON.stringify(PV.refs)); else localStorage.removeItem(PV_RFKEY); } catch (e) {} }
+const pvRefsOf = (r, iso) => PV.refs[r + '|' + iso] || [];
 function pvSavedVals(r, ym) { const o = {}; for (const iso of pvDays(ym)) { const v = ((PREVJ || {})[r] || {})[iso]; if (v != null) o[iso] = v; } return o; }
 function pvDiffDays(a, b) { const ks = new Set([...Object.keys(a), ...Object.keys(b)]); let n = 0; for (const k of ks) if (a[k] == null || b[k] == null || Math.abs(a[k] - b[k]) >= 0.005) n++; return n; }
 function pvDraftPersist() { try { if (Object.keys(PV.drafts).length) localStorage.setItem(PV_DKEY, JSON.stringify(PV.drafts)); else localStorage.removeItem(PV_DKEY); } catch (e) {} }
@@ -1099,6 +1106,34 @@ function pvRefLine(lbl, r, iso, k, v) {                     // valeur du jour é
   const T = typeof simT === 'function' ? simT(r, ri) : null, A = pvCa(r, ri), tp = T > 0 && A > 0 ? ` · ${Math.round(T).toLocaleString('fr-FR')} TAC'S · PM ${(A / T).toFixed(2).replace('.', ',')} €` : '';
   return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · 🎉 ${f}` : ''}${tp}</small></div>`;
 }
+const pvFrD = d => { const dow = PV_JOURS[(new Date(_pvT(d)).getUTCDay() + 6) % 7].toLowerCase(); return `${dow} ${d.slice(8)}/${d.slice(5, 7)}/${d.slice(2, 4)}`; };
+function pvRefsHtml(r, iso) {                               // jours de référence choisis pour ce jour : valeur de chacun, bouton « Utiliser » (moyenne) et « + jour de réf. »
+  const L = pvRefsOf(r, iso), vals = L.map(d => pvRef(r, d)), ok = vals.filter(v => v != null); let h = '';
+  L.forEach((d, i) => { h += `<div class="pv-ref pv-rf">Réf. <b>${pvEur(vals[i])}</b><small>${pvFrD(d)}<button type="button" class="pv-rx" onclick="pvRefDel('${iso}','${d}')" title="Retirer ce jour de référence" aria-label="Retirer ce jour de référence">×</button></small></div>`; });
+  if (ok.length) h += `<div class="pv-ref pv-rf"><button type="button" class="pv-ru" onclick="pvRefUse('${iso}')" title="${ok.length > 1 ? 'Moyenne de ' + ok.length + ' jours de référence' : 'Reprendre ce jour de référence'}">${ok.length > 1 ? 'Moy.' : 'Utiliser'} ${pvEur(ok.reduce((a, b) => a + b, 0) / ok.length)}</button></div>`;
+  return h + `<button type="button" class="pv-ra" onclick="pvRefAdd('${iso}')" title="Ajouter un jour de référence (en plus du N-1 et du N-2)">+ jour de réf.</button>`;
+}
+function pvRefPut(iso, d) {
+  if (!d || d === iso) return pvMsg('err', 'Choisis un autre jour que celui à prévoir.');
+  if (pvRef(curResto, d) == null) return pvMsg('err', `Aucun CA connu pour le ${d.slice(8)}/${d.slice(5, 7)}/${d.slice(0, 4)} : choisis un jour avec du CA réel ou prévu.`);
+  const k = curResto + '|' + iso, a = PV.refs[k] = PV.refs[k] || [];
+  if (a.length >= 8) return pvMsg('err', '8 jours de référence au maximum.');
+  if (!a.includes(d)) a.push(d); a.sort(); pvRefsPersist(); renderPrevCa();
+}
+function pvRefAdd(iso) {                                    // sélecteur de date natif ; à défaut, saisie JJ/MM/AAAA
+  if (typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype.showPicker) {
+    const i = document.createElement('input'); i.type = 'date'; i.style.cssText = 'position:fixed;left:50%;top:45%;opacity:0;width:1px;height:1px'; i.value = pvShift(iso, -7); document.body.appendChild(i);
+    i.addEventListener('change', () => { const d = i.value; i.remove(); pvRefPut(iso, d); }); i.addEventListener('blur', () => setTimeout(() => i.remove(), 400));
+    try { i.showPicker(); return; } catch (e) { i.remove(); }
+  }
+  const t = prompt('Jour de référence (JJ/MM/AAAA)'); const m = t && t.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/); if (m) pvRefPut(iso, `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`);
+}
+function pvRefDel(iso, d) { const k = curResto + '|' + iso, a = (PV.refs[k] || []).filter(x => x !== d); if (a.length) PV.refs[k] = a; else delete PV.refs[k]; pvRefsPersist(); renderPrevCa(); }
+function pvRefUse(iso) {                                    // la prévision du jour = moyenne du CA des jours de référence (arrondie au pas choisi)
+  const ok = pvRefsOf(curResto, iso).map(d => pvRef(curResto, d)).filter(v => v != null); if (!ok.length) return;
+  const el = document.getElementById('pvi_' + iso), u = document.getElementById('pvu_' + iso); if (!el || !u) return;
+  u.value = 'e'; pvUnit(iso); el.value = Math.round(ok.reduce((a, b) => a + b, 0) / ok.length); pvDayInput(iso); pvCommit(iso);
+}
 function pvInit() {
   const now = new Date();
   if (!PV.ym) PV.ym = [`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`, PV_MIN].sort().pop();
@@ -1133,7 +1168,7 @@ function renderPrevCa() {
     const n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), real = pvCa(curResto, iso), v = PV.vals[iso];
     const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, pos = pvPos(iso), fer = pvFerie(iso), mon = pvShift(iso, -pos); curMon = mon;
     cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}${typeof wfChgCls === 'function' ? wfChgCls(curResto, iso) : ''}" id="pvc_${iso}" data-u="${PV.unit}"${typeof wfChgTip === 'function' ? wfChgTip(curResto, iso) : ''}><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
-      ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}
+      ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}${pvRefsHtml(curResto, iso)}
       ${real != null ? `<div class="pv-real">Réel <b>${pvEur(real)}</b></div>` : ''}
       <div class="pv-in"><input type="number" step="any" inputmode="decimal" class="pv-i1" id="pvi_${iso}" value="${v != null ? Math.round(v * 100) / 100 : ''}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="CA prévu" aria-label="Prévision du ${+iso.slice(8)}">
         <span class="pv-tp"><input type="number" step="any" inputmode="numeric" id="pvq_${iso}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="TAC'S" aria-label="TAC'S prévus"><input type="number" step="any" inputmode="decimal" id="pvp_${iso}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="PM €" aria-label="Panier moyen prévu"></span>
@@ -1145,7 +1180,7 @@ function renderPrevCa() {
   if (curMon) { cells += '<div class="pv-empty"></div>'.repeat(7 - inRow) + wkCell(curMon); }
   p.innerHTML = `
     <div class="panel-head"><div><div class="panel-title">Prévision CA alimentaire · ${escH(name)}</div>
-      <div class="last-saisie">Saisis le CA NET ALIMENTAIRE prévu : le CA net total s'en déduit (alimentaire × coefficient, +1 % en général). Chaque jour affiche le CA alimentaire du jour équivalent N-1 et N-2 (même jour de la semaine).</div></div>
+      <div class="last-saisie">Saisis le CA NET ALIMENTAIRE prévu : le CA net total s'en déduit (alimentaire × coefficient, +1 % en général). Chaque jour affiche le CA alimentaire du jour équivalent N-1 et N-2 (même jour de la semaine) ; « + jour de réf. » ajoute un ou plusieurs jours de ton choix (« Utiliser » reprend leur moyenne).</div></div>
       <div class="period"><button class="step" onclick="pvMonth(-1)">◀</button>
         <select id="pvM" onchange="pvPick()">${mois.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''} ${i + 1 < minM || i + 1 > maxM ? 'disabled' : ''}>${n}</option>`).join('')}</select>
         <select id="pvY" onchange="pvPick()">${Array.from({ length: PV_YMAX - 2025 }, (_, i) => 2026 + i).map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -2540,7 +2575,8 @@ function wfCollect(r, Y) {
   }
   const o = bdParams(r), bud = JSON.parse(JSON.stringify(o.p));
   delete bud.edg;                                                        // les salaires voyagent à part (saisie par échelon), jamais dans le contenu partagé
-  return { v: 1, y: +Y, coef: PV.coef, cal, bud, sim: JSON.parse(JSON.stringify(simCfg(r))) };
+  const refs = {}; for (const k of Object.keys(PV.refs || {})) { const [rr, iso] = k.split('|'); if (rr === r && iso.slice(0, 4) === String(Y) && (PV.refs[k] || []).length) refs[iso] = PV.refs[k].slice(); }
+  const out = { v: 1, y: +Y, coef: PV.coef, cal, bud, sim: JSON.parse(JSON.stringify(simCfg(r))) }; if (Object.keys(refs).length) out.refs = refs; return out;
 }
 // Saisie de salaires par poste de l'appelant (envoyée à part : le serveur la range sous son échelon) ; undefined = rien à envoyer
 function wfEdgSeg(r) {
@@ -2557,6 +2593,8 @@ function wfApply(r, P, sal) {                                                  /
     if (pvDiffDays(vals, pvSavedVals(r, ym))) PV.drafts[pvKey(r, ym)] = vals; else delete PV.drafts[pvKey(r, ym)];
   }
   pvDraftPersist(); if (P.coef) PV.coef = P.coef;
+  for (const k of Object.keys(PV.refs)) { const [rr, iso] = k.split('|'); if (rr === r && iso.slice(0, 4) === String(P.y)) delete PV.refs[k]; }       // jours de référence partagés
+  for (const iso of Object.keys(P.refs || {})) PV.refs[r + '|' + iso] = P.refs[iso]; pvRefsPersist();
   const o = bdParams(r), keep = o.p.edg, top = wfTopSeg(sal); o.p = P.bud;
   if (top && accCan('edg', r)) o.p.edg = { on: top.on !== false, rows: JSON.parse(JSON.stringify(top.rows || [])) }; else if (keep) o.p.edg = keep;
   bdSave();
@@ -2755,6 +2793,7 @@ function wfLines(doc) {
   Object.keys(m).forEach(k => ks.add(k)); Object.keys(pm).forEach(k => ks.add(k));
   for (const k of ks) L['b|' + k] = [bud[k] === undefined ? null : bud[k], m[k] === undefined ? null : m[k], pm[k] === undefined ? null : pm[k]];
   (bud.det || []).forEach(d => { if (d && d.id != null) L['d|' + d.id] = d; });
+  Object.keys(doc.refs || {}).forEach(iso => { if ((doc.refs[iso] || []).length) L['r|' + iso] = doc.refs[iso]; });
   if (doc.sim !== undefined) L['s|sim'] = doc.sim; if (doc.coef !== undefined) L['s|coef'] = doc.coef;
   return L;
 }
@@ -2763,6 +2802,7 @@ function wfSetLine(doc, key, val) {
   if (t === 'c') { const ym = id.slice(0, 7), d = +id.slice(8); doc.cal = doc.cal || {}; if (val == null) { if (doc.cal[ym]) doc.cal[ym][d - 1] = null; } else { const a = doc.cal[ym] = doc.cal[ym] || Array(wfNDays(ym)).fill(null); a[d - 1] = val; } }
   else if (t === 'b') { const bud = doc.bud = doc.bud || {}; bud.m = bud.m || {}; bud.pm = bud.pm || {}; const v = val || [null, null, null]; if (v[0] === null) delete bud[id]; else bud[id] = wfCl(v[0]); if (v[1] === null) delete bud.m[id]; else bud.m[id] = wfCl(v[1]); if (v[2] === null) delete bud.pm[id]; else bud.pm[id] = wfCl(v[2]); }
   else if (t === 'd') { const bud = doc.bud = doc.bud || {}, ds = bud.det = bud.det || [], i = ds.findIndex(x => x && String(x.id) === id); if (val == null) { if (i >= 0) ds.splice(i, 1); } else if (i >= 0) ds[i] = wfCl(val); else ds.push(wfCl(val)); }
+  else if (t === 'r') { doc.refs = doc.refs || {}; if (val == null || !val.length) delete doc.refs[id]; else doc.refs[id] = wfCl(val); if (!Object.keys(doc.refs).length) delete doc.refs; }
   else if (t === 's') { if (id === 'sim') doc.sim = wfCl(val); else doc.coef = val; }
 }
 const wfTracked = k => k[0] === 'c' || k[0] === 'b' || k[0] === 'd';
@@ -3038,7 +3078,7 @@ function wfBarPaint() {
 function bdShareHtml(r, Ty) { return wfBarHtml(r, Ty); }                                         // compatibilité : l'écran Budget & PNL appelle ces deux fonctions
 function bdSharePaint() { wfBarPaint(); }
 (function () {                                                                                   // branchements : chaque modification déclenche le partage ; lectures régulières
-  ['bdSave', 'simSave', 'pvDraftPersist', 'pvCommit'].forEach(n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = function () { const x = o.apply(this, arguments); try { wfAutoSchedule(); } catch (e) {} return x; }; });
+  ['bdSave', 'simSave', 'pvDraftPersist', 'pvCommit', 'pvRefsPersist'].forEach(n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = function () { const x = o.apply(this, arguments); try { wfAutoSchedule(); } catch (e) {} return x; }; });
   const rs = setResto; setResto = function (r) { rs(r); setTimeout(() => wfAutoPull(true), 400); };
   const ts = setTab; setTab = function (t) { ts(t); if (t === 'prevca' || t === 'budget' || t === 'valid') setTimeout(() => wfAutoPull(), 200); };
   const tick = () => { if (document.visibilityState !== 'visible') return; wfAutoPull(); if (Object.values(WFA.dirty).some(Boolean)) wfAutoRun(); };
