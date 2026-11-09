@@ -10382,43 +10382,44 @@ const PXP_TH = [
 const pxpTh = i => PXP_TH[((i % PXP_TH.length) + PXP_TH.length) % PXP_TH.length];
 const pxpEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 const pxpF = v => v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
+const pxpEur = v => v == null ? '' : (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '\u00a0€';   // « 2,75 € » comme le modèle (format #,##0.00 "€")
 const pxpUsed = b => b.variantes.filter(v => b.cats.some(c => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined)));
 // o = { doc, canal, title, sub, price(b,c,l,k) → nombre|undefined, code(b,c,l,k) → texte|undefined }
 function pxpBlocks(o) {
   const blocks = o.doc.modele.map((b, bi) => ({ b, bi, th: pxpTh(bi), cols: pxpUsed(b) })).filter(x => x.b.cats.some(c => c.lignes.length));
   return blocks.map(({ b, th, cols }) => {
-    const cs = cols.length || 1, w = 2.1 + cs * 1.05;
+    const cs = cols.length || 1, w = 70 + cs * 56;
     const head = `<tr><th class="nm" style="background:${th.d};color:${th.dt}"></th>${cols.map(v => `<th style="background:${th.d};color:${th.dt}">${pxpEsc(v.l)}</th><th class="kc" style="background:${th.d};color:${th.dt}">CODE</th>`).join('')}</tr>`;
     let rows = '';
     for (const c of b.cats) {
       if (!c.lignes.length) continue;
       rows += `<tr><td class="cat" colspan="${1 + 2 * cs}" style="background:${th.c};color:${th.ct}">${pxpEsc(c.cat || b.titre)}</td></tr>`;
       for (const l of c.lignes) rows += `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(l.produit)}</td>${cols.map(v => { const p = o.price(b, c, l, v.k), k = o.code(b, c, l, v.k);
-        return p === undefined ? `<td class="p" style="background:${th.d}"></td><td class="k" style="background:${th.d}"></td>` : `<td class="p" style="background:${th.l};color:${th.lt}">${pxpF(p)}</td><td class="k" style="background:${th.d};color:${th.dt}">${pxpEsc(k || '')}</td>`; }).join('')}</tr>`;
+        return p === undefined ? `<td class="p" style="background:${th.d}"></td><td class="k" style="background:${th.d}"></td>` : `<td class="p" style="background:${th.l};color:${th.lt}">${pxpEur(p)}</td><td class="k" style="background:${th.d};color:${th.dt}">${pxpEsc(k || '')}</td>`; }).join('')}</tr>`;
     }
-    return { w, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(b.titre)}</div><table><colgroup><col style="width:38%">${cols.map(() => `<col style="width:${(62 / cs) * .6}%"><col style="width:${(62 / cs) * .4}%">`).join('')}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table></div>` };
+    return { w, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(b.titre)}</div><table><colgroup><col style="width:70px">${cols.map(() => `<col style="width:36px"><col style="width:20px">`).join('')}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table></div>` };
   });
 }
 function pxpRepasBlocks(doc) {
   const g = {}; (doc.repas || []).forEach(x => { (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push(x); });
   return Object.keys(g).map((k, i) => { const th = pxpTh(i);
-    return { w: 2.4, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(k.toUpperCase())}</div><table><colgroup><col style="width:78%"><col style="width:22%"></colgroup><thead><tr><th class="nm" style="background:${th.d};color:${th.dt}"></th><th style="background:${th.d};color:${th.dt}">POINTS</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(x.produit)}</td><td class="p" style="background:${th.l};color:${th.lt}">${pxpF(x.points)}</td></tr>`).join('')}</tbody></table></div>` }; });
+    return { w: 190, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(k.toUpperCase())}</div><table><colgroup><col style="width:140px"><col style="width:50px"></colgroup><thead><tr><th class="nm" style="background:${th.d};color:${th.dt}"></th><th style="background:${th.d};color:${th.dt}">POINTS</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(x.produit)}</td><td class="p" style="background:${th.l};color:${th.lt}">${pxpF(x.points)}</td></tr>`).join('')}</tbody></table></div>` }; });
 }
 function pxpPageHtml(o) {
   const bl = o.canal === 'repas' ? pxpRepasBlocks(o.doc) : pxpBlocks(o), rules = o.canal === 'repas' && (o.doc.repasRegles || []).length ? `<div class="rg">${o.doc.repasRegles.map(t => `<div>${pxpEsc(t)}</div>`).join('')}</div>` : '';
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${pxpEsc(o.title)}</title><style>
 @page { size: A4 landscape; margin: 5mm; }
-* { box-sizing: border-box; } html, body { margin: 0; padding: 0; background: #fff; } body { width: 287mm; font-family: 'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #000; }
-.fit { transform-origin: top left; width: 287mm; }
+* { box-sizing: border-box; } html, body { margin: 0; padding: 0; background: #fff; } body { font-family: 'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #000; }
+.fit { transform-origin: top left; width: max-content; }
 .hd { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 4px; font-size: 9px; color: #555; } .hd b { font-size: 12px; color: #000; letter-spacing: .3px; }
 .rg { font-weight: 800; font-size: 9px; margin: 0 0 5px; line-height: 1.35; }
-.grid { display: grid; gap: 6px; align-items: start; grid-template-columns: ${bl.map(x => x.w + 'fr').join(' ')}; } .b { min-width: 0; }
+.grid { display: grid; gap: 6px; align-items: start; grid-template-columns: ${bl.map(x => x.w + 'px').join(' ')}; } .b { min-width: 0; }
 .t { text-align: center; font-weight: 800; font-size: 15px; padding: 4px 2px; border-radius: 4px 4px 0 0; letter-spacing: .2px; }
 table { width: 100%; border-collapse: separate; border-spacing: 0 1.5px; table-layout: fixed; }
-th { font-size: 6.2px; text-align: center; font-weight: 800; padding: 2px 1px; overflow: hidden; line-height: 1.05; } th.kc { font-size: 4.6px; }
+th { font-size: 6.8px; text-align: center; font-weight: 800; padding: 2px 1px; overflow: hidden; line-height: 1.05; } th.kc { font-size: 5px; }
 td.cat { font-size: 11px; font-weight: 800; padding: 2px 5px; border-radius: 3px; }
-td.nm, th.nm { font-weight: 700; font-size: 7.6px; padding: 2px 3px; overflow: hidden; text-overflow: clip; white-space: nowrap; }
-td.p { text-align: center; font-weight: 800; font-size: 8.4px; padding: 2px 0; } td.k { text-align: center; font-size: 6px; padding: 2px 0; overflow: hidden; }
+td.nm, th.nm { font-weight: 700; font-size: 8px; padding: 2px 3px; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+td.p { text-align: center; font-weight: 800; font-size: 7.8px; padding: 2px 0; white-space: nowrap; letter-spacing: -.2px; } td.k { text-align: center; font-size: 6.2px; padding: 2px 0; overflow: hidden; }
 </style></head><body><div class="fit" id="fit"><div class="hd"><span><b>${pxpEsc(o.title)}</b>${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><span>${pxpEsc(o.meta || '')}</span></div>${rules}<div class="grid">${bl.map(x => x.html).join('')}</div></div></body></html>`;
 }
 function pxpPrint(o) {                                                              // une page A4 paysage : la mise en page est réduite pour tout tenir, comme le modèle
@@ -10426,7 +10427,7 @@ function pxpPrint(o) {                                                          
   f.onload = () => {
     try {
       const d = f.contentDocument, el = d.getElementById('fit'), W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / el.scrollHeight, W / el.scrollWidth);
-      if (s < 1) { el.style.transform = 'scale(' + s + ')'; el.style.width = (287 / s) + 'mm'; }
+      el.style.transform = 'scale(' + s + ')';
       f.contentWindow.focus(); setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 250);
     } catch (e) { f.remove(); }
   };
@@ -10466,7 +10467,7 @@ function pxdBloc(canal) {
   b.cats.forEach(c => {
     const list = c.lignes.filter(l => !q || l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!list.length) return;
     rows += `<tr><td class="cat" colspan="${nc}">${pxdEsc(c.cat || b.titre)}</td></tr>`;
-    list.forEach(l => { const key = pxdKey(b, c, l); rows += `<tr><td class="nm">${pxdEsc(l.produit)}</td>${cols.map(v => { const P = pxdPrice(canal, PXD.view, key, l, v.k), cd = pxdCode(canal, key, l, v.k); return `<td class="p${P.v === undefined ? ' e' : ''}${P.src ? ' ' + P.src : ''}">${P.v === undefined ? '' : pxdF(P.v)}</td><td class="k">${pxdEsc(cd || '')}</td>`; }).join('')}</tr>`; });
+    list.forEach(l => { const key = pxdKey(b, c, l); rows += `<tr><td class="nm">${pxdEsc(l.produit)}</td>${cols.map(v => { const P = pxdPrice(canal, PXD.view, key, l, v.k), cd = pxdCode(canal, key, l, v.k); return `<td class="p${P.v === undefined ? ' e' : ''}${P.src ? ' ' + P.src : ''}">${P.v === undefined ? '' : pxpEur(P.v)}</td><td class="k">${pxdEsc(cd || '')}</td>`; }).join('')}</tr>`; });
   });
   return `<div class="pxb" style="${pxdVars(th)}"><div class="pxt">${pxdEsc(b.titre)}</div><div class="pxw"><table class="pxm"><thead><tr><th class="nm"></th>${cols.map(v => `<th>${pxdEsc(v.l)}</th><th class="kc">CODE</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="cat" colspan="${nc}">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</td></tr>`}</tbody></table></div></div>`;
 }
@@ -10988,7 +10989,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261109-152747';
+const BUILD_VERSION = '20261109-155142';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
