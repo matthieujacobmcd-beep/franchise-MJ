@@ -5429,6 +5429,13 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
       return [a, b];
     };
 
+    // Comparable du mois PARTIEL (mois en cours) : JOURS ÉQUIVALENTS de l'an passé (−364 j, même jour de la semaine), et non les mêmes dates :
+    // sinon un lundi serait comparé à un dimanche. Un mois COMPLET reste comparé au même mois de l'an passé.
+    const eqWin = (mi, d) => [utc(CY, mi, 1) - 364 * DAY_MS, utc(CY, mi, d) - 364 * DAY_MS];
+    const dsumEq = (s, f, mi, d) => { const [t0, t1] = eqWin(mi, d); let t = 0, found = false; for (let x = t0; x <= t1; x += DAY_MS) { const y = new Date(x).getUTCFullYear(); if (!daily[y]) continue; const v = daily[y][s][f][doy(y, iso(x))]; if (v != null) { t += v; found = true; } } return found ? t : null; };
+    const dsumBothEq = (s, fa, fb, mi, d) => { const [t0, t1] = eqWin(mi, d); let a = 0, b = 0; for (let x = t0; x <= t1; x += DAY_MS) { const y = new Date(x).getUTCFullYear(); if (!daily[y]) continue; const i = doy(y, iso(x)), A = daily[y][s][fa][i], B = daily[y][s][fb][i]; if (A != null && B != null) { a += A; b += B; } } return [a, b]; };
+    const partialDay = (s, mi) => { const ld = new Date(lastDays[s]); return (ld.getUTCMonth() + 1 === mi && ld.getUTCDate() < daysInMonth(CY, mi)) ? ld.getUTCDate() : null; };   // jour limite si le mois est partiel pour ce restaurant
+
     OUT.meta = {
       open: OPEN,
       partial_by_resto: Object.fromEntries(STORES.map(s => { const d = new Date(lastDays[s]); return [s, { month: MONTHS[d.getUTCMonth()], day: d.getUTCDate() }]; })),
@@ -5469,8 +5476,8 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
       for (const s of STORES) {
         const ld = new Date(lastDays[s]), sm = ld.getUTCMonth() + 1;
         if (mi > sm) { rt[s] = ra[s] = rtc[s] = rpm[s] = rv[s] = null; continue; }     // pas encore de données 2026 ce mois-là
-        const day = mi === sm ? ld.getUTCDate() : null;                                 // mois du dernier jour = partiel, sinon mois entier
-        const vt = dsum(PY, s, mi, 'ca', day), va = dsum(PY, s, mi, 'alim', day), vtc = dsum(PY, s, mi, 'tacs', day), [pa, ph] = dsumBoth(PY, s, mi, 'alim', 'heures', day);
+        const day = partialDay(s, mi);                                                  // jour limite si le mois est partiel (jours équivalents), sinon mois entier
+        const vt = day ? dsumEq(s, 'ca', mi, day) : dsum(PY, s, mi, 'ca'), va = day ? dsumEq(s, 'alim', mi, day) : dsum(PY, s, mi, 'alim'), vtc = day ? dsumEq(s, 'tacs', mi, day) : dsum(PY, s, mi, 'tacs'), [pa, ph] = day ? dsumBothEq(s, 'alim', 'heures', mi, day) : dsumBoth(PY, s, mi, 'alim', 'heures');
         rt[s] = vt; ra[s] = va; rtc[s] = vtc; rpm[s] = (vt && vtc) ? vt / vtc : null; rv[s] = (pa && ph) ? pa / ph : null;
         st += vt || 0; sa += va || 0; stc += vtc || 0; spa += pa; sh += ph;
       }
@@ -5481,7 +5488,7 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
     Y25.ca_total_comparable = comp.t; Y25.ca_alim_comparable = comp.a; Y25.tacs_comparable = comp.tc;
     Y25.pm_comparable = comp.pm; Y25.vphe_comparable = comp.v;
 
-    // Comparables « à date » des ratios issus du quotidien (VPHE, VPHG, pertes) : mêmes dates N-1, chaque restaurant coupé à son dernier jour saisi.
+    // Comparables « à date » des ratios issus du quotidien (VPHE, VPHG, pertes) : jours équivalents N-1 (mois partiel) ou mois entier, chaque restaurant coupé à son dernier jour saisi.
     //   <carte>_comparable / <mensuel>_comparable : tables mensuelles ; <carte>_comparable_annual : cumul depuis janvier.
     for (const spec of [{ card: 'vphe_annual', mon: 'vphe_rh', num: 'alim', den: 'heures', paired: true },
                         { card: 'vphg_annual', mon: 'vphg_monthly', num: 'alim', den: 'heures_total', paired: true },
@@ -5492,10 +5499,10 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
         for (const s0 of STORES) {
           const ld = new Date(lastDays[s0]), sm = ld.getUTCMonth() + 1;
           if (mi > sm) { row[s0] = null; continue; }
-          const day = mi === sm ? ld.getUTCDate() : null;
+          const day = partialDay(s0, mi);
           let n, d;
-          if (spec.paired) [n, d] = dsumBoth(PY, s0, mi, spec.num, spec.den, day);
-          else { n = dsum(PY, s0, mi, spec.num, day); d = dsum(PY, s0, mi, spec.den, day); }
+          if (spec.paired) [n, d] = day ? dsumBothEq(s0, spec.num, spec.den, mi, day) : dsumBoth(PY, s0, mi, spec.num, spec.den);
+          else { n = day ? dsumEq(s0, spec.num, mi, day) : dsum(PY, s0, mi, spec.num); d = day ? dsumEq(s0, spec.den, mi, day) : dsum(PY, s0, mi, spec.den); }
           row[s0] = (n != null && d) ? n / d : null;
           if (n != null && d) { tot[s0][0] += n; tot[s0][1] += d; fn += n; fd += d; }
         }
@@ -6202,13 +6209,14 @@ function _wkMinOffset() {
 }
 function buildWeek(off) {
   const last = _wkLastDay(); if (!last || !DASHBOARD_DATA.daily) return false;
-  let mon, days, daysN1, daysEq;
+  let mon, days, daysN1, daysEq, n1eq = true;
   if (weekMode === 'm') {
     const ld = new Date(Date.parse(last + 'T00:00:00Z')), t = Date.UTC(ld.getUTCFullYear(), ld.getUTCMonth() + off, 1);
     mon = t; const n = new Date(Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 0)).getUTCDate();
     days = [...Array(n)].map((_, i) => _wkIso(t + i * _WD));
-    daysN1 = days.map(d => (+d.slice(0, 4) - 1) + d.slice(4));                  // mois : mêmes dates l'an passé (CA mois comparé au CA mois)
     daysEq = days.map(d => _wkIso(Date.parse(d + 'T00:00:00Z') - 364 * _WD));   // jour : jour équivalent (même jour de semaine)
+    n1eq = days[days.length - 1] > last;                                         // mois en cours (partiel) : comparé aux JOURS ÉQUIVALENTS (sinon un lundi serait comparé à un dimanche) ; mois complet : même mois l'an passé
+    daysN1 = n1eq ? daysEq : days.map(d => (+d.slice(0, 4) - 1) + d.slice(4));
   } else if (weekMode === 'd') {                         // vue Jour : un seul jour (dernier jour saisi, ◀ ▶ pour naviguer), comparé au jour équivalent N-1
     mon = Date.parse(last + 'T00:00:00Z') + off * _WD;
     days = [_wkIso(mon)]; daysN1 = [_wkIso(mon - 364 * _WD)]; daysEq = daysN1;
@@ -6273,7 +6281,7 @@ function buildWeek(off) {
   const nw = {
     label: weekMode === 'd' ? `${_JOURS_LONG[(new Date(mon).getUTCDay() + 6) % 7]} ${new Date(mon).getUTCDate()} ${_MOIS_FR[new Date(mon).getUTCMonth()].toLowerCase()} ${days[0].slice(0, 4)}` : (weekMode === 'm' ? `${_MOIS_FR[new Date(mon).getUTCMonth()]} ${days[0].slice(0, 4)}` : `Semaine ${_wkIsoWeek(mon)} · du ${_wkFmt(days[0])} au ${_wkFmt(days[6])}/${days[6].slice(0, 4)}`) + (partial ? ` · en cours (au ${_wkFmt(last)})` : ''),
     label_n1: weekMode === 'd' ? `${_wkWd(daysN1[0]).toLowerCase()} ${_wkFmt(daysN1[0])}/${daysN1[0].slice(0, 4)}` : `du ${_wkFmt(daysN1[0])} au ${_wkFmt(n1Last)}/${n1Last.slice(0, 4)}`,
-    days, days_n1: daysN1, days_eq: daysEq, missing, kpis: kp, prev, partial, offset: off, mode: weekMode,
+    days, days_n1: daysN1, days_eq: daysEq, n1eq, missing, kpis: kp, prev, partial, offset: off, mode: weekMode,
     yearCur: days[0].slice(0, 4), yearN1: daysN1[0].slice(0, 4),
   };
   for (const k of Object.keys(WEEK)) delete WEEK[k];
@@ -6439,7 +6447,7 @@ function renderWeekStrip() {
     </span>`;
   let h = `<div class="week-strip"><div class="week-strip-head">
     <span class="week-strip-title" style="display:inline-flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> ${WEEK.label}</span>
-    <span class="week-strip-sub">vs ${{ d: 'jour équivalent', m: 'même mois', w: 'semaine équivalente' }[weekMode]} ${WEEK.yearN1} (${WEEK.label_n1})</span>
+    <span class="week-strip-sub">vs ${{ d: 'jour équivalent', m: (WEEK.n1eq ? 'jours équivalents' : 'même mois'), w: 'semaine équivalente' }[weekMode]} ${WEEK.yearN1} (${WEEK.label_n1})</span>
     ${nav}
   </div>
   ${restoCarousel(weekResto, 'weekNavResto', '#8b5cf6', 'wkCar')}
@@ -6502,7 +6510,7 @@ function renderWeekDetail() {
       <tr style="font-weight:800;border-top:2px solid var(--border)"><td>Total ${weekMode === 'm' ? 'mois' : 'semaine'}</td>
         <td>${fmt(tot, k.fmt)}</td><td>${fmt(totp, k.fmt)}</td>
         <td class="delta" style="color:${goodCls(dt)}">${dt == null ? '—' : (dt >= 0 ? '▲ +' : '▼ ') + dt.toFixed(1) + '%'}</td></tr>
-      </tbody></table></div></div>`;
+      </tbody></table></div>${weekMode === 'm' && !WEEK.n1eq ? '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Mois complet : le total est comparé au même mois de l\'an passé ; chaque ligne est comparée au jour équivalent (même jour de la semaine), d\'où une somme des lignes différente du total.</div>' : ''}</div>`;
 
   if (weekChartInst) { try { weekChartInst.destroy(); } catch (e) {} weekChartInst = null; }
   const canvas = document.getElementById('weekChartCanvas');
@@ -6944,10 +6952,19 @@ function _dv(store, time, f) {
   if (!arr) return null;
   return arr[Math.round((time - Date.UTC(y, 0, 1)) / 86400000)] ?? null;
 }
-function aggPaired(store, start, end, n1start) {
+function searchEqFrom(p) {                                       // 1er jour du MOIS PARTIEL (en cours) de la période : à partir de là le N-1 est lu aux jours équivalents (−364 j, même jour de la semaine) ; null si aucun mois partiel
+  const last = (typeof _wkLastDay === 'function') ? _wkLastDay() : null; if (!last || (p.type !== 'month' && p.type !== 'year')) return null;
+  const ld = new Date(Date.parse(last + 'T00:00:00Z')), mEnd = _utc(ld.getUTCFullYear(), ld.getUTCMonth() + 1, 0).getTime();
+  if (ld.getTime() >= mEnd) return null;
+  const ms = _utc(ld.getUTCFullYear(), ld.getUTCMonth(), 1);
+  if (p.type === 'month') return p.start.getTime() === ms.getTime() ? ms : null;
+  return p.y === ld.getUTCFullYear() ? ms : null;
+}
+function aggPaired(store, start, end, n1start, eqFrom) {
+  // eqFrom (facultatif) : à partir de ce jour (mois partiel), le N-1 est lu aux JOURS ÉQUIVALENTS (−364 j) et non aux mêmes dates.
   // Comparaison À DATE, restaurant par restaurant : on ne compte que les jours saisis cette année (chaque restaurant
   // a ses propres jours) et, côté N-1, les MÊMES jours / restaurants (ouverts l'an passé).
-  const shift = n1start.getTime() - start.getTime();
+  const shift0 = n1start.getTime() - start.getTime(), eqMs = eqFrom == null ? null : (eqFrom.getTime ? eqFrom.getTime() : eqFrom), shiftAt = t => (eqMs != null && t >= eqMs) ? -364 * 86400000 : shift0;
   const FLDS = ['ca', 'alim', 'tacs', 'heures', 'perte', 'heures_total'];
   const cur = { ca:null, alim:null, tacs:null, heures:null, perte:null, heures_total:null, n:0 };
   const n1  = { ca:null, alim:null, tacs:null, heures:null, perte:null, heures_total:null, n:0 };
@@ -6955,7 +6972,7 @@ function aggPaired(store, start, end, n1start) {
   const stores = store === 'FRANCHISE' ? RESTOS : [store], OPEN = (DASHBOARD_DATA.meta || {}).open || {};
   for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
     let anyC = false, anyP = false;
-    const t1 = t + shift, iso1 = new Date(t1).toISOString().slice(0, 10);
+    const t1 = t + shiftAt(t), iso1 = new Date(t1).toISOString().slice(0, 10);
     for (const st of stores) {
       if (_dv(st, t, 'ca') == null) continue;
       anyC = true;
@@ -6977,7 +6994,7 @@ function aggPaired(store, start, end, n1start) {
   return { cur, n1 };
 }
 function shiftPeriod(p) {
-  if (p.type === 'date' || p.type === 'week' || p.type === 'range') {
+  if (p.type === 'date' || p.type === 'week' || p.type === 'range' || (p.type === 'month' && searchEqFrom(p))) {      // un mois EN COURS est comparé aux JOURS ÉQUIVALENTS (−364 j), sinon un lundi serait comparé à un dimanche ; un mois complet l'est au même mois de l'an passé
     const st = new Date(p.start.getTime() - 364 * 86400000);
     const en = new Date(p.end.getTime() - 364 * 86400000);
     return { start: st, end: en, label: p.type === 'date' ? `${frDate(st)} (jour équivalent)` : `du ${frDate(st)} au ${frDate(en)} (jours équivalents)` };
@@ -6994,7 +7011,7 @@ function renderSearchResult() {
   if (!p) { box.innerHTML = ''; return; }
   const r = searchResto || currentResto || 'FRANCHISE';
   const n1p = shiftPeriod(p);
-  const pair = aggPaired(r, p.start, p.end, n1p.start);
+  const pair = aggPaired(r, p.start, p.end, n1p.start, searchEqFrom(p));
   const cur = pair.cur, n1 = pair.n1;
   if (cur.ca == null) {
     box.innerHTML = `<div style="color:var(--muted);font-size:.85rem;padding:14px 4px">Aucune donnée pour « ${p.label} » ${r==='FRANCHISE'?'':('— '+r)} (données ${YEAR_CUR} jusqu'au ${(DASHBOARD_DATA.meta||{}).franchise_cutoff ? Object.values(DASHBOARD_DATA.meta.franchise_cutoff).slice(-1)[0].split('-').reverse().join('/') : ''}).</div>`;
@@ -7056,14 +7073,14 @@ function renderSearchDetail() {
   const k = SEARCH_KPIS.find(x => x.id === searchOpenKpi);
   if (!box || !k || !searchState) return;
   const p = searchState, r = searchResto || currentResto || 'FRANCHISE';
-  const shift = (p.type === 'date' || p.type === 'week' || p.type === 'range') ? 364 * 86400000 : null;
+  const shift = (p.type === 'date' || p.type === 'week' || p.type === 'range' || p.type === 'month') ? 364 * 86400000 : null;   // mois : jours équivalents (-364 j)
   const units = searchUnits(p);
-  const cur = [], n1 = [];
+  const cur = [], n1 = [], n1s = [];
   for (const u of units) {
     let n1start;
     if (shift) n1start = new Date(u.start.getTime() - shift);
     else n1start = _utc(u.start.getUTCFullYear()-1, u.start.getUTCMonth(), u.start.getUTCDate());
-    const pr = aggPaired(r, u.start, u.end, n1start);
+    const pr = aggPaired(r, u.start, u.end, n1start, searchEqFrom(p)); n1s.push(n1start);
     cur.push(k.id === 'vphe' ? pr.cur.vphe : pr.cur[k.id]);
     n1.push(k.id === 'vphe' ? pr.n1.vphe : pr.n1[k.id]);
   }
@@ -7073,10 +7090,11 @@ function renderSearchDetail() {
     if (v == null) continue;
     const d = (v != null && pv) ? (v - pv) / pv * 100 : null;
     const gc = d == null ? 'var(--muted)' : ((k.invert ? d < 0 : d >= 0) ? 'var(--green)' : 'var(--red)');
-    rows += `<tr><td>${units[i].label}</td><td>${fmt(v, k.fmt)}</td><td>${fmt(pv, k.fmt)}</td>
+    const wdn = ['dim','lun','mar','mer','jeu','ven','sam'][units[i].start.getUTCDay()], eqs = (shift && p.type !== 'year' && units[i].start.getTime() === units[i].end.getTime() && n1s[i]) ? ` <span style="color:var(--muted);font-size:.68rem">(${wdn} · vs ${String(n1s[i].getUTCDate()).padStart(2,'0')}/${String(n1s[i].getUTCMonth()+1).padStart(2,'0')})</span>` : '';
+    rows += `<tr><td>${units[i].label}${eqs}</td><td>${fmt(v, k.fmt)}</td><td>${fmt(pv, k.fmt)}</td>
       <td class="delta" style="color:${gc}">${d == null ? '—' : (d >= 0 ? '▲ +' : '▼ ') + d.toFixed(1) + '%'}</td></tr>`;
   }
-  const n1p = shiftPeriod(p), totPair = aggPaired(r, p.start, p.end, n1p.start);
+  const n1p = shiftPeriod(p), totPair = aggPaired(r, p.start, p.end, n1p.start, searchEqFrom(p));
   const tv = k.id === 'vphe' ? totPair.cur.vphe : totPair.cur[k.id];
   const tp = k.id === 'vphe' ? totPair.n1.vphe : totPair.n1[k.id];
   const dt = (tv != null && tp) ? (tv - tp) / tp * 100 : null;
@@ -7089,7 +7107,7 @@ function renderSearchDetail() {
       <tr style="font-weight:800;border-top:2px solid var(--border)"><td>Total</td>
         <td>${fmt(tv, k.fmt)}</td><td>${fmt(tp, k.fmt)}</td>
         <td class="delta" style="color:${dt == null ? 'var(--muted)' : ((k.invert ? dt < 0 : dt >= 0) ? 'var(--green)' : 'var(--red)')}">${dt == null ? '—' : (dt >= 0 ? '▲ +' : '▼ ') + dt.toFixed(1) + '%'}</td></tr>
-      </tbody></table></div></div>`;
+      </tbody></table></div>${p.type === 'month' && !searchEqFrom(p) ? '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Mois complet : le total est comparé au même mois de l\'an passé ; chaque ligne est comparée au jour équivalent (même jour de la semaine), d\'où une somme des lignes différente du total.</div>' : ''}</div>`;
   if (searchChartInst) { try { searchChartInst.destroy(); } catch (e) {} searchChartInst = null; }
   const canvas = document.getElementById('searchChartCanvas');
   if (canvas && typeof Chart !== 'undefined' && units.length > 1) {
@@ -7174,7 +7192,7 @@ function renderAutoSummary() {
   const caM  = (p) => move(p, 'bondit de', 'progresse de', 'chute de', 'recule de', 'reste stable');
 
   const ca = dw('ca_total'), vphe = dw('vphe');
-  let body = `<b>${nom}</b> : le chiffre d'affaires ${caM(ca)} sur ${{ d: 'le jour équivalent', m: 'la même période', w: 'la même semaine' }[weekMode]} ${YEAR_PREV}`;
+  let body = `<b>${nom}</b> : le chiffre d'affaires ${caM(ca)} sur ${{ d: 'le jour équivalent', m: (WEEK.n1eq ? 'les jours équivalents' : 'la même période'), w: 'la même semaine' }[weekMode]} ${YEAR_PREV}`;
   const vM = move(vphe, 'bondit de', 'progresse de', 'chute de', 'recule de', 'reste stable');
   body += `, la productivité horaire (VPHE) ${vM}.`;
 
@@ -7963,7 +7981,8 @@ function qhInitChart(canvas) {
 .pc-lfer { background:color-mix(in srgb, #ef4444 7%, var(--card)); --tc:#ef4444; cursor:default; } .pc-lfer .pc-lt { color:#b91c1c; }
 .pc-day.today { border-color:#0891b2; border-width:2px; } .pc-dn { font-size:.78rem; font-weight:800; color:var(--text); } .pc-day.today .pc-dn { color:#0891b2; }
 .pc-ev { display:block; width:100%; text-align:left; font-family:inherit; font-size:.68rem; font-weight:700; line-height:1.25; padding:3px 6px; border:0; border-left:3px solid var(--tc); border-radius:5px; background:color-mix(in srgb, var(--tc) 14%, transparent); color:var(--text); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.pc-more { font-size:.64rem; font-weight:700; color:var(--muted); padding:1px 6px; }
+.pc-more { font-family:inherit; font-size:.64rem; font-weight:700; color:var(--muted); padding:1px 6px; background:none; border:0; border-radius:6px; text-align:left; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; } .pc-more:hover { color:#0891b2; }
+.pc-day.open .pc-ev { white-space:normal; overflow:visible; text-overflow:clip; } .pc-day.open { background:color-mix(in srgb, #0891b2 5%, var(--card)); border-color:#0891b2; }
 .pc-list { display:flex; flex-direction:column; gap:8px; } .pc-lrow { display:grid; grid-template-columns:96px 1fr auto; gap:6px 12px; align-items:start; border:1.5px solid var(--border); border-left:4px solid var(--tc); border-radius:10px; padding:9px 12px; background:var(--card); }
 .pc-ld { font-weight:800; font-size:.82rem; } .pc-ld small { display:block; font-weight:600; color:var(--muted); font-size:.68rem; text-transform:capitalize; } .pc-lt { font-size:.84rem; font-weight:700; } .pc-lt small { display:block; font-weight:500; color:var(--muted); font-size:.74rem; margin-top:2px; line-height:1.4; }
 .pc-empty { text-align:center; color:var(--muted); padding:34px 10px; font-size:.86rem; }
@@ -8037,7 +8056,7 @@ const PC_TYPES = [                                          // catégories (coul
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
 const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE', PC_NONE = 'SANS RESTAURANT';          // PC_FR : événement pour toute la franchise (une seule ligne)
 const PC_FERKEY = 'fmj_pcfer';                                  // afficher les jours fériés (préférence de l'appareil)
-const PC = { fer: (() => { try { return localStorage.getItem(PC_FERKEY) !== '0'; } catch (e) { return true; } })(), rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
+const PC = { fer: (() => { try { return localStorage.getItem(PC_FERKEY) !== '0'; } catch (e) { return true; } })(), rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, openDay: null, upAll: false, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
 const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const pcEsc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -8156,7 +8175,7 @@ function pcRenderUpcoming() {                                   // bandeau « Pr
   const evs = pcAll().filter(e => (e.fin || e.periode) >= today && e.periode <= lim && (!one || pcForResto(e, r))).sort((a, b) => a.periode.localeCompare(b.periode) || a.type.localeCompare(b.type));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = e => { const d = e.periode < today ? today : e.periode; return PC_J[pcDow(d)].toLowerCase() + ' ' + pcFmt(d).slice(0, 5); };
-  box.innerHTML = `<div class="pc-up"><b>📅 Prochains rendez-vous</b>${evs.slice(0, 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}</span>`).join('')}${evs.length > 5 ? `<span class="pc-more">+ ${evs.length - 5}</span>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
+  box.innerHTML = `<div class="pc-up"><b>📅 Prochains rendez-vous</b>${evs.slice(0, PC.upAll ? evs.length : 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}</span>`).join('')}${evs.length > 5 ? `<button type="button" class="pc-more" onclick="PC.upAll = !PC.upAll; pcRenderUpcoming()" title="${PC.upAll ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PC.upAll ? '▲ Réduire' : `+ ${evs.length - 5} autre${evs.length > 6 ? 's' : ''}`}</button>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
 }
 function pcGoPlan() { const r = typeof currentResto !== 'undefined' ? currentResto : 'ALL'; PC.resto = RESTOS.includes(r) ? r : 'ALL'; PC.ym = null; switchEspace('plancom'); }
 async function pcPull() {                                       // lecture légère de l'onglet PlanCom seul (le reste du dashboard se synchronise à son rythme)
@@ -8213,7 +8232,8 @@ function pcRender() {
       const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => e.type !== 'campagne' && pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
       const fer = PC.fer ? pcFer(iso) : '';
       if (d === 1 || (lead + d - 1) % 7 === 0) cells += pcCampBand(PC.ym, lead, nDays, d, camps, fresh) + (d === 1 ? '<div class="pc-day out"></div>'.repeat(lead) : '');
-      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<span class="pc-more" data-day="${iso}">+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}</span>` : ''}</div>`;
+      const opn = PC.openDay === iso && evs.length > 3;
+      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''} ${opn ? 'open' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, opn ? evs.length : 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${opn && e.heure ? '<span style="font-weight:800">' + pcEsc(e.heure) + '</span> · ' : ''}${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<button type="button" class="pc-more" data-more="${iso}" title="${opn ? 'Replier la journée' : 'Voir tous les rendez-vous de ce jour'}">${opn ? '▲ Réduire' : `+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}`}</button>` : ''}</div>`;
     }
     body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
   }
@@ -8227,7 +8247,7 @@ function pcRender() {
   const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
   pcMarkSeen(monthEv); pcBadge();
   const nt = card.querySelector('.pc-note'); if (nt && unseenLeft) nt.insertAdjacentHTML('beforeend', ` <b style="color:#ef4444">${unseenLeft} autre${unseenLeft > 1 ? 's' : ''} événement${unseenLeft > 1 ? 's' : ''} non vu${unseenLeft > 1 ? 's' : ''} (autre mois, restaurant ou catégorie)</b> — <a href="#" onclick="pcSeenAll();return false" style="color:#0891b2;font-weight:700">Tout marquer comme vu</a>`);
-  const g = document.getElementById('pcGrid'); if (g) g.onclick = ev => { const b = ev.target.closest('[data-id]'); if (b) return pcEdit(b.dataset.id); const d = ev.target.closest('[data-day]'); if (d) pcNew(d.dataset.day); };
+  const g = document.getElementById('pcGrid'); if (g) g.onclick = ev => { const mo = ev.target.closest('[data-more]'); if (mo) { PC.openDay = PC.openDay === mo.dataset.more ? null : mo.dataset.more; return pcRender(); } const b = ev.target.closest('[data-id]'); if (b) return pcEdit(b.dataset.id); const d = ev.target.closest('[data-day]'); if (d) pcNew(d.dataset.day); };
   card.querySelectorAll('.pc-lrow [data-id], .pc-cstrip [data-id]').forEach(b => { b.onclick = () => pcEdit(b.dataset.id); });
 }
 const nDaysOf = ym => new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
@@ -10796,7 +10816,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261105-210521';
+const BUILD_VERSION = '20261106-114738';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
