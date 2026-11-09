@@ -388,7 +388,7 @@ function lastLabel(tab){
 
 function fitTabs(){ const b=document.getElementById('tabBar'); if(!b) return; b.classList.remove('wrapped'); const w=b.scrollWidth>b.clientWidth+1; b.classList.toggle('wrapped',w); document.body.classList.toggle('tabs-wrapped',w); }
 let _fitT=null; window.addEventListener('resize',()=>{ clearTimeout(_fitT); _fitT=setTimeout(fitTabs,80); });
-function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>(k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin()))&&(typeof sbTabOk==='function'?sbTabOk(k):k!=='equipes')).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'||k==='valid')&&!accCan(k)?'🔒 ':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
+function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>(k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin()))&&(typeof sbTabOk==='function'?sbTabOk(k):k!=='equipes')).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'&&!accCan(k))||(k==='valid'&&!(accCan('valid')||accCan('sim')||accCan('budget')))?'🔒 ':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(typeof fitTabs==='function') fitTabs(); });
 function init(){
   if(!configured()) document.getElementById('cfgWarn').style.display='block';
@@ -1027,7 +1027,7 @@ function pvStash() {                                         // range les saisie
 }
 function pvPending() {                                       // [{ r, ym, n }] : mois dont la saisie diffère de l'enregistré (mois affiché compris)
   if (!PREVJ) return [];
-  const out = [], seen = {}, add = (k, vals) => { const [r, ym] = k.split('|'), n = pvDiffDays(vals, pvSavedVals(r, ym)); if (n) out.push({ r, ym, n }); seen[k] = 1; };
+  const out = [], seen = {}, add = (k, vals) => { const [r, ym] = k.split('|'); seen[k] = 1; if (typeof wfInCircuit === 'function' && wfInCircuit(r, ym.slice(0, 4)) && !(typeof WFA !== 'undefined' && WFA.dirty[r + '|' + ym.slice(0, 4)])) return; const n = pvDiffDays(vals, pvSavedVals(r, ym)); if (n) out.push({ r, ym, n }); };   // année de budget déjà partagée dans le dossier : pas « en attente »
   if (PV.resto && PV.loadedYm) add(pvKey(PV.resto, PV.loadedYm), PV.vals);
   for (const k of Object.keys(PV.drafts)) if (!seen[k]) add(k, PV.drafts[k]);
   return out;
@@ -1149,6 +1149,7 @@ function renderPrevCa() {
         <select id="pvM" onchange="pvPick()">${mois.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''} ${i + 1 < minM || i + 1 > maxM ? 'disabled' : ''}>${n}</option>`).join('')}</select>
         <select id="pvY" onchange="pvPick()">${Array.from({ length: PV_YMAX - 2025 }, (_, i) => 2026 + i).map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <button class="step next" onclick="pvMonth(1)">Mois suivant ▶</button></div></div>
+    <div id="pvShare" class="bd-shw">${typeof wfBarHtml === 'function' ? wfBarHtml(curResto, +PV.ym.slice(0, 4)) : ''}</div>
     <div id="simHost"></div>
     <div id="pvDraftBar"></div>
     <div class="pv-recap" id="pvRecap"></div>
@@ -1166,7 +1167,7 @@ function renderPrevCa() {
       <select id="pvBase" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="alim">Export : CA alimentaire</option><option value="total">Export : CA net total</option></select>
       <select id="pvScope" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit"><option value="year">ce restaurant · toute l'année</option><option value="month">ce restaurant · ce mois</option><option value="all">tous les restaurants · l'année</option></select>
       <button class="step" onclick="pvExport()">⬇ Excel</button><span class="save-msg" id="pvMsg"></span></div>
-    <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Les prévisions ne comptent qu'après le clic sur « Enregistrer » ; en attendant, tes saisies sont gardées si tu changes de mois ou de restaurant.</div>`;
+    <div class="hint">N-1 / N-2 = CA net alimentaire du jour équivalent (−364 j / −728 j) ; pour une année lointaine, la prévision enregistrée sert de référence (« prév. »). Pour une année de budget, la saisie est partagée automatiquement avec les autres niveaux (le Sheet est alimenté à la finalisation) ; sinon les prévisions ne comptent qu'après le clic sur « Enregistrer » ; en attendant, tes saisies sont gardées si tu changes de mois ou de restaurant.</div>`;
   document.getElementById('pvUAll').value = PV.unit; document.getElementById('pvStep').value = String(PV.step);
   for (const iso of days) { document.getElementById('pvu_' + iso).value = PV.unit; pvUnit(iso); }
   pvRecap();
@@ -1294,10 +1295,11 @@ function pvArrondir() {
 function pvMsg(c, t) { const m = document.getElementById('pvMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } }
 async function pvSave() {
   const btn = document.getElementById('pvSave'); pvStash();
-  const touched = Object.keys(PV.drafts), rows = [], inWf = new Set();
+  const touched = Object.keys(PV.drafts), rows = [], share = new Map(), circ = typeof wfInCircuit === 'function' ? wfInCircuit : () => false;
+  if (PV.resto && PV.ym && circ(PV.resto, PV.ym.slice(0, 4))) share.set(PV.resto + '|' + PV.ym.slice(0, 4), [PV.resto, +PV.ym.slice(0, 4)]);
   for (const k of touched) {                                 // tout ce qui est en attente est enregistré : mois affiché, autres mois, autres restaurants
     const [r, ym] = k.split('|'), vals = PV.drafts[k];
-    if (typeof wfHas === 'function' && wfHas(r, ym.slice(0, 4))) { inWf.add(r + '|' + ym.slice(0, 4)); continue; }   // année en circuit de validation : se partage depuis l'onglet Validation
+    if (circ(r, ym.slice(0, 4))) { share.set(r + '|' + ym.slice(0, 4), [r, +ym.slice(0, 4)]); continue; }   // année de budget : saisie partagée dans le dossier (publiée dans le Sheet à la finalisation)
     for (const iso of pvDays(ym)) {
       const v = vals[iso], old = ((PREVJ || {})[r] || {})[iso];
       const oldT = ((PREVT || {})[r] || {})[iso], newT = v != null ? Math.round(v * PV.coef * 100) / 100 : null;
@@ -1305,19 +1307,27 @@ async function pvSave() {
       else if (old != null) rows.push({ restaurant: r, periode: iso, data: { ca_alim_prev: '', ca_total_prev: '' } });
     }
   }
-  if (!rows.length) { pvMsg('err', inWf.size ? `Ces prévisions sont en circuit de validation (${[...inWf].join(', ')}) : elles se partagent depuis l'onglet Validation et s'enregistrent dans le Sheet à la finalisation par le franchisé.` : 'Rien à enregistrer (aucune modification).'); return; }
+  if (!rows.length && !share.size) { pvMsg('err', 'Rien à enregistrer (aucune modification).'); return; }
   if (btn) btn.disabled = true; pvMsg('', 'Enregistrement…');
+  let sharedOk = true; const sharedTxt = [];
+  for (const [r, Y] of share.values()) {                     // partage immédiat dans le dossier : tous les niveaux voient la saisie
+    const res = await wfShareNow(r, Y), nm = (RESTOS.find(x => x[0] === r) || [0, r])[1];
+    if (!res.ok) sharedOk = false;
+    if (res.ok && res.same && rows.length) continue;                      // déjà partagé : inutile de le répéter à côté de l'enregistrement direct
+    sharedTxt.push(`${nm} ${Y} : ${res.msg}`);
+  }
+  if (!rows.length) { if (btn) btn.disabled = false; pvMsg(sharedOk ? 'ok' : 'err', (sharedOk ? '✓ Prévision ' : '⚠ Prévision non partagée — ') + sharedTxt.join(' ; ') + (sharedOk ? '. Le superviseur valide après la réunion budget, le franchisé publie ensuite dans le Sheet.' : '')); return; }
   const j = await postJson({ action: 'bulk_save', frequence: 'prevjour', pwd: pwdHash(), rows });
   if (btn) btn.disabled = false;
   if (!j.ok) { pvMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + ' — tes saisies sont conservées, réessaie.'); return; }
-  const blocked = new Set([...inWf, ...(j.blocked || [])]), sent = touched.filter(k => { const [r, ym] = k.split('|'); return !blocked.has(r + '|' + ym.slice(0, 4)); });
+  const blocked = new Set(j.blocked || []), shareKeys = new Set([...share.keys()]), sent = touched.filter(k => { const [r, ym] = k.split('|'); return !blocked.has(r + '|' + ym.slice(0, 4)) && !shareKeys.has(r + '|' + ym.slice(0, 4)); });
   for (const k of sent) {
     const [r, ym] = k.split('|'); PREVJ[r] = PREVJ[r] || {}; PREVT[r] = PREVT[r] || {};
     for (const iso of pvDays(ym)) { const v = PV.drafts[k][iso]; if (v != null) { PREVJ[r][iso] = v; PREVT[r][iso] = Math.round(v * PV.coef * 100) / 100; } else { delete PREVJ[r][iso]; delete PREVT[r][iso]; } }
     delete PV.drafts[k];
   }
   pvDraftPersist(); pvDraftBar();
-  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour${sent.length > 1 ? ', ' + sent.length + ' mois / restaurants' : ''}).${blocked.size ? ' ⚠ Non enregistré (circuit de validation) : ' + [...blocked].join(', ') + ' — à partager depuis l\'onglet Validation.' : ''}`);
+  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour${sent.length > 1 ? ', ' + sent.length + ' mois / restaurants' : ''}).${sharedTxt.length ? ' Partagé : ' + sharedTxt.join(' ; ') + '.' : ''}${blocked.size ? ' ⚠ Non enregistré (dossier de validation) : ' + [...blocked].join(', ') + '.' : ''}`);
 }
 
 // ── Export Excel : modèle « PREV ET BUDGET » (mois côte à côte, jours alignés par jour de la semaine) ──
@@ -2263,8 +2273,8 @@ function renderBudget() {
       <div class="f"><label>Impôt sur les sociétés (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.tis)}" onchange="bdSet('tis',this.value,'pct')"></div>
       <div class="f"><label>Évolution des montants fixes (%)</label><input type="text" inputmode="decimal" value="${bdIn(p.infl || 0)}" onchange="bdSet('infl',this.value,'pct')"></div></div></details>
     ${BUD.entry === 'm' ? '' : `<details class="sim-d"><summary>Montants mois par mois (lignes saisies en €)</summary><div class="sim-wrap" style="margin-top:8px"><table class="bd" style="min-width:1250px"><thead><tr><th>Ligne (€ / mois)</th>${MN.map(m => `<th>${m.slice(0, 4)}</th>`).join('')}<th>Année</th><th></th></tr></thead><tbody>${fixRows}</tbody></table></div></details>`}
-    <div class="foot" style="margin-top:14px">${bcCanApply(r) && !(typeof wfHas === 'function' && wfHas(r, Ty)) ? `<button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button>` : ''}<button class="step" onclick="bdExport()" title="Classeur au modèle PREV ET BUDGET : PNL (formules vivantes), DEP CONTROLABLE, SALAIRE EDG, PREV jour par jour">⬇ Exporter en Excel (modèle PREV ET BUDGET)</button><span class="save-msg" id="bdApplyMsg"></span></div>
-    <div class="hint">${bcCanApply(r) ? `« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net (ratios en % du CA alimentaire). Les hypothèses et les salaires sont gardés sur cet appareil.` : `Tes hypothèses sont gardées sur cet appareil tant que tu ne les partages pas (bandeau « Partager ma saisie » ci-dessus). L'enregistrement dans le Prévisionnel du Sheet est fait par le franchisé et le circuit de validation.`}</div>`;
+    <div class="foot" style="margin-top:14px">${bcCanApply(r) && !(typeof wfInCircuit === 'function' && wfInCircuit(r, Ty)) ? `<button class="btn-save" onclick="bdApply()">Appliquer au Prévisionnel mensuel (Sheet) · ${escH(name)} ${Ty}</button>` : ''}<button class="step" onclick="bdExport()" title="Classeur au modèle PREV ET BUDGET : PNL (formules vivantes), DEP CONTROLABLE, SALAIRE EDG, PREV jour par jour">⬇ Exporter en Excel (modèle PREV ET BUDGET)</button><span class="save-msg" id="bdApplyMsg"></span></div>
+    <div class="hint">${typeof wfInCircuit === 'function' && wfInCircuit(r, Ty) ? `Ces hypothèses sont partagées automatiquement avec les autres niveaux (bandeau en haut de l'écran). Après la réunion budget, le superviseur valide puis le franchisé finalise : le Prévisionnel mensuel est alors publié dans le Sheet.` : bcCanApply(r) ? `« Appliquer » enregistre dans l'onglet Prévisionnel du Sheet, pour les 12 mois de ${Ty} : CA net, CA alimentaire, marge, PAC, coût MO, cash flow et résultat net (ratios en % du CA alimentaire). Les hypothèses et les salaires sont gardés sur cet appareil.` : `Tes hypothèses sont gardées sur cet appareil tant que tu ne les partages pas (bandeau « Partager ma saisie » ci-dessus). L'enregistrement dans le Prévisionnel du Sheet est fait par le franchisé et le circuit de validation.`}</div>`;
   if (typeof bcEnsure === 'function') bcEnsure(false);
   if (bdFlash) { const m = document.getElementById('bdMsg'); if (m) { m.className = 'save-msg ' + bdFlash[0]; m.textContent = bdFlash[1]; } bdFlash = null; }
 }
@@ -2281,7 +2291,7 @@ async function bdApply() {
   if (!accCan('budget', curResto) || !bcCanApply(curResto)) return;
   const r = curResto, Ty = +SIM.ty, o = bdParams(r), ca = bdCa(r, Ty), L = bdCompute(o.p, ca.alim), name = RESTOS.find(x => x[0] === r)[1];
   const msg = (c, t) => { const m = document.getElementById('bdApplyMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } };
-  if (typeof wfHas === 'function' && wfHas(r, Ty)) { msg('err', `Le prévisionnel ${Ty} de ${name} est en circuit de validation : il s'enregistre dans le Sheet à la finalisation par le franchisé. Pour partager tes modifications, utilise le bouton « Enregistrer dans le dossier partagé » en haut de l'écran (ou l'onglet Validation).`); return; }
+  if (typeof wfInCircuit === 'function' && wfInCircuit(r, Ty)) { msg('err', `Le prévisionnel ${Ty} de ${name} est en saisie partagée : tes modifications sont déjà partagées avec les autres niveaux, et le franchisé le publie dans le Sheet à la finalisation (onglet Validation).`); return; }
   const { rows, bad } = bdRowsFrom(r, Ty, L);
   if (!rows.length) { msg('err', 'Aucun CA prévu : renseigne la prévision journalière ou le simulateur.'); return; }
   const part = MN.filter((m, i) => ca.src[i] === 'part' && L.alim[i]);
@@ -2449,18 +2459,20 @@ async function bdExport() {
     say('ok', '✓ Fichier Excel généré (' + sheets.join(', ') + ').');
   } catch (e) { say('err', 'Export impossible : ' + e.message); }
 }
-
-// ── Circuit de validation du prévisionnel : directeur → superviseur → franchisé ──
-// Un dossier par restaurant et par année, partagé dans le Google Sheet (onglets « Validation » et « ValidationJournal », via l'Apps Script).
-// Chacun travaille dans ses écrans (Prévision CA, simulation, Budget & PNL) puis « enregistre sa version » dans le dossier ; il valide pour transmettre
-// à l'échelon suivant. Seul le franchisé déverrouille un dossier et le finalise ; la finalisation publie la prévision jour par jour et mensuelle.
+// ── Saisie partagée puis validation du prévisionnel : directeur, superviseur et franchisé saisissent, puis le superviseur valide et le franchisé finalise ──
+// Un « dossier » par restaurant et par année, partagé dans le Google Sheet (onglets « Validation » et « ValidationJournal », via l'Apps Script).
+// SAISIE PARTAGÉE : le directeur, le superviseur et le franchisé saisissent chacun dans leurs écrans (Prévision CA, simulation, Budget & PNL). Leur saisie est partagée AUTOMATIQUEMENT
+// (le dossier s'ouvre au premier enregistrement) et chaque autre niveau la reçoit aussitôt, sans rien à cliquer. Après la réunion budget, le superviseur VALIDE, puis le franchisé FINALISE :
+// la finalisation publie la prévision jour par jour et mensuelle dans le Sheet. Seul le franchisé déverrouille un dossier. Années de budget (après l'année en cours) : toujours en saisie partagée.
 // Salaires par poste (initiales) : chaque échelon enregistre sa propre saisie, visible de lui et des échelons au-dessus ; le serveur ne renvoie jamais la saisie d'un échelon supérieur.
 // Le contenu partagé du dossier (prévision, budget, simulation) ne contient jamais de salaires.
-const WF = { year: null, byKey: {}, listAt: 0, cur: null, backend: null, flash: null, sync: {} };   // sync : version du dossier sur laquelle l'écran local est calé (pull / save / open)
-const WF_STEP = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' };
+const WF = { year: null, byKey: {}, listAt: 0, cur: null, backend: null, flash: null, sync: {}, sig: {} };   // sync : version du dossier sur laquelle l'écran local est calé ; sig : empreinte de l'écran à ce moment-là
+const WF_STEP = { directeur: 'Saisie partagée', superviseur: 'Validation superviseur', franchise: 'Validation franchisé' };
+const WF_EDIT = { directeur: ['directeur', 'superviseur', 'franchise'], superviseur: ['superviseur', 'franchise'], franchise: ['franchise'] };   // étape → échelons qui peuvent encore enregistrer (comme le serveur)
 const wfKey = (r, y) => r + '|' + y;
 const wfHas = (r, y) => !!WF.byKey[wfKey(r, y)];
-const wfDate = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : ''; };
+const wfInCircuit = (r, y) => wfHas(r, y) || +y > new Date().getFullYear();            // année de budget : saisie partagée dans le dossier (le Sheet est alimenté à la finalisation)
+const wfDate = s => { s = String(s || ''); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); if (m) return `${m[3]}/${m[2]} ${m[4]}:${m[5]}`; const d = new Date(s); return isNaN(d) ? '' : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };   // le Sheet renvoie parfois une vraie date
 const wfMsg = (c, t) => { const m = document.getElementById('wfMsg'); if (m) { m.className = 'save-msg ' + c; m.textContent = t; } };
 const wfCm = () => { const e = document.getElementById('wfCm'); return e ? e.value.trim() : ''; };
 (function () {
@@ -2479,28 +2491,42 @@ const wfCm = () => { const e = document.getElementById('wfCm'); return e ? e.val
   document.head.appendChild(st);
 })();
 
-// ── Appels au serveur : le rôle est reconnu à l'empreinte du mot de passe d'accès (profil débloqué qui couvre le restaurant) ──
-function wfProfile(r, etape) {
-  const ps = accProfiles().filter(p => accCovers(p, r));
-  return ps.find(p => p.role === etape) || ['franchise', 'superviseur', 'directeur'].map(k => ps.find(p => p.role === k)).find(Boolean) || null;
+// ── Appels au serveur : l'identité vient du jeton (comptes individuels) ou de l'empreinte du mot de passe d'accès (profil débloqué qui couvre le restaurant) ──
+const wfRoles = r => accProfiles().filter(p => accCovers(p, r)).map(p => p.role);
+const wfMayEdit = (r, etape) => wfRoles(r).some(k => k === 'owner' || (WF_EDIT[etape] || []).includes(k));             // le niveau permet d'enregistrer à cette étape
+const wfRightsOk = r => accCan('sim', r) || accCan('budget', r) || accCan('valid', r);                                  // « Prévision CA », « Budget & PNL » ou « Circuit de validation » : de quoi partager sa saisie
+const wfHasRole = (r, k) => accProfiles().some(p => accCovers(p, r) && p.role === k && (p.can || []).includes('valid'));   // peut valider (superviseur) / finaliser (franchisé)
+function wfProfile(r, act, etape) {
+  const ps = accProfiles().filter(p => accCovers(p, r) && p.h), pick = (...ks) => { for (const k of ks) { const p = ps.find(x => x.role === k); if (p) return p; } return null; };
+  if (act === 'finalize' || act === 'unlock') return pick('franchise');
+  if (act === 'reset') return pick('franchise', 'owner');
+  if (act === 'validate') return pick('superviseur');
+  if (act === 'save' || act === 'open') { const ok = WF_EDIT[etape || 'directeur'] || []; return ps.find(p => p.role === 'owner' || ok.includes(p.role)) || null; }
+  return pick('franchise', 'superviseur', 'directeur', 'owner') || ps[0] || null;
 }
 async function wfCall(act, r, y, extra, etape) {
-  const p = wfProfile(r, etape); if (!p || !p.h) return { ok: false, error: 'accès non débloqué pour ce restaurant' };
+  const p = wfProfile(r, act, etape);
+  if (!p) return { ok: false, error: act === 'validate' ? 'seul le superviseur valide la saisie' : (act === 'finalize' || act === 'unlock') ? 'seul le franchisé peut le faire' : "ton niveau ne permet pas d'enregistrer à cette étape du dossier" };
   const j = await postJson(Object.assign({ action: 'wf_' + act, pwd: p.h, restaurant: r, year: String(y) }, extra || {}));
   if (!j.ok && /action inconnue/.test(j.error || '')) { WF.backend = false; j.error = "Le circuit de validation demande une mise à jour de l'Apps Script du Sheet : colle le nouveau fichier " + ((CFG.files && CFG.files.apps_script) || 'AppsScript') + " (Extensions → Apps Script), puis Déployer → Gérer les déploiements → Nouvelle version."; }
   return j;
 }
-async function wfEnsureList(force) {
-  if (!accProfiles().length) return;
-  if (!force && Date.now() - WF.listAt < 60000) return;
-  WF.listAt = Date.now(); const seen = new Set(), by = {};
-  for (const p of accProfiles()) {
-    if (!p.h || seen.has(p.id)) continue; seen.add(p.id);
-    const j = await postJson({ action: 'wf_list', pwd: p.h });
-    if (!j.ok) { if (/action inconnue/.test(j.error || '')) WF.backend = false; continue; }
-    WF.backend = true; for (const x of j.rows) by[wfKey(x.restaurant, x.year)] = x;
-  }
-  WF.byKey = by;
+function wfEnsureList(force) {                                                                 // dossiers de mon périmètre ; force = true : pas plus d'une lecture toutes les 4 s ; 'now' : tout de suite
+  if (!accProfiles().length) return Promise.resolve();
+  if (WF.listBusy) return WF.listBusy;
+  const age = Date.now() - WF.listAt;
+  if (force !== 'now' && (force ? age < 4000 : age < 60000)) return Promise.resolve();
+  WF.listAt = Date.now();
+  return (WF.listBusy = (async () => {
+    const seen = new Set(), by = {}; let got = false;
+    for (const p of accProfiles()) {
+      if (!p.h || seen.has(p.id)) continue; seen.add(p.id);
+      const j = await postJson({ action: 'wf_list', pwd: p.h });
+      if (!j.ok) { if (/action inconnue/.test(j.error || '')) WF.backend = false; continue; }
+      WF.backend = true; got = true; for (const x of j.rows) by[wfKey(x.restaurant, x.year)] = x;
+    }
+    if (got) WF.byKey = by;                                                                    // lecture impossible : on garde ce qu'on savait
+  })().finally(() => { WF.listBusy = null; }));
 }
 
 // ── Contenu partagé : prévision journalière de l'année, hypothèses du budget (sans salaires par poste), réglages de simulation ──
@@ -2561,7 +2587,7 @@ function wfSummary(P, r, sal) {
   } catch (e) { return null; }
 }
 
-// ── Écran ──
+// ── Écran « Validation » ──
 function wfYear(v) { WF.year = +v; WF.cur = null; renderValid(); }
 async function wfFetch() {
   const r = curResto, y = WF.year; WF.cur = { r, y, loading: true };
@@ -2577,116 +2603,111 @@ function renderValid() {
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Y = WF.year || (WF.year = +SIM.ty);
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
   const head = `<div class="panel-head"><div><div class="panel-title">Validation du prévisionnel ${Y} · ${escH(name)}</div>
-    <div class="last-saisie">Le directeur prépare puis valide, le superviseur reprend, ajuste puis valide, le franchisé finalise. Chacun travaille dans ses écrans (Prévision CA, simulation, Budget & PNL) puis enregistre sa version ici ; les échanges se font par commentaires. Seul le franchisé peut déverrouiller un dossier et le finaliser.</div></div>
+    <div class="last-saisie">La saisie est <b>partagée</b> : le directeur, le superviseur et le franchisé saisissent dans Prévision CA et Budget & PNL, et chacun voit aussitôt la saisie des autres. Après la réunion budget, le superviseur <b>valide</b>, puis le franchisé <b>finalise</b> : la prévision est alors publiée dans le Sheet.</div></div>
     <div class="period"><select onchange="wfYear(this.value)">${years.map(v => `<option ${v === Y ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>`;
-  if (!accCan('valid', r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
+  if (!wfRightsOk(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
   if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const C = WF.cur && WF.cur.r === r && WF.cur.y === Y ? WF.cur : null;
   if (!C) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du dossier…</div>`; wfFetch(); return; }
   if (C.loading) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du dossier…</div>`; return; }
-  const me = accRole(r), who = `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div>`;
+  const me = accRole(r) || accProfiles().find(p => accCovers(p, r)) || null, who = `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div>`;
   if (C.error) { pn.innerHTML = head + who + `<div class="entry-banner err" style="display:block">${escH(C.error)}</div><div class="foot"><button class="step" onclick="WF.cur=null;renderValid()">Réessayer</button></div>`; return; }
-  const D = C.dossier, chain = C.chain || ['directeur', 'franchise'], etape = D ? D.etape : null, isFinal = etape === 'final';
-  const acts = e => accProfiles().some(p => accCovers(p, r) && p.role === e), canAct = !!D && !isFinal && acts(etape), isFr = acts('franchise');
-  const idx = chain.indexOf(etape), next = idx >= 0 ? chain[idx + 1] : null;
-  const J = C.journal || [], doneBy = e => J.filter(x => x.action === (e === 'franchise' ? 'finalize' : 'validate') && x.from === e).pop();
-  const steps = chain.map((e, i) => {
-    const d = doneBy(e), cur = D && !isFinal && etape === e, passed = D && (isFinal || idx > i) && d;
-    return `<div class="wf-st ${passed ? 'done' : (cur ? 'cur' : '')}"><b>${i + 1} · ${WF_STEP[e]}</b><small>${passed ? `✓ ${e === 'franchise' ? 'Finalisé' : 'Validé'} le ${wfDate(d.at)}<br>${escH(d.by)}` : (cur ? `⏳ En cours${D.statut === 'rouvert' ? ' (rouvert)' : ''}` : (D ? 'À venir' : '—'))}</small></div>`;
-  }).join('') + `<div class="wf-st ${isFinal ? 'fin' : ''}"><b>✔ Finalisé</b><small>${isFinal ? 'Publié dans le Sheet le ' + wfDate(D.at) : 'Publication par le franchisé'}</small></div>`;
-  const P = D ? wfParse(D.donnees) : null, S = P ? wfSummary(P, r, C.salaires) : null, topSeg = wfTopSeg(C.salaires);
-  const dirty = P ? (JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) || wfLocalRows(r) !== JSON.stringify(topSeg && topSeg.rows ? topSeg.rows : [])) : false;
+  const D = C.dossier, chain = C.chain || ['directeur', 'franchise'], etape = D ? D.etape : null, isFinal = etape === 'final', hasSup = chain.includes('superviseur');
+  const mayEdit = !!D && !isFinal && wfMayEdit(r, etape) && wfRightsOk(r), isSup = wfHasRole(r, 'superviseur'), isFr = wfHasRole(r, 'franchise');
+  const J = C.journal || [], supDone = J.filter(x => x.action === 'validate' && x.role === 'superviseur').pop(), finDone = J.filter(x => x.action === 'finalize').pop();
+  const st = (n, t, cls, sub) => `<div class="wf-st ${cls}"><b>${n} · ${t}</b><small>${sub}</small></div>`;
+  let steps = st(1, WF_STEP.directeur, !D ? '' : (etape === 'directeur' ? 'cur' : 'done'), !D ? '—' : (etape === 'directeur' ? `⏳ En cours${D.statut === 'rouvert' ? ' (rouvert)' : ''}<br>v${D.version} · ${wfDate(D.at)}<br>${escH(D.by || '')}` : '✓ Saisie arrêtée'));
+  if (hasSup) steps += st(2, WF_STEP.superviseur, supDone && D ? 'done' : (D && etape === 'superviseur' ? 'cur' : ''), supDone && D ? `✓ Validé le ${wfDate(supDone.at)}<br>${escH(supDone.by)}` : (isFinal ? 'Non requise' : (D ? 'À venir (après la réunion budget)' : '—')));
+  steps += st(hasSup ? 3 : 2, WF_STEP.franchise, isFinal ? 'done' : (D && etape === 'franchise' ? 'cur' : ''), isFinal && finDone ? `✓ Finalisé le ${wfDate(finDone.at)}<br>${escH(finDone.by)}` : (D && etape === 'franchise' ? '⏳ À finaliser' : (D ? 'À venir' : '—')));
+  steps += `<div class="wf-st ${isFinal ? 'fin' : ''}"><b>✔ Publié dans le Sheet</b><small>${isFinal ? 'le ' + wfDate(D.at) : 'à la finalisation par le franchisé'}</small></div>`;
+  const P = D ? wfParse(D.donnees) : null, S = P ? wfSummary(P, r, C.salaires) : null;
   const kp = (l, v, sub) => `<div class="sim-kpi"><span>${l}</span><b>${v}</b><i>${sub || ''}</i></div>`;
   const tiles = S ? `<div class="sim-kpis">${kp('CA alim. ' + Y, pvEur(S.A), `${S.nFull}/12 mois complets${S.evo != null ? ' · <span class="' + simSign(S.evo) + '">' + simPct(S.evo) + ' vs ' + (Y - 1) + '</span>' : ''}`)}${S.hyp ? kp('Marge brute', bdP(S.marge), '') + kp('Main-d\'œuvre', bdP(S.mo), '') + kp('PAC', bdP(S.pac), '') + kp('Cash flow', pvEur(S.cf), '') + kp('Résultat net', pvEur(S.rn), bdP(S.rnp) + ' du CA') : kp('Budget', 'à renseigner', 'hypothèses de coûts non saisies')}</div>` : '';
   let box = '';
   if (!D) {
-    const canOpen = accProfiles().some(p => accCovers(p, r) && (p.role === 'directeur' || p.role === 'franchise'));
-    box = `<div class="wf-box"><b>Aucun dossier ouvert pour ${Y}.</b> ${canOpen ? `Ouvrir le dossier partage ta version actuelle (prévision journalière de ${Y}, budget, simulation) et lance le circuit : ${chain.map(e => WF_STEP[e]).join(' → ')}. Tant qu'un dossier existe, l'enregistrement direct de la prévision ${Y} dans le Sheet est bloqué : tout passe par la finalisation du franchisé.
-      <div style="margin-top:10px"><label style="font-size:.7rem;font-weight:800;color:var(--muted)">Commentaire d'ouverture (optionnel)</label><textarea id="wfCm" placeholder="ex. Version de départ issue de la simulation"></textarea></div>
-      <div class="wf-act"><button class="btn-save" onclick="wfOpen()">Ouvrir le dossier ${Y}</button><span class="save-msg" id="wfMsg"></span></div>` : `Le directeur du restaurant ou le franchisé doit l'ouvrir.`}</div>`;
+    box = `<div class="wf-box"><b>Aucune saisie partagée pour ${Y}.</b> Le dossier s'ouvre tout seul dès ton premier enregistrement dans Prévision CA ou Budget & PNL : le superviseur et le franchisé voient alors ta saisie, et les autres directeurs aussi.
+      <div style="margin-top:10px"><label style="font-size:.7rem;font-weight:800;color:var(--muted)">Commentaire (optionnel, joint à la première action)</label><textarea id="wfCm" placeholder="ex. Version de départ issue de la simulation"></textarea></div>
+      <div class="wf-act"><button class="btn-save" onclick="wfShareClick()">Partager ma saisie maintenant</button><span class="save-msg" id="wfMsg"></span></div></div>`;
   } else {
-    const fin = isFinal ? `Dossier <b>finalisé</b> : la prévision ${Y} est publiée. Seul le franchisé peut le déverrouiller.` : `Le dossier est à l'étape <b>${WF_STEP[etape]}</b> (version ${D.version}, enregistrée le ${wfDate(D.at)} par ${escH(D.by)}).`;
-    let a = '';
-    if (canAct) a += `<button class="step" onclick="wfPull()" title="Charge la version partagée dans Prévision CA, Budget & PNL et la simulation">⬇ Reprendre la version partagée</button><button class="step" onclick="wfSave()">⬆ Enregistrer ma version</button>${etape === 'franchise' ? `<button class="btn-save" onclick="wfFinalize()">✔ Finaliser et publier ${Y}</button>` : `<button class="btn-save" onclick="wfValidate()">✔ Valider et transmettre au ${WF_STEP[next]}</button>`}`;
-    else a += `<button class="step" onclick="wfPull()" title="Charge la version partagée dans tes écrans pour la consulter">⬇ Charger la version partagée pour la consulter</button>`;
-    const unlock = isFr ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><b style="font-size:.78rem">Franchisé : déverrouiller</b> — rouvre le dossier à l'étape choisie (le contenu est conservé, la personne concernée peut à nouveau le modifier).
-      <div class="wf-act"><select id="wfTo" style="padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit">${chain.map(e => `<option value="${e}" ${e === etape ? 'selected' : ''}>${WF_STEP[e]}</option>`).join('')}</select><button class="step" onclick="wfUnlock()">🔓 Déverrouiller</button></div></div>` : '';
-    box = `<div class="wf-box">${fin} ${dirty ? '<br><span style="color:#b45309">Ta version locale diffère de la version partagée.</span>' : ''}
-      ${!canAct && !isFinal ? `<div class="hint" style="margin-top:6px">Le dossier est chez le <b>${WF_STEP[etape]}</b> : tu peux le consulter et commenter ; seul le franchisé peut le déverrouiller.</div>` : ''}
-      ${canAct && wfStale(r, Y, C) ? `<div class="hint" style="margin-top:6px;color:#b45309">Charge d'abord la version partagée (« Reprendre ») avant d'enregistrer ou de valider : ton écran local n'est pas calé sur la dernière version.</div>` : ''}
-      <div style="margin-top:10px"><label style="font-size:.7rem;font-weight:800;color:var(--muted)">Commentaire (joint à l'action, visible de tous les échelons)</label><textarea id="wfCm" placeholder="ex. CA décembre relevé de 3 % : ouverture exceptionnelle le 24"></textarea></div>
-      <div class="wf-act">${a}<button class="step" onclick="wfComment()">💬 Envoyer seulement le commentaire</button><span class="save-msg" id="wfMsg"></span></div>${unlock}</div>`;
+    const fin = isFinal ? `Dossier <b>finalisé</b> : la prévision ${Y} est publiée dans le Sheet. Seul le franchisé peut le déverrouiller.` : `Le dossier est à l'étape <b>${WF_STEP[etape]}</b> (version ${D.version}, enregistrée le ${wfDate(D.at)} par ${escH(D.by)}).`;
+    let a = `<button class="step" onclick="wfPull()" title="Charge la version partagée dans Prévision CA, Budget & PNL et la simulation">⬇ Recharger la version partagée</button>`;
+    if (mayEdit) a += `<button class="step" onclick="wfShareClick()">⬆ Partager maintenant</button>`;
+    if (isSup && !isFinal && etape !== 'franchise') a += `<button class="btn-save" onclick="wfValidate()">✔ Valider la saisie (superviseur)</button>`;
+    if (isFr && !isFinal) a += `<button class="btn-save" onclick="wfFinalize()">✔ Finaliser et publier ${Y}</button>`;
+    const canReset = wfHasRole(r, 'franchise') || wfHasRole(r, 'owner');
+    const reset = canReset ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><b style="font-size:.78rem">Repartir de zéro</b> — supprime le dossier partagé de ${escH(name)} ${Y} (par exemple une saisie de test). La version actuelle est archivée dans l'historique du Sheet ; les valeurs déjà publiées dans le Sheet ne changent pas.
+      <div class="wf-act"><button class="step" onclick="wfReset()">🗑 Repartir de zéro</button></div></div>` : '';
+    const unlock = isFr && etape !== 'directeur' ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><b style="font-size:.78rem">Franchisé : déverrouiller</b> — rouvre le dossier à l'étape choisie (le contenu est conservé, les niveaux concernés peuvent à nouveau le modifier).
+      <div class="wf-act"><select id="wfTo" style="padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit">${chain.map(e => `<option value="${e}" ${e === 'directeur' ? 'selected' : ''}>${WF_STEP[e]}</option>`).join('')}</select><button class="step" onclick="wfUnlock()">🔓 Déverrouiller</button></div></div>` : '';
+    box = `<div class="wf-box">${fin}
+      ${!isFinal && !mayEdit ? `<div class="hint" style="margin-top:6px">${etape !== 'directeur' ? 'La saisie est validée : tu peux la consulter et commenter ; seul le franchisé peut encore l\'ajuster ou la déverrouiller.' : 'Ton accès ne permet pas de modifier le dossier : tu peux le consulter et commenter.'}</div>` : ''}
+      ${isFr && !isFinal && hasSup && !supDone ? `<div class="hint" style="margin-top:6px;color:#b45309">Le superviseur n'a pas encore validé la saisie. Tu peux finaliser quand même (une confirmation te sera demandée).</div>` : ''}
+      <div style="margin-top:10px"><label style="font-size:.7rem;font-weight:800;color:var(--muted)">Commentaire (joint à l'action, visible de tous les niveaux)</label><textarea id="wfCm" placeholder="ex. CA décembre relevé de 3 % : ouverture exceptionnelle le 24"></textarea></div>
+      <div class="wf-act">${a}<button class="step" onclick="wfComment()">💬 Envoyer seulement le commentaire</button><span class="save-msg" id="wfMsg"></span></div>${unlock}${reset}</div>`;
   }
   const L = J.slice().reverse().map(x => {
-    const t = { open: 'a ouvert le dossier', validate: 'a validé', finalize: 'a finalisé et publié', unlock: `a déverrouillé (retour à ${WF_STEP[x.to] || x.to})`, comment: 'a commenté' }[x.action] || x.action;
-    return `<li><b>${escH(x.by)}</b> ${t}${x.action === 'validate' ? ` → ${WF_STEP[x.to] || x.to}` : ''} <small>· ${wfDate(x.at)} · v${x.version}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`;
+    const t = { open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: `a déverrouillé (retour à « ${WF_STEP[x.to] || x.to} »)`, comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', reset: 'a remis le dossier à zéro' }[x.action] || x.action;
+    return `<li><b>${escH(x.by)}</b> ${t} <small>· ${wfDate(x.at)} · v${x.version}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`;
   }).join('');
   const LV = { franchise: 'Franchisé', superviseur: 'Superviseur', directeur: 'Directeur' }, myRank = { directeur: 0, superviseur: 1, franchise: 2 }[(me || {}).role];
   const salBlocks = ['franchise', 'superviseur', 'directeur'].filter(k => (C.salaires || {})[k]).map(k => { const sg = C.salaires[k], rows = sg.rows || [], cost = x => (x.sal || []).reduce((a, b) => a + b, 0) + ((x.sal || []).some(v => v > 0) ? (x.prime || 0) : 0);
     return `<tr class="tot"><td class="l" colspan="3">Saisie du ${LV[k]}${{ directeur: 0, superviseur: 1, franchise: 2 }[k] === myRank ? ' (la tienne)' : ''}</td><td>${bdE(rows.reduce((a, x) => a + cost(x), 0))}</td></tr>` + rows.map(x => `<tr><td class="l">${escH(x.poste || '')}</td><td class="l">${escH(x.ini || '')}</td><td class="l">${escH(x.ctr || '')}</td><td>${bdE(cost(x))}</td></tr>`).join(''); }).join('');
   const salSec = salBlocks ? `<details class="sim-d"><summary>Salaires par poste enregistrés dans le dossier</summary><div class="hint" style="margin:6px 0 8px">Chaque échelon voit sa propre saisie et celles des échelons en dessous ; la saisie d'un échelon supérieur ne t'est jamais transmise. Coût annuel (brut + prime) par poste, repéré par les initiales.</div><div class="sim-wrap"><table class="sim" style="min-width:480px"><thead><tr><th class="l">Poste</th><th class="l">Initiales</th><th class="l">Contrat</th><th>Coût ${Y} (€)</th></tr></thead><tbody>${salBlocks}</tbody></table></div></details>` : '';
-  const mine = RESTOS.filter(x => accCan('valid', x[0])), ov = mine.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th><th class="l">Étape</th><th class="l">Dernière action</th><th></th></tr></thead><tbody>${mine.map(x => {
+  const mine = RESTOS, ov = mine.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th><th class="l">Étape</th><th class="l">Dernière action</th><th></th></tr></thead><tbody>${mine.map(x => {
     const d = WF.byKey[wfKey(x[0], Y)];
-    return `<tr><td class="l">${escH(x[1])}</td><td class="l">${d ? (d.etape === 'final' ? '✔ Finalisé' : WF_STEP[d.etape] + (d.statut === 'rouvert' ? ' (rouvert)' : '')) : '<span style="color:var(--muted)">non ouvert</span>'}</td><td class="l">${d ? wfDate(d.at) + ' · ' + escH(d.by) : ''}</td><td><button class="step" onclick="setResto('${x[0].replace(/'/g, "\\'")}')">Ouvrir</button></td></tr>`;
+    return `<tr><td class="l">${escH(x[1])}</td><td class="l">${d ? (d.etape === 'final' ? '✔ Finalisé' : WF_STEP[d.etape] + (d.statut === 'rouvert' ? ' (rouvert)' : '')) : '<span style="color:var(--muted)">pas encore de saisie partagée</span>'}</td><td class="l">${d ? wfDate(d.at) + ' · ' + escH(d.by) : ''}</td><td><button class="step" onclick="setResto('${x[0].replace(/'/g, "\\'")}')">Ouvrir</button></td></tr>`;
   }).join('')}</tbody></table></div></details>` : '';
-  pn.innerHTML = head + who + `<div class="wf-steps">${steps}</div>` + box + tiles + salSec + `<div class="sim-h">Historique et échanges</div>${L ? `<ul class="wf-log">${L}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}` + ov +
-    `<div class="hint" style="margin-top:12px">« Enregistrer ma version » partage dans le dossier la prévision journalière ${Y}, les hypothèses du budget et les réglages de simulation ; ta saisie de salaires par poste est enregistrée à part (visible de toi et des échelons au-dessus). La version partagée ne remplace tes écrans que si tu cliques sur « Reprendre ».</div>`;
+  pn.innerHTML = head + who + `<div class="wf-steps">${steps}</div>` + wfBarHtml(r, Y) + box + tiles + salSec + `<div class="sim-h">Historique et échanges</div>${L ? `<ul class="wf-log">${L}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}` + ov +
+    `<div class="hint" style="margin-top:12px">Ta saisie (prévision journalière ${Y}, hypothèses du budget, réglages de simulation) est partagée automatiquement quelques secondes après chaque modification ; ta saisie de salaires par poste est enregistrée à part (visible de toi et des niveaux au-dessus). La validation et la finalisation portent sur la version partagée affichée ici.</div>`;
   if (WF.flash) { wfMsg(WF.flash[0], WF.flash[1]); WF.flash = null; }
 }
 
-// ── Actions ──
-async function wfOpen() {
-  const r = curResto, Y = WF.year, P = wfCollect(r, Y);
-  if (!Object.keys(P.cal).length && !confirm(`Aucune prévision journalière n'est saisie pour ${Y}. Ouvrir quand même le dossier ?`)) return;
-  wfMsg('', 'Ouverture du dossier…');
-  const j = await wfCall('open', r, Y, { donnees: JSON.stringify(P), salaires: wfEdgSeg(r), comment: wfCm() }, 'directeur');
-  if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
-  WF.sync[wfKey(r, Y)] = j.version; WF.cur = null; WF.byKey[wfKey(r, Y)] = { restaurant: r, year: String(Y), etape: j.etape, statut: j.statut, version: j.version, at: '', by: '' }; renderValid();
-}
-async function wfSave() {
-  const C = WF.cur, r = curResto, Y = WF.year;
-  if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
-  if (!wfSure(r, Y, C)) return;
-  wfMsg('', 'Enregistrement…');
-  const j = await wfCall('save', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), salaires: wfEdgSeg(r), base_version: C.dossier.version }, C.dossier.etape);
-  if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
-  WF.sync[wfKey(r, Y)] = j.version; WF.flash = ['ok', '✓ Ta version est enregistrée dans le dossier (v' + j.version + ').']; WF.cur = null; renderValid();
-}
-const wfStale = (r, Y, C) => { const s = WF.sync[wfKey(r, Y)]; return s !== undefined && s !== C.dossier.version; };      // une version PLUS RÉCENTE existe (la version sur laquelle l'écran était calé est connue et dépassée)
-const wfUnknown = (r, Y, C) => WF.sync[wfKey(r, Y)] === undefined;                                                            // écran jamais comparé au dossier (nouvel appareil, session vidée) : on demande confirmation au lieu de refuser
-const wfSure = (r, Y, C) => !wfUnknown(r, Y, C) || confirm("Cet écran n'a pas encore été comparé à la version partagée du dossier (v" + C.dossier.version + ', ' + wfDate(C.dossier.at) + ' par ' + (C.dossier.by || '?') + ").\nContinuer avec TA version (celle de cet appareil), qui remplacera la version partagée ?");
-const WF_STALE_MSG = "Une version plus récente du dossier a été enregistrée par quelqu'un d'autre : clique d'abord sur « Reprendre la version partagée » (tes modifications éventuelles se refont ensuite par-dessus), puis recommence.";
+// ── Actions de validation ──
 async function wfValidate() {
-  const C = WF.cur, r = curResto, Y = WF.year, chain = C.chain, next = chain[chain.indexOf(C.dossier.etape) + 1];
-  if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
-  if (!wfSure(r, Y, C)) return;
-  if (!confirm(`Valider ta version et la transmettre au ${WF_STEP[next]} ?\nTu ne pourras plus la modifier : seul le franchisé peut déverrouiller.`)) return;
+  const r = curResto, Y = WF.year, name = RESTOS.find(x => x[0] === r)[1], key = wfKey(r, Y);
+  await wfAutoRun();
+  if (WFA.newer[key]) return wfMsg('err', 'Une version plus récente est partagée : charge-la (bandeau ci-dessus) avant de valider.');
+  const j0 = await wfCall('load', r, Y); if (!j0.ok || !j0.dossier) return wfMsg('err', 'Erreur : ' + (j0.error || 'dossier introuvable'));
+  if (!confirm(`Valider la saisie de ${name} ${Y} (version partagée v${j0.dossier.version}) et la transmettre au franchisé ?\nLe directeur ne pourra plus la modifier : seul le franchisé pourra encore l'ajuster, la finaliser ou la déverrouiller.`)) return;
   wfMsg('', 'Validation…');
-  const j = await wfCall('validate', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), salaires: wfEdgSeg(r), base_version: C.dossier.version, comment: wfCm() }, C.dossier.etape);
+  const j = await wfCall('validate', r, Y, { base_version: j0.dossier.version, comment: wfCm() }, j0.dossier.etape);
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
-  WF.flash = ['ok', '✓ Dossier validé et transmis.']; WF.cur = null; WF.listAt = 0; renderValid();
+  WF.sync[key] = j.version; WF.flash = ['ok', '✓ Saisie validée et transmise au franchisé.']; WF.cur = null; WF.listAt = 0; wfEnsureList('now'); renderValid();
 }
 async function wfFinalize() {
-  const C = WF.cur, r = curResto, Y = WF.year, P = wfCollect(r, Y), seg = wfEdgSeg(r), R = wfRows(r, P, seg), name = RESTOS.find(x => x[0] === r)[1];
-  if (wfStale(r, Y, C)) return wfMsg('err', WF_STALE_MSG);
-  if (!wfSure(r, Y, C)) return;
-  if (!P.cal || !Object.keys(P.cal).length) return wfMsg('err', 'Aucune prévision journalière à publier.');
-  if (!confirm(`Finaliser et publier le prévisionnel ${Y} de ${name} ?\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ${Y} seront remplacées. Seul le franchisé pourra ensuite déverrouiller.`)) return;
+  const r = curResto, Y = WF.year, name = RESTOS.find(x => x[0] === r)[1], key = wfKey(r, Y);
+  await wfAutoRun();
+  if (WFA.newer[key]) return wfMsg('err', 'Une version plus récente est partagée : charge-la (bandeau ci-dessus) avant de finaliser.');
+  const j0 = await wfCall('load', r, Y); if (!j0.ok || !j0.dossier) return wfMsg('err', 'Erreur : ' + (j0.error || 'dossier introuvable'));
+  const P = wfParse(j0.dossier.donnees); if (!P || !P.cal || !Object.keys(P.cal).length) return wfMsg('err', 'Aucune prévision journalière à publier.');
+  const seg = accCan('edg', r) ? wfTopSeg(j0.salaires) : undefined, R = wfRows(r, P, seg && { on: seg.on, rows: seg.rows });
+  const hasSup = (j0.chain || []).includes('superviseur'), supOk = (j0.journal || []).some(x => x.action === 'validate' && x.role === 'superviseur');
+  if (!confirm(`Finaliser et publier le prévisionnel ${Y} de ${name} (version partagée v${j0.dossier.version}) ?${hasSup && !supOk ? '\n⚠ Le superviseur n\'a pas encore validé la saisie.' : ''}\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ${Y} seront remplacées. Seul le franchisé pourra ensuite déverrouiller.`)) return;
   wfMsg('', 'Publication…');
-  const j = await wfCall('finalize', r, Y, { donnees: JSON.stringify(P), salaires: seg, base_version: C.dossier.version, comment: wfCm(), rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel }, 'franchise');
+  const j = await wfCall('finalize', r, Y, { donnees: JSON.stringify(P), base_version: j0.dossier.version, comment: wfCm(), rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel }, 'franchise');
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   PREVJ[r] = PREVJ[r] || {}; PREVT = PREVT || {}; PREVT[r] = PREVT[r] || {};
   for (const x of R.prevjour) { if (x.data.ca_alim_prev === '') { delete PREVJ[r][x.periode]; delete PREVT[r][x.periode]; } else { PREVJ[r][x.periode] = x.data.ca_alim_prev; PREVT[r][x.periode] = x.data.ca_total_prev; } }
   for (let m = 1; m <= 12; m++) delete PV.drafts[pvKey(r, Y + '-' + pad2(m))];
-  pvDraftPersist(); PV.resto = null; PV.loadedYm = null; WF.flash = ['ok', '✓ Prévisionnel ' + Y + ' finalisé et publié dans le Sheet.']; WF.cur = null; WF.listAt = 0; renderValid();
+  pvDraftPersist(); PV.resto = null; PV.loadedYm = null; WF.sync[key] = j.version; WF.sig[key] = wfSig(r, Y); WFA.dirty[key] = false; delete WFA.newer[key];
+  WF.flash = ['ok', '✓ Prévisionnel ' + Y + ' finalisé et publié dans le Sheet.']; WF.cur = null; WF.listAt = 0; wfEnsureList('now'); renderValid();
 }
 async function wfUnlock() {
-  const C = WF.cur, r = curResto, Y = WF.year, to = document.getElementById('wfTo').value;
-  if (!confirm(`Déverrouiller le dossier ${Y} et le rouvrir à l'étape « ${WF_STEP[to]} » ?${C.dossier.etape === 'final' ? '\nLa prévision déjà publiée reste en place jusqu\'à une nouvelle finalisation.' : ''}`)) return;
+  const r = curResto, Y = WF.year, to = document.getElementById('wfTo').value, C = WF.cur;
+  if (!confirm(`Déverrouiller le dossier ${Y} et le rouvrir à l'étape « ${WF_STEP[to]} » ?${C && C.dossier && C.dossier.etape === 'final' ? '\nLa prévision déjà publiée reste en place jusqu\'à une nouvelle finalisation.' : ''}`)) return;
   wfMsg('', 'Déverrouillage…');
   const j = await wfCall('unlock', r, Y, { to, comment: wfCm() }, 'franchise');
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
-  WF.flash = ['ok', '✓ Dossier déverrouillé.']; WF.cur = null; WF.listAt = 0; renderValid();
+  WF.flash = ['ok', '✓ Dossier déverrouillé.']; WF.cur = null; WF.listAt = 0; wfEnsureList('now'); renderValid();
+}
+async function wfReset() {
+  const r = curResto, Y = WF.year, name = RESTOS.find(x => x[0] === r)[1], key = wfKey(r, Y);
+  if (!confirm(`Supprimer le dossier partagé ${Y} de ${name} et repartir de zéro ?\nLa version actuelle est archivée dans l'historique du Sheet. Les valeurs déjà publiées dans le Sheet ne changent pas ; l'enregistrement direct de la prévision ${Y} redevient possible tant qu'aucun dossier n'est ouvert (le prochain enregistrement en rouvrira un).`)) return;
+  wfMsg('', 'Suppression…');
+  const j = await wfCall('reset', r, Y, { comment: wfCm() || 'dossier remis à zéro' });
+  if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
+  delete WF.byKey[key]; delete WF.sync[key]; delete WF.sig[key]; delete WFA.newer[key]; delete WFA.err[key]; WFA.dirty[key] = false;
+  WF.flash = ['ok', '✓ Dossier remis à zéro (ancienne version archivée dans l\'historique).']; WF.cur = null; WF.listAt = 0; wfEnsureList('now'); renderValid();
 }
 async function wfComment() {
   const r = curResto, Y = WF.year, c = wfCm(); if (!c) return wfMsg('err', 'Écris un commentaire.');
@@ -2694,22 +2715,170 @@ async function wfComment() {
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
   WF.flash = ['ok', '✓ Commentaire envoyé.']; WF.cur = null; renderValid();
 }
-function wfPull() {
-  const C = WF.cur, r = curResto, Y = WF.year, P = C && C.dossier ? wfParse(C.dossier.donnees) : null;
-  if (!P) return wfMsg('err', 'Version partagée illisible.');
-  const top = wfTopSeg(C.salaires), sameSal = wfLocalRows(r) === JSON.stringify(top && top.rows ? top.rows : []);
-  if ((JSON.stringify(wfCollect(r, Y)) !== JSON.stringify(P) || !sameSal) && !confirm('Remplacer tes brouillons de Prévision CA, tes hypothèses de budget, tes réglages de simulation et ta saisie de salaires (' + Y + ') par la version partagée ?')) return;
-  wfApply(r, P, C.salaires); WF.sync[wfKey(r, Y)] = C.dossier.version; WF.flash = ['ok', '✓ Version partagée chargée : consulte-la dans Prévision CA et Budget & PNL.']; renderValid();
+async function wfPull() {                                                                    // recharge la version partagée dans les écrans (Prévision CA, Budget & PNL, simulation)
+  const r = curResto, Y = WF.year || +SIM.ty, key = wfKey(r, Y);
+  if (WF.sig[key] !== undefined && wfSig(r, Y) !== WF.sig[key] && !confirm('Tu as des modifications pas encore partagées pour ' + Y + '. Les remplacer par la version partagée ?')) return;
+  const res = await wfLoadApply(r, Y, false);
+  if (!res.ok) return wfMsg('err', 'Erreur : ' + res.msg);
+  WF.flash = ['ok', '✓ Version partagée chargée : consulte-la dans Prévision CA et Budget & PNL.']; WF.cur = null; renderValid();
 }
 
-
-// ── La mémoire de la version partagée survit au rechargement (clé py_budget) : sinon chaque nouvelle session obligeait à « Reprendre » (donc à écraser son travail local) avant d'enregistrer ──
+// ── La mémoire de la version partagée survit au rechargement (clé py_budget) : version sur laquelle l'écran est calé et son empreinte ──
 (function () {
-  const saved = BUD.wfsync && typeof BUD.wfsync === 'object' ? BUD.wfsync : {};
+  const saved = BUD.wfsync && typeof BUD.wfsync === 'object' ? BUD.wfsync : {}, sg = BUD.wfsig && typeof BUD.wfsig === 'object' ? BUD.wfsig : {};
   WF.sync = new Proxy(saved, { set(t, k, v) { t[k] = v; BUD.wfsync = t; bdSaveRaw(); return true; } });
+  WF.sig = new Proxy(sg, { set(t, k, v) { t[k] = v; BUD.wfsig = t; bdSaveRaw(); return true; } });
 })();
 
-// ── Budget & PNL : barre « où en est mon enregistrement ? » (brouillon sur l'appareil + dossier partagé), toujours visible en haut de l'écran ──
+// ── PARTAGE AUTOMATIQUE : chaque modification de la prévision, du budget ou de la simulation est partagée dans le dossier quelques secondes plus tard ;
+//    les autres niveaux la reçoivent d'eux-mêmes (relecture toutes les 45 s, au choix du restaurant, à l'ouverture d'un écran et au retour sur la page).
+//    Jamais d'écrasement silencieux : si quelqu'un a partagé une version plus récente alors que tu as aussi modifié ton écran, un bandeau te laisse choisir. ──
+const WFA = { t: null, busy: false, again: false, applying: 0, pulling: false, refresh: false, err: {}, newer: {}, flash: {}, dirty: {}, saving: {} };
+function wfSig(r, Y) {                                                                         // empreinte (cyrb53) de ce que contient l'écran pour ce restaurant et cette année
+  const s = JSON.stringify(wfCollect(r, Y)) + '|' + wfLocalRows(r); let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+let WF_DEFBUD = null;
+function wfDefBud() { if (!WF_DEFBUD) { bdParams('__defaut__'); WF_DEFBUD = JSON.stringify(bdParams('__defaut__').p); delete BUD.byResto['__defaut__']; } return WF_DEFBUD; }
+const wfHasContent = P => !!P && (Object.keys(P.cal || {}).length > 0 || JSON.stringify(P.bud) !== wfDefBud());       // rien de saisi = rien à partager (et rien à protéger)
+const wfNowIso = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
+const wfMe = r => { const ps = accProfiles().filter(p => accCovers(p, r)); return (ps[0] || {}).label || ''; };
+const wfBusyTyping = () => { const a = document.activeElement, pn = document.getElementById('panel'); return !!a && !!pn && pn.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+function wfTargets() {                                                                         // [restaurant, année] concernés : écran affiché + brouillons d'autres restaurants/années de budget
+  const out = new Map(), add = (r, Y) => { if (r && Y && RESTOS.some(x => x[0] === r)) out.set(wfKey(r, Y), [r, +Y]); };
+  if (curResto) { add(curResto, +SIM.ty); if (PV.ym) add(curResto, +PV.ym.slice(0, 4)); }
+  for (const k of Object.keys(PV.drafts)) { const [r, ym] = k.split('|'); add(r, +ym.slice(0, 4)); }
+  return [...out.values()].filter(([r, Y]) => wfInCircuit(r, Y));
+}
+function wfAutoSchedule(delay) {
+  if (WFA.applying || !PREVJ) return;
+  let any = false;
+  for (const [r, Y] of wfTargets()) {                                                          // seulement ce qui a vraiment changé depuis le dernier partage / la dernière réception
+    const key = wfKey(r, Y); if (WF.sig[key] === wfSig(r, Y)) continue;
+    if (!WF.byKey[key] && !wfHasContent(wfCollect(r, Y))) continue;                            // rien de saisi : rien à partager
+    WFA.dirty[key] = true; any = true;
+  }
+  if (!any) { wfBarPaint(); return; }
+  clearTimeout(WFA.t); WFA.t = setTimeout(wfAutoRun, delay || 3500); wfBarPaint();
+}
+async function wfShareOne(r, Y, manual) {                                                      // partage la saisie de l'écran dans le dossier (l'ouvre au besoin) ; { ok, msg, same, newer, skip }
+  const key = wfKey(r, Y), noRight = "tu n'as pas le droit d'enregistrer ici (« Prévision CA et simulation » ou « Budget & PNL ») : demande au franchisé de l'activer pour toi (Équipes → Modifier → « Ce qu'elle peut enregistrer »)";
+  if (!PREVJ || !ALIMM) return { ok: false, msg: 'les données de référence ne sont pas encore chargées', skip: true };
+  if (!wfRightsOk(r)) return { ok: false, msg: noRight, skip: true };
+  if (WF.backend === false) return { ok: false, msg: "le partage demande une mise à jour de l'Apps Script du Sheet", skip: true };
+  const D = WF.byKey[key] || null;
+  if (D && D.etape === 'final') return { ok: false, msg: 'le dossier est finalisé : seul le franchisé peut le déverrouiller', skip: true };
+  if (D && !wfMayEdit(r, D.etape)) return { ok: false, msg: 'la saisie est validée : seuls le superviseur et le franchisé peuvent encore modifier le dossier', skip: true };
+  const P = wfCollect(r, Y), sig = wfSig(r, Y);
+  if (D && WF.sync[key] === D.version && WF.sig[key] === sig) { WFA.dirty[key] = false; return { ok: true, msg: 'déjà partagé (v' + D.version + ')', same: true, version: D.version }; }
+  if (D && WF.sig[key] === sig && WF.sync[key] !== D.version) { WFA.dirty[key] = false; return { ok: true, msg: 'rien de nouveau à partager (une version plus récente est chargée automatiquement)', same: true }; }   // écran inchangé : c'est à lui de recevoir, pas d'envoyer
+  if (!D && !wfHasContent(P)) { WFA.dirty[key] = false; return { ok: manual ? false : true, msg: manual ? "rien à partager : saisis d'abord une prévision journalière ou des hypothèses de budget" : 'rien à partager', same: true }; }
+  if (D && WF.sync[key] !== D.version) {                                                        // une version plus récente (ou inconnue de cet écran) : jamais écrasée sans choix
+    const j = await wfCall('load', r, Y); if (!j.ok || !j.dossier) return { ok: false, msg: j.error || 'dossier introuvable' };
+    const RP = wfParse(j.dossier.donnees);
+    if (RP && JSON.stringify(P) === JSON.stringify(RP)) { WF.sync[key] = j.dossier.version; WF.sig[key] = sig; WFA.dirty[key] = false; return { ok: true, msg: 'déjà partagé (v' + j.dossier.version + ')', same: true, version: j.dossier.version }; }
+    WFA.newer[key] = { version: j.dossier.version, by: j.dossier.by, at: j.dossier.at, first: WF.sync[key] === undefined };
+    return { ok: false, msg: 'une version plus récente est partagée : choisis dans le bandeau', newer: true };
+  }
+  const donnees = JSON.stringify(P), etape = D ? D.etape : 'directeur', sal = wfEdgSeg(r), cm = manual ? wfCm() : '';
+  WFA.saving[key] = true; wfBarPaint();
+  let j;
+  try {
+    j = await wfCall('save', r, Y, { donnees, salaires: sal, base_version: D ? WF.sync[key] : undefined, comment: cm }, etape);
+    if (!j.ok && !j.conflict && /dossier non ouvert/.test(j.error || '')) j = await wfCall('open', r, Y, { donnees, salaires: sal, comment: cm }, 'directeur');
+  } finally { WFA.saving[key] = false; }
+  if (j.conflict) { await wfEnsureList('now'); const D2 = WF.byKey[key] || {}; WFA.newer[key] = { version: j.version, by: D2.by, at: D2.at }; return { ok: false, msg: 'une version plus récente est partagée : choisis dans le bandeau', newer: true }; }
+  if (!j.ok) { WFA.err[key] = j.error || 'refusé'; return { ok: false, msg: j.error || 'refusé' }; }
+  WF.sync[key] = j.version; WF.sig[key] = sig; delete WFA.err[key]; delete WFA.newer[key]; delete WFA.flash[key]; WFA.dirty[key] = wfSig(r, Y) !== sig;
+  WF.byKey[key] = { restaurant: r, year: String(Y), etape: j.etape || etape, statut: j.statut || 'en_cours', version: j.version, at: wfNowIso(), by: wfMe(r) };
+  return { ok: true, msg: 'partagé avec tous (v' + j.version + ')', version: j.version, opened: !D };
+}
+async function wfAutoRun() {
+  clearTimeout(WFA.t); WFA.t = null;
+  if (WFA.busy) { WFA.again = true; return; }
+  WFA.busy = true;
+  try {
+    do {
+      WFA.again = false;
+      for (const [r, Y] of wfTargets()) {
+        const key = wfKey(r, Y); if (WFA.newer[key]) continue;                                 // en attente d'un choix de la personne
+        try { const res = await wfShareOne(r, Y, false); if (res.skip) WFA.dirty[key] = false; } catch (e) { WFA.err[key] = e.message || 'erreur'; }
+      }
+    } while (WFA.again);
+  } finally { WFA.busy = false; wfBarPaint(); }
+}
+async function wfShareNow(r, Y) {                                                              // « Partager maintenant » / « Enregistrer » : même chose, tout de suite
+  r = r || curResto; Y = Y || +SIM.ty; const key = wfKey(r, Y);
+  while (WFA.busy) await new Promise(x => setTimeout(x, 150));
+  WFA.busy = true; delete WFA.err[key];
+  try {
+    const res = await wfShareOne(r, Y, true);
+    if (res.ok) WFA.flash[key] = res.msg; else if (!res.newer) WFA.err[key] = res.msg;
+    return res;
+  } catch (e) { WFA.err[key] = e.message || 'erreur'; return { ok: false, msg: e.message || 'erreur' }; }
+  finally { WFA.busy = false; wfBarPaint(); }
+}
+async function wfShareClick() {
+  const Y = curTab === 'valid' ? WF.year : (curTab === 'prevca' && PV.ym ? +PV.ym.slice(0, 4) : +SIM.ty), r = curResto;
+  const res = await wfShareNow(r, Y);
+  if (curTab === 'valid') { WF.flash = [res.ok ? 'ok' : 'err', res.ok ? '✓ Saisie ' + res.msg + '.' : 'Erreur : ' + res.msg]; WF.cur = null; renderValid(); }
+}
+// ── Réception : la saisie des autres niveaux arrive d'elle-même ──
+function wfRefreshScreens() {
+  try {
+    if (curTab !== 'prevca' && curTab !== 'budget' && curTab !== 'valid') return;
+    if (wfBusyTyping()) { WFA.refresh = true; return; }
+    WFA.refresh = false; renderPanel();
+  } catch (e) {}
+}
+document.addEventListener('focusout', () => { if (WFA.refresh) setTimeout(() => { if (!wfBusyTyping()) wfRefreshScreens(); }, 500); });
+async function wfLoadApply(r, Y, keepTy) {                                                     // charge la version partagée dans les écrans
+  const key = wfKey(r, Y), j = await wfCall('load', r, Y);
+  if (!j.ok || !j.dossier) return { ok: false, msg: j.error || 'dossier introuvable' };
+  const P = wfParse(j.dossier.donnees); if (!P) return { ok: false, msg: 'version partagée illisible' };
+  const ty = SIM.ty; WFA.applying++;
+  try { wfApply(r, P, j.salaires); if (keepTy && ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; }
+  WF.sync[key] = j.dossier.version; WF.sig[key] = wfSig(r, Y); delete WFA.newer[key]; delete WFA.err[key]; WFA.dirty[key] = false;
+  WF.byKey[key] = { restaurant: r, year: String(Y), etape: j.dossier.etape, statut: j.dossier.statut, version: j.dossier.version, at: j.dossier.at, by: j.dossier.by };
+  WFA.flash[key] = 'mise à jour reçue de ' + (j.dossier.by || '?') + ' (' + wfDate(j.dossier.at) + ')';
+  if (WF.cur && WF.cur.r === r && WF.cur.y === Y) WF.cur = null;
+  wfRefreshScreens(); return { ok: true, dossier: j.dossier };
+}
+async function wfAutoPull(force) {
+  if (WFA.pulling || !curResto || !PREVJ || !ALIMM || WF.backend === false || !accProfiles().length) return;
+  WFA.pulling = true;
+  try {
+    await wfEnsureList(force ? 'now' : true);
+    const r = curResto;
+    for (const D of Object.values(WF.byKey)) {
+      if (D.restaurant !== r) continue;
+      const Y = +D.year, key = wfKey(r, Y);
+      if (WF.sync[key] === D.version) { if (WFA.newer[key] && WFA.newer[key].version <= D.version && WF.sig[key] === wfSig(r, Y)) delete WFA.newer[key]; continue; }
+      if (WFA.newer[key] && WFA.newer[key].version >= D.version) continue;                      // déjà signalée : on attend le choix de la personne
+      if (wfBusyTyping()) continue;                                                              // jamais pendant une saisie
+      const sig = wfSig(r, Y), known = WF.sync[key] !== undefined && WF.sig[key] !== undefined, unchanged = known && sig === WF.sig[key];
+      if (unchanged || !wfHasContent(wfCollect(r, Y))) { await wfLoadApply(r, Y, true); continue; }
+      const j = await wfCall('load', r, Y); if (!j.ok || !j.dossier) continue;
+      const RP = wfParse(j.dossier.donnees);
+      if (RP && JSON.stringify(wfCollect(r, Y)) === JSON.stringify(RP)) { WF.sync[key] = j.dossier.version; WF.sig[key] = sig; continue; }       // identique : rien à charger
+      WFA.newer[key] = { version: j.dossier.version, by: j.dossier.by, at: j.dossier.at, first: WF.sync[key] === undefined };
+    }
+  } catch (e) {} finally { WFA.pulling = false; wfBarPaint(); }
+}
+async function wfTakeTheirs(Y) {
+  const r = curResto, key = wfKey(r, Y);
+  if (!confirm('Charger la version partagée et remplacer ce que tu as modifié sur cet écran pour ' + Y + ' ?')) return;
+  const res = await wfLoadApply(r, Y, true); if (!res.ok) { WFA.err[key] = res.msg; wfBarPaint(); }
+}
+async function wfKeepMine(Y) {
+  const r = curResto, key = wfKey(r, Y), nw = WFA.newer[key];
+  if (!confirm('Partager TA version pour ' + Y + ' ? Elle remplacera la version partagée' + (nw && nw.by ? ' par ' + nw.by : '') + (nw && nw.at ? ' du ' + wfDate(nw.at) : '') + ' (cette version reste archivée dans l\'historique du Sheet).')) return;
+  if (nw) { WF.sync[key] = nw.version; delete WFA.newer[key]; if (WF.byKey[key]) WF.byKey[key].version = nw.version; }
+  const res = await wfShareNow(r, Y); if (res.ok && curTab === 'valid') { WF.cur = null; renderValid(); }
+}
+// ── Barre d'état du partage (Budget & PNL, Prévision CA, Validation) ──
 (function () {
   const st = document.createElement('style');
   st.textContent = `
@@ -2722,50 +2891,49 @@ function wfPull() {
   document.head.appendChild(st);
 })();
 const bdHm = t => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-function bdShareHtml(r, Ty) {
-  const box = (c, h) => `<div class="bd-sh ${c}">${h}</div>`;
-  const loc = `<span class="loc">${BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b>' : (BUD.at ? '💾 Brouillon enregistré automatiquement sur cet appareil à ' + bdHm(BUD.at) + '.' : '💾 Tes modifications s\'enregistrent automatiquement sur cet appareil.')}</span>`;
-  if (typeof accCan !== 'function' || !accCan('valid', r)) return box('', loc + ' Elles ne sont pas partagées avec les autres niveaux (ton accès n\'a pas le circuit de validation).');
-  const C = WF.cur && WF.cur.r === r && WF.cur.y === Ty ? WF.cur : null;
-  if (!C) { WF.year = Ty; wfFetch().then(bdSharePaint); return box('', loc + ' · Vérification du dossier partagé…'); }
-  if (C.loading) return box('', loc + ' · Vérification du dossier partagé…');
-  if (C.error) return box('err', loc + '<br><b>Dossier partagé indisponible :</b> ' + escH(C.error) + ' <button class="step" onclick="WF.cur=null;bdSharePaint()">Réessayer</button>');
-  const D = C.dossier, acts = e => accProfiles().some(p => accCovers(p, r) && p.role === e);
-  const msg = '<span class="save-msg" id="bdShMsg"></span>';
-  if (!D) {
-    const canOpen = accProfiles().some(p => accCovers(p, r) && (p.role === 'directeur' || p.role === 'franchise'));
-    return box('warn', loc + `<br><b>⚠ Pas encore partagées :</b> aucun dossier ${Ty} n'est ouvert pour ce restaurant, donc ni le superviseur ni le franchisé ne voient tes modifications.` + (canOpen ? ` <button class="btn-save" onclick="bdShareOpen()">Ouvrir le dossier et partager ma version</button>` : ' Le directeur ou le franchisé doit ouvrir le dossier (onglet Validation).') + msg);
+let WF_KICK = 0;
+function wfBarHtml(r, Y) {
+  if (!r || !wfInCircuit(r, Y)) return '';
+  if (Date.now() - WF_KICK > 6000) { WF_KICK = Date.now(); setTimeout(() => wfAutoPull(), 60); }      // première lecture à l'ouverture de l'écran
+  const key = wfKey(r, Y), D = WF.byKey[key] || null, box = (c, h) => `<div class="bd-sh ${c}">${h}</div>`, nm = (RESTOS.find(x => x[0] === r) || [0, r])[1];
+  const loc = BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '';
+  const when = D ? `v${D.version} · ${wfDate(D.at)} par ${escH(D.by || '?')}` : '';
+  if (WF.backend === false) return box('err', loc + "Le partage de la saisie demande une mise à jour de l'Apps Script du Sheet (circuit de validation).");
+  const nw = WFA.newer[key];
+  if (nw && nw.first) return box('warn', `<b>📌 Un dossier partagé existe déjà pour ${escH(nm)} ${Y}</b> (v${nw.version}${nw.at ? ' · ' + wfDate(nw.at) : ''}${nw.by ? ' par ' + escH(nw.by) : ''}) et il diffère de ta saisie sur cet écran. Quelle version garder ? <button class="btn-save" onclick="wfKeepMine(${Y})">Garder la mienne et la partager</button><button class="step" onclick="wfTakeTheirs(${Y})">Charger la sienne (remplace ma saisie)</button><br><span class="loc">Ta saisie n'est pas perdue tant que tu ne choisis pas ; la version remplacée reste archivée dans l'historique du Sheet.</span>`);
+  if (nw) return box('warn', `<b>🔔 Une version plus récente est partagée</b> (v${nw.version}${nw.at ? ' · ' + wfDate(nw.at) : ''}${nw.by ? ' par ' + escH(nw.by) : ''}) alors que tu as aussi modifié cet écran. <button class="btn-save" onclick="wfTakeTheirs(${Y})">Charger la version partagée</button><button class="step" onclick="wfKeepMine(${Y})">Garder la mienne et la partager</button>`);
+  if (D && D.etape === 'final') return box('', loc + `🔒 Dossier ${Y} <b>finalisé</b> et publié dans le Sheet (${when}) : seul le franchisé peut le déverrouiller.`);
+  if (!wfRightsOk(r)) return box('warn', loc + `💾 Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL », ta saisie ne peut donc pas être partagée. Demande au franchisé de l'activer (Équipes → Modifier).` + (D ? `<br>Version partagée : ${when}.` : ''));
+  if (D && !wfMayEdit(r, D.etape)) return box('', loc + `🔒 Saisie <b>validée par le superviseur</b> (${when}) : lecture seule pour toi. Seul le franchisé peut encore l'ajuster, la finaliser ou la déverrouiller.`);
+  const er = WFA.err[key]; if (er) return box('err', loc + `<b>⚠ Partage impossible :</b> ${escH(er)} <button class="step" onclick="wfShareClick()">Réessayer</button>`);
+  if (WFA.saving[key]) return box('', loc + '⏳ Partage en cours…');
+  if (WFA.dirty[key]) return box('warn', loc + `● Modifications partagées dans quelques secondes… <button class="btn-save" onclick="wfShareClick()">Partager maintenant</button>`);
+  const fl = WFA.flash[key] ? ` <span class="save-msg ok">${escH(WFA.flash[key])}</span>` : '';
+  if (D) {
+    const inSync = WF.sync[key] === D.version && WF.sig[key] !== undefined && WF.sig[key] === wfSig(r, Y);
+    if (!inSync) return box('', loc + `Version partagée : ${when}, étape ${WF_STEP[D.etape]}. Elle n'est pas encore chargée sur cet écran. <button class="step" onclick="wfTakeTheirs(${Y})">Charger la version partagée</button>`);
+    return box('ok', loc + `✓ <b>Partagé avec tous</b> · ${when} · ${WF_STEP[D.etape]}.${fl}<br><span class="loc">Directeurs, superviseurs et franchisé voient ta saisie aussitôt ; la validation vient après la réunion budget.</span>`);
   }
-  const etape = D.etape, isFinal = etape === 'final', canAct = !isFinal && acts(etape), when = wfDate(D.at) + ' par ' + escH(D.by || '?');
-  if (isFinal) return box('', loc + `<br>🔒 Dossier ${Ty} <b>finalisé</b> et publié : tes modifications restent sur cet appareil (seul le franchisé peut le déverrouiller).`);
-  if (!canAct) return box('', loc + `<br>Le dossier est à l'étape <b>${WF_STEP[etape]}</b> : tu peux le consulter, mais seul ce niveau l'enregistre ; tes modifications restent sur cet appareil.`);
-  if (wfStale(r, Ty, C)) return box('warn', loc + `<br><b>⚠ Une version plus récente du dossier existe</b> (v${D.version}, ${when}). <button class="step" onclick="setTab('valid')">Ouvrir « Validation » pour la reprendre</button>`);
-  const P = wfParse(D.donnees), top = wfTopSeg(C.salaires);
-  const dirty = P ? (JSON.stringify(wfCollect(r, Ty)) !== JSON.stringify(P) || wfLocalRows(r) !== JSON.stringify(top && top.rows ? top.rows : [])) : true;
-  const flash = BD_SAVE.flash && BD_SAVE.flash.k === wfKey(r, Ty) ? ` <span class="save-msg ok">${BD_SAVE.flash.m}</span>` : '';
-  if (!dirty) return box('ok', loc + `<br>✓ <b>Partagé :</b> ta version est celle du dossier (v${D.version}, ${when}), étape ${WF_STEP[etape]}.` + flash);
-  return box('warn', loc + `<br><b>● Pas encore enregistré dans le dossier partagé</b> (dernière version partagée : v${D.version}, ${when}). <button class="btn-save" onclick="bdShareSave()">⬆ Enregistrer dans le dossier partagé</button>` + msg + flash);
+  return box('', loc + `Aucune saisie partagée pour ${escH(nm)} ${Y} : elle sera partagée automatiquement dès ton premier enregistrement.`);
 }
-function bdSharePaint() { const b = document.getElementById('bdShare'); if (b && curTab === 'budget') b.innerHTML = bdShareHtml(curResto, +SIM.ty); }
-const bdShSay = (c, t) => { const e = document.getElementById('bdShMsg'); if (e) { e.className = 'save-msg ' + c; e.textContent = ' ' + t; } };
-async function bdShareSave() {
-  const C = WF.cur, r = curResto, Y = +SIM.ty;
-  if (!C || !C.dossier || wfStale(r, Y, C) || !wfSure(r, Y, C)) return;
-  bdShSay('', 'Enregistrement…');
-  const j = await wfCall('save', r, Y, { donnees: JSON.stringify(wfCollect(r, Y)), salaires: wfEdgSeg(r), base_version: C.dossier.version }, C.dossier.etape);
-  if (!j.ok) { bdShSay('err', 'Erreur : ' + j.error); return; }
-  WF.sync[wfKey(r, Y)] = j.version; BD_SAVE.flash = { k: wfKey(r, Y), m: '✓ Enregistré dans le dossier partagé à ' + bdHm(Date.now()) + ' (v' + j.version + ').' };
-  WF.cur = null; await wfFetch(); bdSharePaint();
+function wfBarPaint() {
+  const r = curResto; if (!r) return;
+  const b = document.getElementById('bdShare'); if (b && curTab === 'budget') b.innerHTML = wfBarHtml(r, +SIM.ty);
+  const p = document.getElementById('pvShare'); if (p && curTab === 'prevca') p.innerHTML = wfBarHtml(r, PV.ym ? +PV.ym.slice(0, 4) : +SIM.ty);
+  try { if (typeof pvDraftBar === 'function' && curTab === 'prevca') pvDraftBar(); } catch (e) {}
 }
-async function bdShareOpen() {
-  const r = curResto, Y = +SIM.ty, P = wfCollect(r, Y);
-  if (!Object.keys(P.cal).length && !confirm(`Aucune prévision journalière n'est saisie pour ${Y}. Ouvrir quand même le dossier ?`)) return;
-  bdShSay('', 'Ouverture du dossier…');
-  const j = await wfCall('open', r, Y, { donnees: JSON.stringify(P), salaires: wfEdgSeg(r), comment: '' }, 'directeur');
-  if (!j.ok) { bdShSay('err', 'Erreur : ' + j.error); return; }
-  WF.sync[wfKey(r, Y)] = j.version; BD_SAVE.flash = { k: wfKey(r, Y), m: '✓ Dossier ouvert et partagé à ' + bdHm(Date.now()) + ' (v' + j.version + ').' };
-  WF.cur = null; WF.listAt = 0; await wfFetch(); renderBudget();
-}
+function bdShareHtml(r, Ty) { return wfBarHtml(r, Ty); }                                         // compatibilité : l'écran Budget & PNL appelle ces deux fonctions
+function bdSharePaint() { wfBarPaint(); }
+(function () {                                                                                   // branchements : chaque modification déclenche le partage ; lectures régulières
+  ['bdSave', 'simSave', 'pvDraftPersist', 'pvCommit'].forEach(n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = function () { const x = o.apply(this, arguments); try { wfAutoSchedule(); } catch (e) {} return x; }; });
+  const rs = setResto; setResto = function (r) { rs(r); setTimeout(() => wfAutoPull(true), 400); };
+  const ts = setTab; setTab = function (t) { ts(t); if (t === 'prevca' || t === 'budget' || t === 'valid') setTimeout(() => wfAutoPull(), 200); };
+  const tick = () => { if (document.visibilityState !== 'visible') return; wfAutoPull(); if (Object.values(WFA.dirty).some(Boolean)) wfAutoRun(); };
+  setInterval(tick, 45000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { wfAutoPull(true); if (Object.values(WFA.dirty).some(Boolean)) wfAutoRun(); } });
+  [3000, 9000, 20000].forEach(ms => setTimeout(() => wfAutoPull(), ms));
+  window.addEventListener('beforeunload', e => { try { if (Object.values(WFA.dirty).some(Boolean)) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
+})();
 // ── Saisie de la collaboratrice (Budget & PNL), partagée avec TOUS les niveaux : directeurs, superviseurs et franchisé ──
 // Elle saisit les hypothèses du budget (lignes du PNL, services extérieurs par société) de n'importe quel restaurant avec son accès (rôle « collab », droit « budget » seul)
 // puis les partage : une version par restaurant et par année est enregistrée dans l'onglet « BudgetCollab » du Sheet (Apps Script, actions bc_*).
@@ -2773,7 +2941,7 @@ async function bdShareOpen() {
 // Jamais de salaires dans la saisie partagée. Seule la collaboratrice écrit ; le serveur revérifie son rôle à l'empreinte de son mot de passe.
 const BC_SEEN = 'mj_bcseen';                                     // par appareil : { restaurant|année : { v : version vue ou reprise, base : version sur laquelle repose ma saisie } }
 const BC = { byKey: {}, year: null, at: 0, backend: null, seen: (() => { try { return JSON.parse(localStorage.getItem(BC_SEEN) || '{}') || {}; } catch (e) { return {}; } })() };
-const bcOn = () => (typeof ACCESS !== 'undefined' ? ACCESS : []).some(a => a.role === 'collab');
+const bcOn = () => (typeof ACCESS !== 'undefined' ? ACCESS : []).some(a => a.role === 'collab') && !(typeof CFG !== 'undefined' && CFG.auth && CFG.auth.mode === 'accounts');   // inactif en « comptes individuels uniquement » : plus d'accès collaboratrice par mot de passe
 const bcKey = (r, y) => r + '|' + y;
 const bcSt = (r, y) => BC.seen[bcKey(r, y)] || {};
 const bcSeenSave = () => { try { localStorage.setItem(BC_SEEN, JSON.stringify(BC.seen)); } catch (e) {} };
