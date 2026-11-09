@@ -809,7 +809,7 @@ async function save(){
   btn.disabled=true; msg.className='save-msg'; msg.textContent='Enregistrement…';
   try{
     const res=await fetch(APPS_SCRIPT_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
-    const j=await res.json();
+    const j=droitMsg(await res.json());
     if(j&&j.ok){
       msg.className='save-msg ok'; msg.textContent=(j.updated?'✓ Saisie mise à jour':'✓ Saisie enregistrée')+' ('+where+')';
       setBanner('exists','📝 <b>Une saisie existe pour cette période</b> — tu peux encore modifier les valeurs puis ré-enregistrer.');
@@ -839,13 +839,21 @@ const DOC_KINDS=[
 ];
 const pwdHash=()=>{ try{ return sessionStorage.getItem('mj_pwdhash')||''; }catch(e){ return ''; } };
 const fileToB64=file=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=()=>rej(new Error('lecture du fichier impossible')); r.readAsDataURL(file); });
+// Refus du serveur faute de droit : message clair (au lieu de « droit manquant : sim »)
+function droitMsg(j){
+  if(!j||j.ok!==false||typeof j.error!=='string') return j;
+  const L={sim:'Prévision CA et simulation',budget:'Budget & PNL',valid:'Circuit de validation',edg:"Salaires de l'équipe de gestion"}, m=/droit manquant : (\w+)/.exec(j.error);
+  if(m) j.error="tu n'as pas le droit d'enregistrer ici (« "+(L[m[1]]||m[1])+" ») : demande au franchisé de l'activer pour toi (Équipes → Modifier → « Ce qu'elle peut enregistrer »)";
+  else if(/restaurant non autorisé/.test(j.error)) j.error="ce restaurant n'est pas dans ton périmètre ("+j.error.replace(/^.*: /,'')+")";
+  return j;
+}
 async function postJson(body){
   let err='';
   for(let t=0;t<2;t++){
     try{
       const c=new AbortController(), to=setTimeout(()=>c.abort(),150000);
       const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),signal:c.signal});
-      clearTimeout(to); return await r.json();
+      clearTimeout(to); return droitMsg(await r.json());
     }catch(e){ err=e.name==='AbortError'?'délai dépassé':e.message; }
   }
   return {ok:false,error:err||'connexion impossible'};
@@ -3326,6 +3334,11 @@ const eqPlan = r => { if (r.role !== 'directeur' || !(r.modules || []).includes(
 const eqState = r => !r.actif ? ['Désactivé', 'var(--red)'] : (r.user_id ? ['Actif', 'var(--green)'] : ['Invitation en attente', 'var(--gold)']);
 const eq218 = r => { if (!EQ.f218) return ['—', 'var(--muted)']; const x = EQ.f218[String(r.email).toLowerCase()]; return !x ? ['Pas de fiche', 'var(--muted)'] : [(x.actif ? 'Actif' : 'Désactivé') + ' · ' + (EQ_218[x.role] || x.role), x.actif ? 'var(--green)' : 'var(--red)']; };
 const eqWhen = s => { try { return new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
+const eqCanLine = r => {                                                      // ce que la personne peut ENREGISTRER dans la saisie : sans ces droits, le serveur refuse « droit manquant » (prévision, budget, validation)
+  if (!(r.modules || []).includes('saisie')) return '';
+  const c = sbEffCan(r), lab = { sim: 'Prévision CA', budget: 'Budget & PNL', valid: 'Validation', edg: 'Salaires' }, have = ['sim', 'budget', 'valid', 'edg'].filter(k => c.includes(k));
+  return have.length ? '<br><span style="color:#1e8449">Enregistre : ' + have.map(k => lab[k]).join(' · ') + '</span>' : '<br><span style="color:#b9770e;font-weight:700">Attention : ne peut enregistrer ni prévision, ni budget, ni validation</span>';
+};
 function eqPaint() {
   const p = document.getElementById('panel'), can = eqRolesFor().length > 0, banner = SBA.mode() === 'both' ? '<div class="hint" style="margin-bottom:10px">ℹ️ Mode transition : les anciens mots de passe partagés fonctionnent encore. Ils seront supprimés quand chacun aura son compte.</div>' : '';
   const th = 'padding:6px;text-align:left;font-size:.75rem;color:var(--muted)', td = 'padding:8px 6px;border-top:1px solid var(--border);vertical-align:top';
@@ -3333,7 +3346,7 @@ function eqPaint() {
     const st = eqState(r), me = SB_RIGHTS && r.email.toLowerCase() === SB_RIGHTS.email.toLowerCase(), low = EQ_RANK[r.role] < (SB_RIGHTS.rang || 0) && !me;
     return `<tr><td style="${td}"><b>${escH(r.nom)}</b>${me ? ' <small style="color:var(--muted)">(vous)</small>' : ''}<br><span style="font-size:.76rem;color:var(--muted)">${escH(r.email)}</span></td>
       <td data-l="Fonction · restaurants" style="${td};font-size:.82rem">${escH(eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span>${eqPlan(r)}</td>
-      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}</td>
+      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}${eqCanLine(r)}</td>
       <td data-l="218 jours" style="${td};font-size:.78rem;font-weight:700;color:${eq218(r)[1]}">${escH(eq218(r)[0])}</td>
       <td data-l="Statut" style="${td};font-size:.8rem;font-weight:700;color:${st[1]}">${st[0]}</td>
       <td style="${td};text-align:right;white-space:nowrap">${low ? `<button class="btn-save" style="padding:5px 10px;font-size:.78rem" onclick="eqOpen('${r.id}')">Modifier</button>` : ''}</td></tr>`;
