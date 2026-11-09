@@ -298,12 +298,13 @@ const FIELDS={
 };
 // Ponctuel : les champs dépendent du type de visite
 const PONCT_TYPES=[['RGRV','RGRV'],['CFV','CFV'],['PPFV','PPFV'],['AUDIT_MERIEUX','Audit Mérieux'],['ANALYSE_SILLIKER','Analyse Silliker / Mérieux']];
-const RGRV_SUBS=['qualite','service','proprete','gestion_quart','securite_prevention','securite_alimentaire'];
+const RGRV_SUBS=['qualite','service','proprete','gestion_quart','securite_prevention'];      // sous-notes qui entrent dans la moyenne (la sécurité alimentaire est seulement validée / invalidée, hors calcul)
 const PONCT_FIELDS={
   RGRV:[
     {k:'qualite',l:'Qualité',u:'%',pct:1},{k:'service',l:'Service',u:'%',pct:1},{k:'proprete',l:'Propreté',u:'%',pct:1},{k:'gestion_quart',l:'Gestion de Quart',u:'%',pct:1},
-    {k:'securite_prevention',l:'Sécurité / Prévention',u:'%',pct:1},{k:'securite_alimentaire',l:'Sécurité Alimentaire',u:'%',pct:1},
-    {k:'score',l:'Score global',u:'%',pct:1,auto:'rgrv'},
+    {k:'securite_prevention',l:'Sécurité / Prévention',u:'%',pct:1},
+    {k:'securite_alimentaire',l:'Sécurité alimentaire (hors moyenne)',type:'select',opts:[['','—'],['Validée','Validée'],['Invalidée','Invalidée']]},
+    {k:'score',l:'Moyenne (score global)',u:'%',pct:1,free:1},
   ],
   ANALYSE_SILLIKER:[
     {k:'analyses_ok',l:'Analyses conformes (OK)',u:'analyses'},{k:'analyses_nok',l:'Analyses non conformes (NOK)',u:'analyses'},
@@ -457,10 +458,10 @@ const currentType=()=>{ const el=document.getElementById('pType'); return el?el.
 function fieldHtml(f){
   if(f.type==='textarea') return `<div class="field field-full"><label>${f.l}</label><textarea id="f_${f.k}" placeholder="${f.ph||''}"></textarea></div>`;
   if(f.type==='select') return `<div class="field"><label>${f.l}</label><select id="f_${f.k}">${f.opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`;
-  const auto=f.auto?'auto':'', ro=f.auto?'readonly':'', oninput=f.auto?'':'oninput="recompute()"';
+  const auto=f.auto?'auto':'', ro=f.auto?'readonly':'', oninput=f.auto?'':(f.free?'oninput="scoreTyped(this)"':'oninput="recompute()"');
   const unit=f.u?`<span class="unit">${f.u}</span>`:'';
   const note=f.k==='oph'?'<div class="hint" id="ophNote"></div>':(['cc_eur','uber_eur','lad_eur','fid_nb'].includes(f.k)?`<div class="hint" id="note_${f.k}"></div>`:'');
-  return `<div class="field"><label>${f.l}</label><div class="inwrap ${f.u?'has-unit':''}"><input type="${f.auto?'text':'number'}" step="any" inputmode="decimal" id="f_${f.k}" class="${auto}" ${ro} ${oninput} ${f.auto?'placeholder="calculé"':''}>${unit}</div>${note}</div>`;
+  return `<div class="field"><label>${f.l}</label><div class="inwrap ${f.u?'has-unit':''}"><input type="${f.auto?'text':'number'}" step="any" inputmode="decimal" id="f_${f.k}" class="${auto}" ${ro} ${oninput} ${f.auto?'placeholder="calculé"':(f.free?'placeholder="moyenne"':'')}>${unit}</div>${note}</div>`;
 }
 let GATE_ON=false;
 function renderPanel(keepPeriod){
@@ -597,10 +598,12 @@ function recompute(){
     else if(el&&!el.dataset.legacy) el.value='';                                                          // ancien score saisi en % : conservé tant qu'aucun nombre n'est saisi
   }
   if(curTab==='ponctuel' && currentType()==='RGRV'){
-    const subs=RGRV_SUBS.map(k=>num('f_'+k)).filter(v=>v!=null);
-    setAuto('f_score', subs.length?subs.reduce((a,b)=>a+b,0)/subs.length:null, 1);   // sous-notes déjà en %
+    const el=document.getElementById('f_score'), a=rgrvAvg();
+    if(el && !el.dataset.manual){ el.value = a==null?'':a.toFixed(1); el.classList.toggle('suggest', a!=null); }   // moyenne des 5 sous-notes proposée tant que la moyenne n'est pas saisie à la main
   }
 }
+function rgrvAvg(){ const subs=RGRV_SUBS.map(k=>num('f_'+k)).filter(v=>v!=null); return subs.length?subs.reduce((a,b)=>a+b,0)/subs.length:null; }
+function scoreTyped(el){ el.dataset.manual = el.value.trim()!==''?'1':''; el.classList.remove('suggest'); recompute(); }   // la moyenne tapée est conservée ; champ vidé = retour à la moyenne calculée
 function setAuto(id,val,dec){ const el=document.getElementById(id); if(!el) return; el.value = val==null?'' : val.toFixed(dec).replace('.',','); }
 
 // ── Période courante (clé) ──
@@ -631,7 +634,7 @@ async function hebdoRows(resto){
 let loadSeq=0;
 async function loadExisting(){
   const seq=++loadSeq, tab=curTab, resto=curResto, flds=fieldsFor(tab); window.hasExisting=false; updateDateBanner();
-  flds.forEach(f=>{ const el=document.getElementById('f_'+f.k); if(el){ delete el.dataset.legacy; if(!f.auto) el.value=''; } });
+  flds.forEach(f=>{ const el=document.getElementById('f_'+f.k); if(el){ delete el.dataset.legacy; delete el.dataset.manual; el.classList.remove('suggest'); if(!f.auto) el.value=''; } });
   recompute();
   const msg=document.getElementById('saveMsg'); if(msg){ msg.className='save-msg'; msg.textContent=''; }
   if(!configured()){ setBanner('',''); return; }
@@ -650,8 +653,15 @@ async function loadExisting(){
       if(k==='score' && curTab==='ponctuel' && currentType()==='ANALYSE_SILLIKER'){ el.dataset.legacy=v; el.value=(typeof v==='number')?String(Math.round(v*1e5)/1e3).replace('.',','):v; return; }     // score saisi à l'ancienne (en %)
       if(k==='fid_actifs'){ el.dataset.legacy=v; return; }     // taux d'origine : affiché tant qu'aucun nombre de comptes n'est saisi
       if(k==='oph'){ el.dataset.legacy=v; return; }     // OPH d'origine : affiché tant qu'aucun nombre d'avis n'est saisi
+      if(k==='securite_alimentaire' && el.tagName==='SELECT' && !['Validée','Invalidée'].includes(String(v))){      // ancienne saisie chiffrée : conservée telle quelle
+        const o=document.createElement('option'); o.value=String(v); o.textContent='Ancienne saisie : '+(typeof v==='number'?(Math.round(v*1e4)/100).toString().replace('.',',')+' %':v); el.appendChild(o); el.value=String(v); return;
+      }
       el.value=showVal(flds.find(x=>x.k===k),v);
     });
+    if(tab==='ponctuel' && currentType()==='RGRV'){                                       // moyenne enregistrée = moyenne des sous-notes → elle suit les modifications ; sinon elle a été saisie à la main → conservée
+      const sc=document.getElementById('f_score'), a=rgrvAvg(), s=(data.score==null||data.score==='')?null:(+data.score)*100;
+      if(sc) sc.dataset.manual=(s!=null&&isFinite(s)&&(a==null||Math.abs(s-a)>0.06))?'1':'';
+    }
     recompute();
     setBanner('exists','📝 <b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées. Modifie-les puis clique sur « Enregistrer » pour les mettre à jour.');
   } else {
@@ -773,6 +783,7 @@ async function save(){
     const el=document.getElementById('f_'+f.k); if(!el) return;
     if(f.auto && !(curTab==='ponctuel'&&f.k==='score') && f.k!=='fid_actifs') return;          // champs calculés : jamais enregistrés (sauf score RGRV)          // le score RGRV calculé est enregistré
     let v=(f.type==='textarea'||f.type==='select')?el.value.trim():num('f_'+f.k);
+    if(f.k==='securite_alimentaire' && v!=null && /^-?\d*\.?\d+$/.test(String(v))) v=parseFloat(v);     // ancienne valeur chiffrée conservée en nombre ; sinon « Validée » / « Invalidée »
     if(v===0 && ['oepe','r2p','hello_mcdo','reseaux','uvhe','tche'].includes(f.k) && (curTab==='hebdomadaire'||curTab==='mensuel')) v=null;   // 0 = non renseigné
     if(v!=null&&v!==''&&isPct(f)) v=v/100;
     if(f.auto&&v!=null&&v!=='') v=v/100;                                  // score RGRV affiché en %
