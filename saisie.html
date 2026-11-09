@@ -3288,13 +3288,38 @@ function pxpPrint(o) {                                                          
   };
   document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
 }
+
+// ── Règles de prix : écarts constatés ──
+// Règle de format (v.de / v.plus) : Best Of = à l'unité + 3,20 €, Maxi Best Of = Best Of + 1,20 €… ; règle de canal : Uber / Deliveroo = prix restaurant + majoration (arrondi 0,1 €).
+// Un écart = un prix qui ne respecte pas sa règle (saisi à la main, prix fixé, exception de restaurant). doc.ack = écarts validés (« garder »), liés au prix constaté : si le prix change, l'écart revient.
+function pxpRules(doc, nameOf, opt) {
+  const out = [], ack = (opt && opt.noAck) ? {} : (doc.ack || {}), eq = (a, b) => Math.abs(a - b) < 0.005, r1 = x => Math.round(x * 10 + 1e-9) / 10, r2 = x => Math.round(x * 100) / 100, nm = nameOf || (r => r);
+  const exc = (r, cn, key, k) => { const x = (doc.exceptions || {})[r]; return x && x[cn] && x[cn][key] ? x[cn][key][k] : undefined; };
+  const rest = (r, key, l, k) => { const x = r ? exc(r, 'restaurant', key, k) : undefined; return x !== undefined ? x : (l.prix || {})[k]; };
+  const scopes = [''].concat(Object.keys(doc.exceptions || {})), CN = [['uber', 'Uber'], ['deliveroo', 'Deliveroo']];
+  const push = d => { d.id = [d.scope, d.canal, d.key, d.k].join('|'); if (ack[d.id] !== undefined && eq(ack[d.id], d.actual)) return; d.where = d.scope ? nm(d.scope) : ''; out.push(d); };
+  for (const b of doc.modele) { const vl = k => (b.variantes.find(v => v.k === k) || { l: k }).l;
+    for (const c of b.cats) for (const l of c.lignes) { const key = b.titre + '|' + c.cat + '|' + l.produit, base = { key, b: b.titre, cat: c.cat, produit: l.produit };
+      for (const sc of scopes) {
+        for (const v of b.variantes) if (v.de) {
+          if (sc && exc(sc, 'restaurant', key, v.k) === undefined && exc(sc, 'restaurant', key, v.de) === undefined) continue;      // rien de propre à ce restaurant : déjà vu au niveau du modèle
+          const a = rest(sc, key, l, v.de), p = rest(sc, key, l, v.k); if (a === undefined || p === undefined) continue;
+          const ex = r2(a + (+v.plus || 0)); if (!eq(p, ex)) push(Object.assign({}, base, { type: 'fmt', scope: sc, canal: 'restaurant', k: v.k, fmt: vl(v.k), actual: p, expected: ex, rule: vl(v.k) + ' = ' + vl(v.de) + ' + ' + pxpEur(v.plus) }));
+        }
+        for (const [cn, cl] of CN) { const cfg = (doc.canaux || {})[cn]; if (!cfg) continue; const taux = +cfg.taux || 0;
+          for (const v of b.variantes) { const own = sc ? exc(sc, cn, key, v.k) : ((cfg.surcharges || {})[key] || {})[v.k]; if (own === undefined) continue;
+            const bs = rest(sc, key, l, v.k), ex = bs === undefined ? undefined : r1(bs * (1 + taux / 100));
+            if (ex === undefined || !eq(own, ex)) push(Object.assign({}, base, { type: 'canal', scope: sc, canal: cn, k: v.k, fmt: vl(v.k), actual: own, expected: ex, rule: cl + ' = prix restaurant + ' + pxpF(taux) + ' %' })); } }
+      } } }
+  return out;
+}
 // ── Prix franchise : modèle global (tarif restaurant, majorations Uber / Deliveroo, points repas) + exceptions par restaurant ──
 // Même présentation que le modèle « Prix Franchise » : une couleur par rubrique, noms et codes sur fond foncé, prix sur fond clair ; impression en une page A4 paysage comme le modèle (prix_print.js).
 // Modifiable par le franchisé et le superviseur (prix, codes, ajout / suppression de produits, de catégories, de formats, de rubriques), en lecture seule pour les directeurs.
 // Un seul document partagé dans le Sheet (Apps Script, actions px_*), enregistré avec un contrôle de version : jamais d'écrasement silencieux.
 //   • exception = prix différent pour UN restaurant sur UN produit (cadre orange) ; effacer la case revient au modèle ;
 //   • « Uber » et « Deliveroo » : prix du restaurant + majoration (28 % au départ, arrondi à 0,1 €), sauf prix fixé à la main (cadre bleu) ; codes propres à chaque canal.
-const PX = { doc: null, base: null, version: 0, can: false, state: 'idle', err: '', view: '', viewSet: false, canal: 'restaurant', bloc: 0, q: '', at: '', by: '', conflict: null, saving: false, flash: null, journal: null, guard: null, note: '' };
+const PX = { doc: null, base: null, version: 0, can: false, state: 'idle', err: '', view: '', viewSet: false, canal: 'restaurant', bloc: 0, q: '', at: '', by: '', conflict: null, saving: false, flash: null, journal: null, guard: null, note: '', dev: [], alertOpen: false };
 const PX_CANAUX = [['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']];
 const PX_UD = [['uber', 'Uber'], ['deliveroo', 'Deliveroo']];
 const pxClone = o => JSON.parse(JSON.stringify(o));
@@ -3329,6 +3354,8 @@ table.pxm td.add{ background:transparent; padding:2px 0 0; } .pxa{ width:100%; b
 .pxs{ margin:0 10px 10px; font-size:.8rem; } .pxs summary{ cursor:pointer; font-weight:800; color:var(--d); } .pxs .r{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; } .pxs input[type=text]{ padding:6px 9px; border:1.5px solid var(--border); border-radius:9px; font:inherit; font-size:.8rem; background:var(--card); color:var(--text); } .pxs .tag{ display:inline-flex; align-items:center; gap:4px; background:var(--l); color:var(--lt); border-radius:999px; padding:2px 4px 2px 10px; font-weight:700; } .pxs .tag button{ border:0; background:rgba(0,0,0,.12); color:inherit; border-radius:50%; width:18px; height:18px; cursor:pointer; line-height:16px; padding:0; }
 .px-leg{ display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i{ display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:5px; vertical-align:-3px; box-sizing:border-box; }
 .px-save{ position:sticky; bottom:8px; z-index:5; }
+.px-alert{ border:1.5px solid #ea580c; background:rgba(234,88,12,.09); border-radius:14px; padding:12px 14px; margin:0 0 12px; } .px-at{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .px-at svg{ color:#ea580c; flex:none; } .px-at > div{ flex:1 1 240px; } .px-at b{ font-size:.92rem; } .px-chips2{ display:flex; gap:6px; flex-wrap:wrap; margin-top:5px; } .px-chip{ font-size:.72rem; background:var(--card); border:1px solid var(--border); border-radius:999px; padding:2px 9px; } .px-al-act{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px; }
+.px-ok{ display:flex; align-items:center; gap:8px; font-size:.8rem; font-weight:700; color:#15803d; background:rgba(21,128,61,.09); border:1.5px solid rgba(21,128,61,.35); border-radius:12px; padding:8px 12px; margin:0 0 12px; }
 .pxar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; } .pxar .pxa{ flex:1 1 260px; width:auto; } .pxol{ font-size:.74rem; font-weight:700; color:var(--d); } .pxo{ display:inline-flex; gap:4px; align-items:center; font-size:.76rem; font-weight:700; color:var(--d); white-space:nowrap; } .pxo small{ font-weight:600; opacity:.8; }
 table.pxm td.p{ position:relative; } .pxr{ position:absolute; right:2px; top:50%; transform:translateY(-50%); border:0; background:rgba(0,0,0,.18); color:inherit; border-radius:50%; width:17px; height:17px; line-height:15px; font-size:.7rem; padding:0; cursor:pointer; opacity:0; } table.pxm td.p:hover .pxr, .pxr:focus{ opacity:.85; } table.pxm td.p.au .pxi{ font-style:italic; }
 .px-mod{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:80; display:flex; align-items:flex-start; justify-content:center; overflow:auto; padding:20px 10px; } .px-mb{ background:var(--card); color:var(--text); border-radius:16px; max-width:860px; width:100%; padding:16px 18px 18px; box-shadow:0 12px 44px rgba(0,0,0,.35); } .px-mb h3{ margin:0 0 8px; font-size:1.1rem; } .px-mb h4{ margin:14px 0 6px; font-size:.9rem; }
@@ -3357,7 +3384,7 @@ async function pxLoad() {
   if (!PX.viewSet) { PX.view = PX.can ? '' : (curResto || ''); PX.viewSet = true; }
   if (curTab === 'prix') renderPrix();
 }
-function pxNorm(d) { d.canaux = d.canaux || {}; for (const c of ['uber', 'deliveroo']) { const x = d.canaux[c] = d.canaux[c] || {}; x.taux = x.taux == null ? 28 : x.taux; x.surcharges = x.surcharges || {}; x.codes = x.codes || {}; } d.exceptions = d.exceptions || {}; d.repas = d.repas || []; d.repasRegles = d.repasRegles || []; if (Array.isArray(d.modele)) pxNormRules(d); return d; }
+function pxNorm(d) { d.canaux = d.canaux || {}; for (const c of ['uber', 'deliveroo']) { const x = d.canaux[c] = d.canaux[c] || {}; x.taux = x.taux == null ? 28 : x.taux; x.surcharges = x.surcharges || {}; x.codes = x.codes || {}; } d.exceptions = d.exceptions || {}; d.ack = d.ack || {}; d.repas = d.repas || []; d.repasRegles = d.repasRegles || []; if (Array.isArray(d.modele)) pxNormRules(d); return d; }
 // ── Formats calculés : Best Of = prix à l'unité + 3,20 €, Maxi Best Of = Best Of + 1,20 € (modifiable par rubrique dans « Modifier la structure ») ──
 // v.de = format de départ, v.plus = supplément en € ; l.auto = formats du produit qui suivent la règle (un prix saisi à la main sort du calcul ; ↺ le remet).
 const PX_RULE_DEF = { bo: ['unite', 3.2], mxbo: ['bo', 1.2] };
@@ -3378,6 +3405,7 @@ function pxFlat(doc) {
     for (const v of b.variantes) if (v.de) o['U|' + b.titre + '|' + v.k] = v.de + '|' + pxF(v.plus); }
   for (const cn of ['uber', 'deliveroo']) { const cfg = doc.canaux[cn]; o['K|' + cn + '|taux'] = cfg.taux; for (const key of Object.keys(cfg.surcharges)) for (const k of Object.keys(cfg.surcharges[key])) o['K|' + cn + '|' + key + '|' + k + '|p'] = cfg.surcharges[key][k]; for (const key of Object.keys(cfg.codes)) for (const k of Object.keys(cfg.codes[key])) o['K|' + cn + '|' + key + '|' + k + '|c'] = cfg.codes[key][k]; }
   doc.repas.forEach(x => { o['R|' + x.produit] = x.points; });
+  Object.keys(doc.ack || {}).forEach(id => { o['A|' + id] = doc.ack[id]; });
   for (const r of Object.keys(doc.exceptions)) for (const cn of Object.keys(doc.exceptions[r])) for (const key of Object.keys(doc.exceptions[r][cn])) for (const k of Object.keys(doc.exceptions[r][cn][key])) o['E|' + r + '|' + cn + '|' + key + '|' + k] = doc.exceptions[r][cn][key][k];
   return o;
 }
@@ -3395,6 +3423,7 @@ function pxChanges() {
     if (a[p] === b[p]) continue; const s = p.split('|'), f = eur;
     if (['P', 'G', 'B', 'V'].includes(s[0])) continue;
     if (s[0] === 'M') { if (struct.has(s[1] + '|' + s[2] + '|' + s[3])) continue; out.push(`Modèle · ${pn(s[1] + '|' + s[2] + '|' + s[3])} · ${vl(s[1], s[4])}${s[5] === 'c' ? ' (code)' : ''} : ${s[5] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`); }
+    else if (s[0] === 'A') out.push(`${b[p] === undefined ? 'Écart à la règle : validation retirée' : 'Écart à la règle gardé'} · ${s[5]} · ${vl(s[3], s[6])}${s[2] !== 'restaurant' ? ' · ' + cn[s[2]] : ''}${s[1] ? ' · ' + name(s[1]) : ''}${b[p] === undefined ? '' : ' : ' + eur(b[p])}`);
     else if (s[0] === 'U') { const f = x => !x ? 'aucun calcul' : vl(s[1], x.split('|')[0]) + ' + ' + x.split('|')[1] + ' €'; out.push(`Calcul automatique · ${vl(s[1], s[2])} (${s[1]}) : ${f(a[p])} → ${f(b[p])}`); }
     else if (s[0] === 'K' && s[2] === 'taux') out.push(`${cn[s[1]]} · majoration : ${a[p]} % → ${b[p]} %`);
     else if (s[0] === 'K') { if (struct.has(s[2] + '|' + s[3] + '|' + s[4])) continue; out.push(`${cn[s[1]]} · ${s[4]} · ${vl(s[2], s[5])}${s[6] === 'c' ? ' (code)' : ' (prix fixé)'} : ${s[6] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`); }
@@ -3405,6 +3434,7 @@ function pxChanges() {
 }
 async function pxCommit() {
   const ch = pxChanges(); if (!ch.length || PX.saving) return;
+  { const cur = pxpRules(PX.doc, pxName, { noAck: true }), keep = {}; cur.forEach(d => { if (PX.doc.ack[d.id] !== undefined && Math.abs(PX.doc.ack[d.id] - d.actual) < 0.005) keep[d.id] = PX.doc.ack[d.id]; }); PX.doc.ack = keep; }      // les validations devenues sans objet disparaissent
   PX.saving = true; PX.flash = null; renderPrix();
   const j = await pxCall({ action: 'px_save', doc: PX.doc, base_version: PX.version, changes: ch });
   PX.saving = false; const note = PX.note; PX.note = '';
@@ -3439,6 +3469,7 @@ function pxGuardCalc() {
     repas.push({ n: l.produit, g, p: pxMode(PX.doc.repas.filter(x => (x.groupe || 'Autres') === g).map(x => x.points)) }); }
   for (const [cn, nm] of PX_UD) { const cur = PX.doc.canaux[cn].surcharges, old = PX.base.canaux[cn].surcharges;                      // prix Uber / Deliveroo fixé à la main sans prix restaurant
     for (const key of Object.keys(cur)) for (const k of Object.keys(cur[key])) if (cur[key][k] !== (old[key] || {})[k] && B[key] && B[key].l.prix[k] === undefined) warns.push(`<b>${escH(B[key].l.produit)}</b> : prix ${nm} fixé à ${pxpEur(cur[key][k])} mais aucun prix restaurant (${escH(vl(B[key].b, k))}).`); }
+  { const before = pxpRules(PX.base, pxName), eu = v => pxpEur(v); pxpRules(PX.doc, pxName).filter(d => !before.some(x => x.id === d.id && Math.abs(x.actual - d.actual) < 0.005)).slice(0, 40).forEach(d => warns.push(`<b>${escH(d.produit)}</b>${d.where ? ' (' + escH(d.where) + ')' : ''} · ${escH(d.fmt)} : ${eu(d.actual)} au lieu de ${d.expected === undefined ? 'pas de prix restaurant' : eu(d.expected)} (${escH(d.rule)}).`)); }
   return { rows, repas, warns, groups };
 }
 function pxSave() {
@@ -3462,6 +3493,33 @@ function pxGuardHtml() {
   const t2 = g.repas.length ? `<h4>Politique de repas (ajout automatique)</h4><div class="hint">Décoche un produit qui ne doit pas être dans les repas. Une ligne cochée sans points n'est pas ajoutée.</div><div class="px-mt"><table><thead><tr><th></th><th>Produit</th><th>Groupe</th><th>Points</th></tr></thead><tbody>${g.repas.map((x, i) => `<tr><td><input type="checkbox" id="pxGU_${i}" checked aria-label="Ajouter ${escH(x.n)} aux repas"></td><td>${escH(x.n)}</td><td><select id="pxGG_${i}">${[...new Set([x.g, ...g.groups])].map(y => `<option ${y === x.g ? 'selected' : ''}>${escH(y)}</option>`).join('')}</select></td><td><input type="text" inputmode="numeric" id="pxGP_${i}" style="width:60px" value="${x.p == null ? '' : pxF(x.p)}" placeholder="?"></td></tr>`).join('')}</tbody></table></div>` : '';
   const t3 = g.warns.length ? `<div class="px-warn"><b>⚠ Valeurs non saisies (${g.warns.length})</b><ul>${g.warns.slice(0, 40).map(w => `<li>${w}</li>`).join('')}</ul>${g.warns.length > 40 ? '<div>… et ' + (g.warns.length - 40) + ' autres.</div>' : ''}</div>` : '';
   return `<div class="px-mod" id="pxGuard" role="dialog" aria-modal="true" aria-label="Vérification avant enregistrement"><div class="px-mb"><h3>Vérifie avant d'enregistrer</h3>${t1}${t2}${t3}<div class="px-act"><button class="step" type="button" onclick="pxGuardNo()">Revenir corriger</button><button class="${g.warns.length ? 'step' : 'btn-save'}" style="${g.warns.length ? 'border-color:#ea580c;color:#c2410c;font-weight:800' : ''}" type="button" onclick="pxGuardOk()">${g.warns.length ? 'Confirmer malgré les valeurs non saisies' : 'Confirmer et enregistrer'}</button></div></div></div>`;
+}
+// ── Tuile d'alerte : prix qui ne respectent pas leurs règles ──
+const pxName = r => (RESTOS.find(x => x[0] === r) || [0, r])[1];
+function pxLocate(key) { const [t, ca, pr] = key.split('|'); const bi = PX.doc.modele.findIndex(b => b.titre === t); if (bi < 0) return null; const b = PX.doc.modele[bi], ci = b.cats.findIndex(c => c.cat === ca); if (ci < 0) return null; const c = b.cats[ci], li = c.lignes.findIndex(l => l.produit === pr); return li < 0 ? null : { b, c, l: c.lignes[li] }; }
+function pxDevApply(d) {                                                 // remet le prix dans la règle
+  const f = pxLocate(d.key); if (!f) return; const { b, c, l } = f;
+  if (d.type === 'fmt') { const sv = PX.view; PX.view = d.scope; try { if (!d.scope) l.auto = (l.auto || []).filter(x => x !== d.k).concat(d.k); pxSetRest(l, d.key, d.k, d.expected); pxRuleChain(b, c, l, d.k); } finally { PX.view = sv; } }
+  else if (d.scope) { const o = ((PX.doc.exceptions[d.scope] || {})[d.canal] || {})[d.key]; if (o) delete o[d.k]; pxPrune(); }
+  else { const cfg = PX.doc.canaux[d.canal], o = cfg.surcharges[d.key]; if (o) delete o[d.k]; pxClean(cfg.surcharges, d.key); }
+}
+function pxDevFix(i) { const d = PX.dev[i]; if (!PX.can || !d) return; pxDevApply(d); renderPrix(); }
+function pxDevKeep(i) { const d = PX.dev[i]; if (!PX.can || !d) return; PX.doc.ack[d.id] = d.actual; renderPrix(); }
+function pxDevAll(mode) {
+  if (!PX.can || !PX.dev.length) return; const n = PX.dev.length;
+  if (!confirm(mode === 'fix' ? 'Remettre les ' + n + ' prix dans leur règle (Best Of = unité + supplément, Uber / Deliveroo = restaurant + majoration) ?\nLes prix saisis à la main ou fixés sont remplacés (à l\'enregistrement).' : 'Garder les ' + n + ' prix actuels malgré l\'écart ?\nIls ne seront plus signalés tant que leur prix ne change pas.')) return;
+  if (mode === 'fix') { for (let pass = 0; pass < 4; pass++) { const L = pxpRules(PX.doc, pxName); if (!L.length) break; L.forEach(pxDevApply); } }
+  else PX.dev.forEach(d => { PX.doc.ack[d.id] = d.actual; });
+  PX.flash = ['ok', mode === 'fix' ? n + ' prix remis dans leur règle. Vérifie puis enregistre.' : n + ' écarts gardés. Enregistre pour les mémoriser.']; renderPrix();
+}
+function pxAlertHtml() {
+  if (!PX.can) { PX.dev = []; return ''; }
+  const dev = PX.dev = pxpRules(PX.doc, pxName);
+  if (!dev.length) return `<div class="px-ok"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>Tous les prix respectent les règles (Best Of, Maxi Best Of, Uber, Deliveroo).</div>`;
+  const by = {}; dev.forEach((d, i) => { (by[d.rule] = by[d.rule] || []).push({ d, i }); });
+  const sum = Object.keys(by).map(r => `<span class="px-chip">${escH(r)} : <b>${by[r].length}</b></span>`).join('');
+  const list = PX.alertOpen ? `<div class="px-al-act"><button class="step" type="button" onclick="pxDevAll('fix')">Tout remettre dans la règle</button><button class="step" type="button" onclick="pxDevAll('keep')">Tout garder</button></div>` + Object.keys(by).map(r => `<div class="px-mt"><table style="table-layout:fixed;min-width:560px"><colgroup><col style="width:30%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:21%"></colgroup><thead><tr><th colspan="6">${escH(r)}</th></tr></thead><tbody>${by[r].slice(0, 120).map(({ d, i }) => `<tr><td>${escH(d.produit)}${d.where ? ` <small>· ${escH(d.where)}</small>` : ''}</td><td>${escH(d.fmt)}</td><td><b>${pxpEur(d.actual)}</b></td><td>${d.expected === undefined ? '<small>pas de prix restaurant</small>' : pxpEur(d.expected)}</td><td>${d.expected === undefined ? '' : (d.actual - d.expected > 0 ? '+' : '') + pxF(d.actual - d.expected) + ' €'}</td><td style="white-space:nowrap"><button type="button" class="step" onclick="pxDevFix(${i})" title="${d.expected === undefined ? 'Retirer le prix fixé' : 'Remettre ' + pxpEur(d.expected)}">${d.expected === undefined ? 'Retirer' : 'Aligner'}</button> <button type="button" class="step" onclick="pxDevKeep(${i})" title="Garder ce prix : plus d'alerte tant qu'il ne change pas">Garder</button></td></tr>`).join('')}</tbody></table>${by[r].length > 120 ? `<div class="hint">… et ${by[r].length - 120} autres.</div>` : ''}</div>`).join('') : '';
+  return `<div class="px-alert" role="alert"><div class="px-at"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><div><b>${dev.length} prix ne respectent pas les règles</b><div class="px-chips2">${sum}</div></div><button class="step" type="button" onclick="PX.alertOpen=!PX.alertOpen;renderPrix()">${PX.alertOpen ? 'Masquer' : 'Voir le détail'}</button></div>${list}</div>`;
 }
 function pxCancel() { if (!pxChanges().length || !confirm('Annuler toutes les modifications non enregistrées ?')) return; PX.doc = pxClone(PX.base); PX.flash = null; renderPrix(); }
 // ── Clés d'un produit (rubrique | catégorie | nom) : utilisées par les prix Uber / Deliveroo, les codes et les exceptions ──
@@ -3671,7 +3729,7 @@ function renderPrix() {
   const flash = PX.flash ? `<div class="bd-sh ${PX.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PX.flash[1])}</div>` : '';
   const bar = PX.can ? `<div class="bd-sh ${dirty.length ? 'warn' : ''} px-save">${PX.saving ? '⏳ Enregistrement…' : dirty.length ? `<b>● ${dirty.length} modification${dirty.length > 1 ? 's' : ''} non enregistrée${dirty.length > 1 ? 's' : ''}</b> <button class="btn-save" onclick="pxSave()">Enregistrer les prix</button><button class="step" onclick="pxCancel()">Annuler</button> <span class="loc">${escH(dirty.slice(0, 3).join(' ; '))}${dirty.length > 3 ? ' …' : ''}</span>` : `Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. Rien à enregistrer.`}</div>` : `<div class="bd-sh"><span class="loc">Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. ${nExc ? nExc + ' exception' + (nExc > 1 ? 's' : '') + ' par restaurant.' : ''}</span></div>`;
   const admin = PX.can ? `<details class="sim-d"><summary>Administration : remplacer le modèle par un fichier</summary><div class="hint" style="margin:6px 0 8px">Pour la mise à jour annuelle : un fichier .json préparé à partir du classeur « Prix Franchise ». Il remplace le modèle global ; les exceptions par restaurant sont conservées et l'ancienne version reste dans le journal.</div><input type="file" accept=".json,application/json" onchange="pxImport(this)"></details>` : '';
-  p.innerHTML = head + conflict + flash + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}</button>`).join('')}</div>` +
+  p.innerHTML = head + conflict + flash + pxAlertHtml() + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}</button>`).join('')}</div>` +
     `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}<button type="button" class="step" onclick="pxPrintNow()" title="Une page A4 paysage, comme le modèle">Imprimer</button></div>` +
     (canal === 'repas' ? '' : `<div class="hint" style="margin:0 0 10px">${what}</div>`) + bloc + leg + (canal === 'repas' ? pxRepasHtml() : pxBlocHtml(canal)) +
     bar + pxGuardHtml() + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">⏳ Chargement…</div>'}</div></details>` + admin;

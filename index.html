@@ -10434,6 +10434,31 @@ function pxpPrint(o) {                                                          
   document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
 }
 
+// ── Règles de prix : écarts constatés ──
+// Règle de format (v.de / v.plus) : Best Of = à l'unité + 3,20 €, Maxi Best Of = Best Of + 1,20 €… ; règle de canal : Uber / Deliveroo = prix restaurant + majoration (arrondi 0,1 €).
+// Un écart = un prix qui ne respecte pas sa règle (saisi à la main, prix fixé, exception de restaurant). doc.ack = écarts validés (« garder »), liés au prix constaté : si le prix change, l'écart revient.
+function pxpRules(doc, nameOf, opt) {
+  const out = [], ack = (opt && opt.noAck) ? {} : (doc.ack || {}), eq = (a, b) => Math.abs(a - b) < 0.005, r1 = x => Math.round(x * 10 + 1e-9) / 10, r2 = x => Math.round(x * 100) / 100, nm = nameOf || (r => r);
+  const exc = (r, cn, key, k) => { const x = (doc.exceptions || {})[r]; return x && x[cn] && x[cn][key] ? x[cn][key][k] : undefined; };
+  const rest = (r, key, l, k) => { const x = r ? exc(r, 'restaurant', key, k) : undefined; return x !== undefined ? x : (l.prix || {})[k]; };
+  const scopes = [''].concat(Object.keys(doc.exceptions || {})), CN = [['uber', 'Uber'], ['deliveroo', 'Deliveroo']];
+  const push = d => { d.id = [d.scope, d.canal, d.key, d.k].join('|'); if (ack[d.id] !== undefined && eq(ack[d.id], d.actual)) return; d.where = d.scope ? nm(d.scope) : ''; out.push(d); };
+  for (const b of doc.modele) { const vl = k => (b.variantes.find(v => v.k === k) || { l: k }).l;
+    for (const c of b.cats) for (const l of c.lignes) { const key = b.titre + '|' + c.cat + '|' + l.produit, base = { key, b: b.titre, cat: c.cat, produit: l.produit };
+      for (const sc of scopes) {
+        for (const v of b.variantes) if (v.de) {
+          if (sc && exc(sc, 'restaurant', key, v.k) === undefined && exc(sc, 'restaurant', key, v.de) === undefined) continue;      // rien de propre à ce restaurant : déjà vu au niveau du modèle
+          const a = rest(sc, key, l, v.de), p = rest(sc, key, l, v.k); if (a === undefined || p === undefined) continue;
+          const ex = r2(a + (+v.plus || 0)); if (!eq(p, ex)) push(Object.assign({}, base, { type: 'fmt', scope: sc, canal: 'restaurant', k: v.k, fmt: vl(v.k), actual: p, expected: ex, rule: vl(v.k) + ' = ' + vl(v.de) + ' + ' + pxpEur(v.plus) }));
+        }
+        for (const [cn, cl] of CN) { const cfg = (doc.canaux || {})[cn]; if (!cfg) continue; const taux = +cfg.taux || 0;
+          for (const v of b.variantes) { const own = sc ? exc(sc, cn, key, v.k) : ((cfg.surcharges || {})[key] || {})[v.k]; if (own === undefined) continue;
+            const bs = rest(sc, key, l, v.k), ex = bs === undefined ? undefined : r1(bs * (1 + taux / 100));
+            if (ex === undefined || !eq(own, ex)) push(Object.assign({}, base, { type: 'canal', scope: sc, canal: cn, k: v.k, fmt: vl(v.k), actual: own, expected: ex, rule: cl + ' = prix restaurant + ' + pxpF(taux) + ' %' })); } }
+      } } }
+  return out;
+}
+
 // ── Prix franchise : consultation (la modification se fait dans la saisie, onglet « Prix franchise », par le franchisé et le superviseur) ──
 const PXD = { doc: null, version: 0, at: '', by: '', can: false, state: 'idle', err: '', view: '', canal: 'restaurant', bloc: 0, q: '' };
 const PXD_CANAUX = [['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']];
@@ -10989,7 +11014,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261109-193520';
+const BUILD_VERSION = '20261109-202648';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
