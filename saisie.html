@@ -3479,6 +3479,13 @@ function pxTaux(canal, txt) { if (!PX.can || PX.view) return; const v = pxParse(
 function pxPoints(i, txt) { if (!PX.can) return; const v = pxParse(txt); if (v === undefined || v === null) return renderPrix(); PX.doc.repas[i].points = v; renderPrix(); }
 // ── Ajouter / supprimer / renommer : produits, catégories, formats, rubriques, produits « repas » ──
 const pxNm = t => String(t == null ? '' : t).replace(/\|/g, '/').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 60);
+const pxProdNames = () => new Set(PX.doc.modele.flatMap(b => b.cats.flatMap(c => c.lignes.map(l => pxNm(l.produit)))));
+// La politique de repas suit le tarif : un produit retiré du tarif sort aussi des repas (sauf si un autre produit porte encore le même nom, ex. « NATURE » en Sundae et McFlurry).
+function pxRepasDrop(names) {
+  const gone = new Set(names.map(pxNm)), have = pxProdNames(), out = PX.doc.repas.filter(x => gone.has(pxNm(x.produit)) && !have.has(pxNm(x.produit)));
+  if (out.length) PX.doc.repas = PX.doc.repas.filter(x => !out.includes(x)); return out.map(x => x.produit);
+}
+const pxRepasMsg = out => out.length ? ' Retiré aussi des repas : ' + out.join(', ') + '.' : '';
 const pxVal = id => { const e = document.getElementById(id); return e ? e.value : ''; };
 function pxAddProduct(bi, ci) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], n = pxNm(pxVal('pxAP_' + bi + '_' + ci)); if (!n) return;
@@ -3487,13 +3494,15 @@ function pxAddProduct(bi, ci) {
 }
 function pxDelProduct(bi, ci, li) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li];
-  if (!confirm('Supprimer « ' + l.produit + ' » (' + c.cat + ') ?\nSes prix, ses codes Uber / Deliveroo et ses exceptions par restaurant sont supprimés aussi (à l\'enregistrement).')) return;
-  pxDropKey(pxKey(b, c, l)); c.lignes.splice(li, 1); PX.flash = null; renderPrix();
+  if (!confirm('Supprimer « ' + l.produit + ' » (' + c.cat + ') ?\nSes prix, ses codes Uber / Deliveroo, ses exceptions par restaurant et sa ligne de repas sont supprimés aussi (à l\'enregistrement).')) return;
+  pxDropKey(pxKey(b, c, l)); c.lignes.splice(li, 1); const rm = pxRepasDrop([l.produit]); PX.flash = rm.length ? ['ok', '« ' + l.produit + ' » supprimé.' + pxRepasMsg(rm)] : null; renderPrix();
 }
 function pxRenameProduct(bi, ci, li, txt) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li], n = pxNm(txt); if (!n || n === l.produit) return renderPrix();
   if (c.lignes.some((x, i) => i !== li && x.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans ' + c.cat + '.']; return renderPrix(); }
-  const a = pxKey(b, c, l); l.produit = n; pxMoveKey(a, pxKey(b, c, l)); renderPrix();
+  const a = pxKey(b, c, l), old = l.produit; l.produit = n; pxMoveKey(a, pxKey(b, c, l));
+  if (!pxProdNames().has(pxNm(old))) { const rl = PX.doc.repas.find(x => pxNm(x.produit) === pxNm(old)); if (rl) { if (PX.doc.repas.some(x => x !== rl && pxNm(x.produit) === n)) PX.doc.repas = PX.doc.repas.filter(x => x !== rl); else rl.produit = n; } }       // la ligne de repas suit le nouveau nom
+  renderPrix();
 }
 function pxAddCat(bi) { if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], n = pxNm(pxVal('pxAC_' + bi)); if (!n) return; if (b.cats.some(c => c.cat === n)) { PX.flash = ['err', 'La catégorie « ' + n + ' » existe déjà.']; return renderPrix(); } b.cats.push({ cat: n, lignes: [] }); renderPrix(); }
 function pxRenameCat(bi, ci, txt) {
@@ -3502,7 +3511,7 @@ function pxRenameCat(bi, ci, txt) {
 }
 function pxDelCat(bi, ci) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci];
-  if (!confirm('Supprimer la catégorie « ' + c.cat + ' »' + (c.lignes.length ? ' et ses ' + c.lignes.length + ' produit(s)' : '') + ' ?')) return; c.lignes.forEach(l => pxDropKey(pxKey(b, c, l))); b.cats.splice(ci, 1); renderPrix();
+  if (!confirm('Supprimer la catégorie « ' + c.cat + ' »' + (c.lignes.length ? ' et ses ' + c.lignes.length + ' produit(s) (et leurs lignes de repas)' : '') + ' ?')) return; c.lignes.forEach(l => pxDropKey(pxKey(b, c, l))); b.cats.splice(ci, 1); const rm = pxRepasDrop(c.lignes.map(l => l.produit)); PX.flash = rm.length ? ['ok', 'Catégorie « ' + c.cat + ' » supprimée.' + pxRepasMsg(rm)] : null; renderPrix();
 }
 function pxAddVar(bi) { if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], l = pxNm(pxVal('pxAV_' + bi)), k = pxVarKey(l); if (!l || !k) return; if (b.variantes.some(v => v.k === k)) { PX.flash = ['err', 'Le format « ' + l + ' » existe déjà.']; return renderPrix(); } b.variantes.push({ k, l }); renderPrix(); }
 function pxRenameVar(bi, vi, txt) { if (!PX.can || PX.view) return; const n = pxNm(txt); if (n) PX.doc.modele[bi].variantes[vi].l = n; renderPrix(); }
@@ -3514,12 +3523,17 @@ function pxDelVar(bi, vi) {
 function pxAddBloc() { if (!PX.can || PX.view) return; const n = pxNm(pxVal('pxAB')); if (!n) return; if (PX.doc.modele.some(b => b.titre === n)) { PX.flash = ['err', 'La rubrique « ' + n + ' » existe déjà.']; return renderPrix(); } PX.doc.modele.push({ titre: n, variantes: [{ k: 'prix', l: 'PRIX' }], cats: [{ cat: n, lignes: [] }] }); PX.bloc = PX.doc.modele.length - 1; renderPrix(); }
 function pxDelBloc(bi) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi]; const n = b.cats.reduce((a, c) => a + c.lignes.length, 0);
-  if (!confirm('Supprimer la rubrique « ' + b.titre + ' »' + (n ? ' et ses ' + n + ' produit(s)' : '') + ' ?')) return; b.cats.forEach(c => c.lignes.forEach(l => pxDropKey(pxKey(b, c, l)))); PX.doc.modele.splice(bi, 1); PX.bloc = 0; renderPrix();
+  if (!confirm('Supprimer la rubrique « ' + b.titre + ' »' + (n ? ' et ses ' + n + ' produit(s) (et leurs lignes de repas)' : '') + ' ?')) return; const names = b.cats.flatMap(c => c.lignes.map(l => l.produit)); b.cats.forEach(c => c.lignes.forEach(l => pxDropKey(pxKey(b, c, l)))); PX.doc.modele.splice(bi, 1); PX.bloc = 0; const rm = pxRepasDrop(names); PX.flash = rm.length ? ['ok', 'Rubrique « ' + b.titre + ' » supprimée.' + pxRepasMsg(rm)] : null; renderPrix();
 }
 function pxAddRepas() {
   if (!PX.can) return; const n = pxNm(pxVal('pxAR_n')), g = pxVal('pxAR_g'), p = pxParse(pxVal('pxAR_p')); if (!n) return;
   if (PX.doc.repas.some(x => x.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans la politique de repas.']; return renderPrix(); }
   PX.doc.repas.push({ produit: n, points: p == null ? 1 : p, groupe: g || 'Gamme' }); renderPrix();
+}
+function pxRepasPurge() {
+  if (!PX.can) return; const have = pxProdNames(), out = PX.doc.repas.filter(x => !have.has(pxNm(x.produit))); if (!out.length) return;
+  if (!confirm('Retirer ' + out.length + ' ligne(s) de repas dont le produit n\'est plus au tarif ?\n' + out.map(x => '• ' + x.produit).join('\n'))) return;
+  PX.doc.repas = PX.doc.repas.filter(x => have.has(pxNm(x.produit))); PX.flash = ['ok', out.length + ' ligne(s) de repas retirée(s) : ' + out.map(x => x.produit).join(', ') + '.']; renderPrix();
 }
 function pxDelRepas(i) { if (!PX.can) return; const x = PX.doc.repas[i]; if (!confirm('Retirer « ' + x.produit + ' » de la politique de repas ?')) return; PX.doc.repas.splice(i, 1); renderPrix(); }
 const pxPick = (k, v) => { PX[k] = v; renderPrix(); };
@@ -3571,10 +3585,10 @@ function pxBlocHtml(canal) {
 }
 function pxRepasHtml() {
   const q = PX.q.trim().toLowerCase(), g = {}; PX.doc.repas.forEach((x, i) => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push({ x, i }); });
-  const groups = [...new Set(PX.doc.repas.map(x => x.groupe || 'Autres'))], rules = PX.doc.repasRegles.length ? `<div class="wf-box" style="margin-bottom:12px"><b>Politique de repas</b><ul style="margin:6px 0 0 18px;padding:0">${PX.doc.repasRegles.map(t => `<li>${escH(t)}</li>`).join('')}</ul></div>` : '';
-  const add = PX.can ? `<div class="px-bar"><input type="text" id="pxAR_n" placeholder="Nouveau produit repas" maxlength="60"><select id="pxAR_g">${groups.map(x => `<option>${escH(x)}</option>`).join('')}</select><input type="text" id="pxAR_p" placeholder="Points" inputmode="numeric" style="width:80px" value="1"><button class="step" type="button" onclick="pxAddRepas()">Ajouter</button></div>` : '';
+  const have = pxProdNames(), orph = PX.doc.repas.filter(x => !have.has(pxNm(x.produit))), groups = [...new Set(PX.doc.repas.map(x => x.groupe || 'Autres'))], rules = PX.doc.repasRegles.length ? `<div class="wf-box" style="margin-bottom:12px"><b>Politique de repas</b><ul style="margin:6px 0 0 18px;padding:0">${PX.doc.repasRegles.map(t => `<li>${escH(t)}</li>`).join('')}</ul></div>` : '';
+  const add = PX.can ? `<div class="px-bar"><input type="text" id="pxAR_n" placeholder="Nouveau produit repas" maxlength="60"><select id="pxAR_g">${groups.map(x => `<option>${escH(x)}</option>`).join('')}</select><input type="text" id="pxAR_p" placeholder="Points" inputmode="numeric" style="width:80px" value="1"><button class="step" type="button" onclick="pxAddRepas()">Ajouter</button></div>` + (orph.length ? `<div class="bd-sh warn">⚠ <b>${orph.length} ligne${orph.length > 1 ? 's' : ''} de repas sans produit au tarif</b> (repérée${orph.length > 1 ? 's' : ''} en orange). <button class="step" type="button" onclick="pxRepasPurge()">Retirer ${orph.length > 1 ? 'ces lignes' : 'cette ligne'}</button></div>` : '') : '';
   return rules + add + (Object.keys(g).map((k, gi) => { const th = pxpTh(groups.indexOf(k));
-    return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="nm">${escH(x.produit)}${PX.can ? `<button type="button" class="pxd" title="Retirer de la politique de repas" aria-label="Retirer ${escH(x.produit)}" onclick="pxDelRepas(${i})">×</button>` : ''}</td><td class="p">${PX.can ? `<input class="pxi" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : pxF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
+    return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="nm">${escH(x.produit)}${!have.has(pxNm(x.produit)) ? ' <small style="color:#fdba74" title="Ce produit n\'est plus (ou pas) au tarif">· hors tarif</small>' : ''}${PX.can ? `<button type="button" class="pxd" title="Retirer de la politique de repas" aria-label="Retirer ${escH(x.produit)}" onclick="pxDelRepas(${i})">×</button>` : ''}</td><td class="p">${PX.can ? `<input class="pxi" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : pxF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
 }
 function renderPrix() {
   const p = document.getElementById('panel');
