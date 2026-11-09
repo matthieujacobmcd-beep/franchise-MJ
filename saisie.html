@@ -3530,8 +3530,8 @@ const pxVal = id => { const e = document.getElementById(id); return e ? e.value 
 function pxAddProduct(bi, ci) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], n = pxNm(pxVal('pxAP_' + bi + '_' + ci)); if (!n) return;
   if (c.lignes.some(l => l.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans ' + c.cat + '.']; return renderPrix(); }
-  const auto = b.variantes.filter(v => v.de && (document.getElementById('pxAO_' + bi + '_' + ci + '_' + v.k) || {}).checked).map(v => v.k);
-  c.lignes.push({ produit: n, prix: {}, code: {}, auto }); PX.flash = ['ok', '« ' + n + ' » ajouté : saisis son prix' + (auto.length ? ' (' + auto.map(k => b.variantes.find(v => v.k === k).l).join(' et ') + ' se calculent tout seuls)' : '') + ' et ses codes. Les prix Uber et Deliveroo (+' + pxF(PX.doc.canaux.uber.taux) + ' % / +' + pxF(PX.doc.canaux.deliveroo.taux) + ' %) se calculent tout seuls ; à l\'enregistrement, un récapitulatif te permet de l\'ajouter aux repas et te signale les valeurs non saisies.']; renderPrix();
+  const auto = b.variantes.filter(v => v.de).map(v => v.k);                  // Best Of, Maxi Best Of… : créés d'office ; vider la case d'un format = le produit n'existe pas dans ce format
+  c.lignes.push({ produit: n, prix: {}, code: {}, auto }); PX.flash = ['ok', '« ' + n + ' » ajouté : saisis son prix' + (auto.length ? ' (' + auto.map(k => b.variantes.find(v => v.k === k).l).join(' et ') + ' se créent tout seuls ; vide la case d\'un format que le produit n\'a pas)' : '') + ' et ses codes. Les prix Uber et Deliveroo (+' + pxF(PX.doc.canaux.uber.taux) + ' % / +' + pxF(PX.doc.canaux.deliveroo.taux) + ' %) se calculent tout seuls ; à l\'enregistrement, un récapitulatif te permet de l\'ajouter aux repas et te signale les valeurs non saisies.']; renderPrix();
 }
 function pxDelProduct(bi, ci, li) {
   if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li];
@@ -3631,8 +3631,7 @@ function pxBlocHtml(canal) {
     const list = c.lignes.map((l, li) => ({ l, li })).filter(x => !q || x.l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!list.length && !(addOk && !q)) return; n += list.length;
     rows += `<tr><td class="cat" colspan="${nc}">${escH(c.cat || b.titre)}</td></tr>`;
     list.forEach(x => { rows += `<tr><td class="nm">${edit ? `<input class="pxn" value="${escH(x.l.produit)}" maxlength="60" onchange="pxRenameProduct(${bi},${ci},${x.li},this.value)" aria-label="Nom du produit"><button type="button" class="pxd" title="Supprimer ce produit" aria-label="Supprimer ${escH(x.l.produit)}" onclick="pxDelProduct(${bi},${ci},${x.li})">×</button>` : escH(x.l.produit)}</td>${cols.map(v => pxCell(canal, bi, ci, x.li, v, b, c, x.l)).join('')}</tr>`; });
-    if (addOk && !q) { const opts = b.variantes.filter(v => v.de).map(v => `<label class="pxo"><input type="checkbox" id="pxAO_${bi}_${ci}_${escH(v.k)}" checked> ${escH(v.l)} <small>+${pxF(v.plus)} €</small></label>`).join('');
-      rows += `<tr><td class="add" colspan="${nc}"><div class="pxar"><input class="pxa" id="pxAP_${bi}_${ci}" maxlength="60" placeholder="+ Ajouter un produit à « ${escH(c.cat || b.titre)} » (Entrée)" onkeydown="if(event.key==='Enter')pxAddProduct(${bi},${ci})">${opts ? `<span class="pxol">Existe en :</span>${opts}` : ''}</div></td></tr>`; }
+    if (addOk && !q) rows += `<tr><td class="add" colspan="${nc}"><input class="pxa" id="pxAP_${bi}_${ci}" maxlength="60" placeholder="+ Ajouter un produit à « ${escH(c.cat || b.titre)} » (Entrée)" onkeydown="if(event.key==='Enter')pxAddProduct(${bi},${ci})"></td></tr>`;
   });
   const head = `<tr><th class="nm"></th>${cols.map(v => `<th>${escH(v.l)}</th><th class="kc">CODE</th>`).join('')}</tr>`;
   const struct = edit ? `<details class="pxs"><summary>Modifier la structure de « ${escH(b.titre)} »</summary>
