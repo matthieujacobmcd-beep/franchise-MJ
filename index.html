@@ -1451,6 +1451,7 @@ window.addEventListener('DOMContentLoaded', () => {
   <button class="espace-pill" data-esp="formation" style="--e-color:#7c3aed;--e-bg:rgba(124,58,237,.14)" onclick="switchEspace('formation')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 2.5 9 2.5 12 0v-5"/></svg></span>Formation</button>
   <button class="espace-pill" data-esp="marketing" style="--e-color:#ea580c;--e-bg:rgba(234,88,12,.14)" onclick="switchEspace('marketing')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 15-5v12L3 13Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>Marketing</button>
   <button class="espace-pill" data-esp="plancom" style="--e-color:#0891b2;--e-bg:rgba(8,145,178,.14)" onclick="switchEspace('plancom')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Plan de communication</button>
+  <button class="espace-pill" data-esp="prix" style="--e-color:#b45309;--e-bg:rgba(180,83,9,.14)" onclick="switchEspace('prix')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>Prix franchise</button>
   <button class="espace-pill" data-esp="actualite" style="--e-color:#db2777;--e-bg:rgba(219,39,119,.14)" onclick="switchEspace('actualite')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z"/></svg></span>Actualité Restaurant</button>
   <button class="espace-pill" id="pillPlanning" data-esp="planning" style="display:none;--e-color:#0e7490;--e-bg:rgba(14,116,144,.14)" onclick="switchEspace('planning')" title="Planning de l'équipe de gestion (EDG)"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h3M13 14h3M8 18h3"/></svg></span>Planning EDG</button>
 </div>
@@ -10332,6 +10333,88 @@ window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault
 </script>
 
 <!-- PLANNING_EDG:END -->
+<!-- ════════ ESPACE : PRIX FRANCHISE (consultation) ════════ -->
+<style>
+.px-chips { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; } .px-chips button { border:1.5px solid var(--border); background:var(--card); border-radius:999px; padding:7px 14px; font:inherit; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--text); }
+.px-chips button.on { background:#b45309; border-color:#b45309; color:#fff; }
+.px-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 12px; } .px-bar select, .px-bar input[type=text] { padding:8px 10px; border:1.5px solid var(--border); border-radius:10px; font-family:inherit; font-size:.84rem; background:var(--card); color:var(--text); }
+.px-h { font-size:.74rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin:16px 0 6px; }
+.px-wrap { overflow-x:auto; border:1.5px solid var(--border); border-radius:12px; background:var(--card); }
+table.px { border-collapse:collapse; width:100%; min-width:520px; font-size:.84rem; } table.px th { text-align:right; font-size:.7rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); padding:8px 12px; border-bottom:1.5px solid var(--border); white-space:nowrap; background:var(--card2, var(--card)); }
+table.px th.l, table.px td.l { text-align:left; } table.px td { padding:7px 12px; border-bottom:1px solid var(--border); text-align:right; font-variant-numeric:tabular-nums; } table.px tr:last-child td { border-bottom:0; } table.px td.l { font-weight:600; min-width:190px; }
+table.px td.exc { background:rgba(234,88,12,.14); font-weight:800; } table.px td.sur { background:rgba(37,99,235,.10); } .px-k { display:block; font-size:.64rem; color:var(--muted); font-weight:600; }
+.px-leg { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-2px; }
+.px-rule { background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:.82rem; line-height:1.5; } .px-rule ul { margin:6px 0 0 18px; padding:0; }
+</style>
+<div id="espace-prix" style="display:none">
+  <div class="main">
+    <div class="esp-page-head">
+      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(180,83,9,.14);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#b45309" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>Prix franchise</div>
+      <div style="font-size:.78rem;color:var(--muted)" id="pxDashSub">Les prix de vente en vigueur : un modèle commun à tous les restaurants, avec les exceptions de chaque restaurant.</div>
+    </div>
+    <div class="esp-card" id="pxCard"><div class="pc-empty">Chargement des prix…</div></div>
+  </div>
+</div>
+<script>
+// ── Prix franchise : consultation (la modification se fait dans la saisie, onglet « Prix franchise », par le franchisé et le superviseur) ──
+const PXD = { doc: null, version: 0, at: '', by: '', can: false, state: 'idle', err: '', view: '', canal: 'restaurant', bloc: 0, q: '' };
+const pxdEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const pxdF = v => v == null ? '—' : String(Math.round(v * 100) / 100).replace('.', ',');
+const pxdR1 = x => Math.round(x * 10 + 1e-9) / 10;
+const pxdKey = (b, c, l) => b.titre + '|' + c.cat + '|' + l.produit;
+const pxdDate = s => { s = String(s || ''); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); if (m) return m[3] + '/' + m[2] + '/' + m[1]; const d = new Date(s); return isNaN(d) ? '' : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
+function pxdExc(r, canal, key, k) { const e = PXD.doc.exceptions[r]; return e && e[canal] && e[canal][key] ? e[canal][key][k] : undefined; }
+function pxdPrice(canal, r, key, l, k) {
+  if (canal === 'restaurant') { const e = r ? pxdExc(r, 'restaurant', key, k) : undefined; return e !== undefined ? { v: e, src: 'exc' } : { v: l.prix[k], src: '' }; }
+  const cfg = PXD.doc.canaux[canal] || { taux: 28, surcharges: {}, codes: {} }, ex = r ? pxdExc(r, canal, key, k) : undefined; if (ex !== undefined) return { v: ex, src: 'exc' };
+  const su = (cfg.surcharges[key] || {})[k]; if (su !== undefined) return { v: su, src: 'sur' };
+  const b = pxdPrice('restaurant', r, key, l, k).v; return b === undefined ? { v: undefined, src: '' } : { v: pxdR1(b * (1 + (+cfg.taux || 0) / 100)), src: '' };
+}
+const pxdCode = (canal, key, l, k) => canal === 'restaurant' ? (l.code || {})[k] : ((((PXD.doc.canaux[canal] || {}).codes || {})[key]) || {})[k];
+async function loadPrixDash() {
+  if (PXD.state === 'loading') return; if (PXD.doc) { pxdRender(); }
+  PXD.state = 'loading';
+  try {
+    const url = (typeof SHEET_URL !== 'undefined' && SHEET_URL) || (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.apps_script_url) || '';
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'px_load', pwd: (typeof PWD_HASH !== 'undefined' && PWD_HASH) || 'sb' }) }), j = await r.json();
+    if (!j || !j.ok) { PXD.err = (j && /action inconnue/.test(j.error || '')) ? "Les prix ne sont pas encore disponibles (mise à jour du serveur en cours)." : ((j && j.error) || 'lecture impossible'); }
+    else { PXD.err = ''; PXD.can = !!j.can; PXD.version = j.version || 0; PXD.at = j.at || ''; PXD.by = j.by || ''; PXD.doc = j.doc || null; if (PXD.doc) { PXD.doc.canaux = PXD.doc.canaux || {}; PXD.doc.exceptions = PXD.doc.exceptions || {}; PXD.doc.repas = PXD.doc.repas || []; PXD.doc.repasRegles = PXD.doc.repasRegles || []; for (const c of ['uber', 'deliveroo']) { const x = PXD.doc.canaux[c] = PXD.doc.canaux[c] || {}; x.taux = x.taux == null ? 28 : x.taux; x.surcharges = x.surcharges || {}; x.codes = x.codes || {}; } } }
+  } catch (e) { PXD.err = 'connexion impossible'; }
+  PXD.state = 'idle'; pxdRender();
+}
+const pxdPick = (k, v) => { PXD[k] = v; pxdRender(); };
+function pxdBloc(canal) {
+  const bi = Math.min(PXD.bloc, PXD.doc.modele.length - 1), b = PXD.doc.modele[bi], q = PXD.q.trim().toLowerCase(); let out = '';
+  b.cats.forEach(c => {
+    const used = b.variantes.filter(v => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined)), cols = used.length ? used : b.variantes.slice(0, 1);
+    const rows = c.lignes.filter(l => !q || l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!rows.length) return;
+    out += `<div class="px-h">${pxdEsc(c.cat || b.titre)}</div><div class="px-wrap"><table class="px"><thead><tr><th class="l">Produit</th>${cols.map(v => `<th>${pxdEsc(v.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(l => { const key = pxdKey(b, c, l);
+      return `<tr><td class="l">${pxdEsc(l.produit)}</td>${cols.map(v => { const P = pxdPrice(canal, PXD.view, key, l, v.k), cd = pxdCode(canal, key, l, v.k); return `<td class="${P.src}">${P.v === undefined ? '—' : pxdF(P.v)}${cd ? `<span class="px-k">${pxdEsc(cd)}</span>` : ''}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+  });
+  return out || `<div class="pc-empty">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</div>`;
+}
+function pxdRepas() {
+  const q = PXD.q.trim().toLowerCase(), g = {}; PXD.doc.repas.forEach(x => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push(x); });
+  const rules = PXD.doc.repasRegles.length ? `<div class="px-rule"><b>Politique de repas</b><ul>${PXD.doc.repasRegles.map(t => `<li>${pxdEsc(t)}</li>`).join('')}</ul></div>` : '';
+  return rules + (Object.keys(g).map(k => `<div class="px-h">${pxdEsc(k)}</div><div class="px-wrap"><table class="px" style="min-width:320px"><thead><tr><th class="l">Produit</th><th>Points</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="l">${pxdEsc(x.produit)}</td><td>${pxdF(x.points)}</td></tr>`).join('')}</tbody></table></div>`).join('') || `<div class="pc-empty">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</div>`);
+}
+function pxdRender() {
+  const card = document.getElementById('pxCard'); if (!card) return;
+  if (PXD.err) { card.innerHTML = `<div class="pc-empty">${pxdEsc(PXD.err)}</div>`; return; }
+  if (!PXD.doc) { card.innerHTML = `<div class="pc-empty">${PXD.state === 'loading' ? 'Chargement des prix…' : 'Aucun prix n\'est encore publié. Le franchisé ou le superviseur doit d\'abord les mettre en place.'}</div>`; return; }
+  const resto = typeof RESTOS !== 'undefined' ? RESTOS : [], name = r => (typeof restoDisplay === 'function' ? restoDisplay(r) : r), canal = PXD.canal;
+  if (PXD.view === '' && !PXD._init) { PXD._init = 1; if (resto.length === 1) PXD.view = resto[0]; }
+  const views = `<select onchange="pxdPick('view',this.value)" aria-label="Voir les prix de"><option value="">Modèle global</option>${resto.map(r => `<option value="${pxdEsc(r)}" ${PXD.view === r ? 'selected' : ''}>${pxdEsc(name(r))}${PXD.doc.exceptions[r] ? ' · exceptions' : ''}</option>`).join('')}</select>`;
+  const bloc = canal === 'repas' ? '' : `<div class="px-chips">${PXD.doc.modele.map((b, i) => `<button class="${i === Math.min(PXD.bloc, PXD.doc.modele.length - 1) ? 'on' : ''}" onclick="pxdPick('bloc',${i})">${pxdEsc(b.titre)}</button>`).join('')}</div>`;
+  const leg = canal === 'repas' ? '' : `<div class="px-leg"><span><i style="background:rgba(234,88,12,.5)"></i>prix propre au restaurant (exception)</span>${canal !== 'restaurant' ? '<span><i style="background:rgba(37,99,235,.45)"></i>prix fixé (hors majoration)</span>' : ''}<span>petit chiffre = code caisse</span></div>`;
+  card.innerHTML = `<div class="px-chips">${[['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']].map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxdPick('canal','${k}')">${n}</button>`).join('')}</div>` +
+    `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" id="pxdQ" placeholder="Rechercher un produit" value="${pxdEsc(PXD.q)}" oninput="PXD.q=this.value;clearTimeout(PXD.qt);PXD.qt=setTimeout(()=>{pxdRender();const e=document.getElementById('pxdQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},300)"><span style="font-size:.74rem;color:var(--muted)">Version ${PXD.version}${PXD.at ? ' · mise à jour le ' + pxdDate(PXD.at) : ''}${PXD.by ? ' par ' + pxdEsc(PXD.by) : ''}</span></div>` +
+    (canal === 'uber' || canal === 'deliveroo' ? `<div class="px-leg">Prix = prix du restaurant + ${pxdF(PXD.doc.canaux[canal].taux)} % (arrondi à 0,1 €), sauf prix fixé.</div>` : '') +
+    bloc + leg + (canal === 'repas' ? pxdRepas() : pxdBloc(canal)) +
+    (PXD.can ? `<div class="pc-note">Pour modifier les prix : saisie → onglet « Prix franchise » (franchisé et superviseur).</div>` : '');
+}
+</script>
+
 <!-- ════════ FAQ / AIDE ════════ -->
 <style>
 #faqModal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,17,23,.55); align-items:flex-start; justify-content:center; padding:5vh 14px; overflow-y:auto; }
@@ -10777,7 +10860,7 @@ body.dark-mode .search-kpi-pick .skp.on { color:#fff; }
 let currentEspace = 'pilotage';
 function switchEspace(name) {
   currentEspace = name;
-  ['pilotage','interventions','formation','marketing','actualite','performance','plancom','planning'].forEach(e => {
+  ['pilotage','interventions','formation','marketing','actualite','performance','plancom','planning','prix'].forEach(e => {
     const el = document.getElementById('espace-' + e);
     if (el) el.style.display = (e === name) ? '' : 'none';
   });
@@ -10787,7 +10870,7 @@ function switchEspace(name) {
   const bE = document.getElementById('btnExporter'); if (bE) bE.style.display = (name === 'pilotage' || name === 'performance') ? '' : 'none';
   const bI = document.getElementById('btnIndices'); if (bI) bI.style.display = (name === 'pilotage') ? '' : 'none';
   // Libellé de l'en-tête selon l'espace
-  const LBL = { pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication', planning:'Planning EDG' };
+  const LBL = { prix:'Prix franchise', pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication', planning:'Planning EDG' };
   const lblEl = document.getElementById('espaceLabel');
   if (lblEl) lblEl.textContent = LBL[name] || '';
   // La date « Données au… » ne concerne que le Pilotage
@@ -10799,6 +10882,7 @@ function switchEspace(name) {
   if (name === 'marketing') loadMarketing();
   if (name === 'actualite') loadActu();
   if (name === 'performance') loadPerformance();
+  if (name === 'prix') loadPrixDash();
   if (name === 'plancom') loadPlanCom();
   if (name === 'planning') loadPlanning();
   try { if (typeof esbOpen === 'function') esbOpen(name); } catch (e) {}
@@ -10822,7 +10906,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261109-100219';
+const BUILD_VERSION = '20261109-144440';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
