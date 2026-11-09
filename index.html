@@ -10345,33 +10345,102 @@ window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault
 <!-- ════════ ESPACE : PRIX FRANCHISE (consultation) ════════ -->
 <style>
 .px-chips { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; } .px-chips button { border:1.5px solid var(--border); background:var(--card); border-radius:999px; padding:7px 14px; font:inherit; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--text); }
-.px-chips button.on { background:#b45309; border-color:#b45309; color:#fff; }
+.px-chips button.on { background:#b45309; border-color:#b45309; color:#fff; } .px-chips.bl button { border-color:var(--d); color:var(--tt); background:var(--t); opacity:.55; } .px-chips.bl button.on { opacity:1; box-shadow:0 0 0 2.5px var(--d); }
 .px-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 12px; } .px-bar select, .px-bar input[type=text] { padding:8px 10px; border:1.5px solid var(--border); border-radius:10px; font-family:inherit; font-size:.84rem; background:var(--card); color:var(--text); }
-.px-h { font-size:.74rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin:16px 0 6px; }
-.px-wrap { overflow-x:auto; border:1.5px solid var(--border); border-radius:12px; background:var(--card); }
-table.px { border-collapse:collapse; width:100%; min-width:520px; font-size:.84rem; } table.px th { text-align:right; font-size:.7rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); padding:8px 12px; border-bottom:1.5px solid var(--border); white-space:nowrap; background:var(--card2, var(--card)); }
-table.px th.l, table.px td.l { text-align:left; } table.px td { padding:7px 12px; border-bottom:1px solid var(--border); text-align:right; font-variant-numeric:tabular-nums; } table.px tr:last-child td { border-bottom:0; } table.px td.l { font-weight:600; min-width:190px; }
-table.px td.exc { background:rgba(234,88,12,.14); font-weight:800; } table.px td.sur { background:rgba(37,99,235,.10); } .px-k { display:block; font-size:.64rem; color:var(--muted); font-weight:600; }
-.px-leg { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-2px; }
+.px-btn { font:inherit; font-size:.8rem; font-weight:700; padding:8px 14px; border:1.5px solid var(--border); border-radius:10px; background:var(--card); color:var(--text); cursor:pointer; } .px-btn:hover { border-color:#b45309; color:#b45309; }
+.pxb { border:2px solid var(--t); border-radius:14px; overflow:hidden; background:var(--card); margin:0 0 14px; }
+.pxt { background:var(--t); color:var(--tt); font-weight:800; font-size:1.15rem; padding:9px 14px; letter-spacing:.3px; }
+.pxw { overflow-x:auto; padding:6px 10px 10px; }
+table.pxm { border-collapse:separate; border-spacing:0 3px; width:100%; min-width:560px; font-variant-numeric:tabular-nums; }
+table.pxm th { background:var(--d); color:var(--dt); font-size:.72rem; font-weight:800; padding:6px 8px; text-align:center; white-space:nowrap; } table.pxm th.kc { font-size:.55rem; opacity:.85; } table.pxm th.nm { border-radius:8px 0 0 8px; } table.pxm th:last-child { border-radius:0 8px 8px 0; }
+table.pxm td.cat { background:var(--c); color:var(--ct); font-weight:800; font-size:.95rem; padding:6px 12px; border-radius:8px; letter-spacing:.2px; }
+table.pxm td.nm { background:var(--d); color:var(--dt); font-weight:700; font-size:.84rem; padding:6px 10px; min-width:200px; border-radius:8px 0 0 8px; }
+table.pxm td.p { background:var(--l); color:var(--lt); text-align:center; font-weight:800; font-size:.9rem; padding:6px 8px; min-width:78px; } table.pxm td.p.e { background:var(--d); }
+table.pxm td.k { background:var(--d); color:var(--dt); text-align:center; font-size:.68rem; padding:6px 8px; min-width:58px; } table.pxm tr td:last-child { border-radius:0 8px 8px 0; }
+table.pxm td.p.exc { box-shadow:inset 0 0 0 2.5px #ea580c; } table.pxm td.p.sur { box-shadow:inset 0 0 0 2.5px #2563eb; }
+.px-leg { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i { display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:5px; vertical-align:-3px; box-sizing:border-box; }
 .px-rule { background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:.82rem; line-height:1.5; } .px-rule ul { margin:6px 0 0 18px; padding:0; }
 </style>
 <div id="espace-prix" style="display:none">
   <div class="main">
     <div class="esp-page-head">
       <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(180,83,9,.14);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#b45309" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>Prix franchise</div>
-      <div style="font-size:.78rem;color:var(--muted)" id="pxDashSub">Les prix de vente en vigueur : un modèle commun à tous les restaurants, avec les exceptions de chaque restaurant.</div>
+      <div style="font-size:.78rem;color:var(--muted)" id="pxDashSub">Les prix de vente en vigueur, présentés comme le modèle : un tarif commun à tous les restaurants, avec les exceptions de chaque restaurant.</div>
     </div>
     <div class="esp-card" id="pxCard"><div class="pc-empty">Chargement des prix…</div></div>
   </div>
 </div>
 <script>
+// ── Prix franchise : couleurs du modèle (une teinte par rubrique) et IMPRESSION « comme le modèle » : une page A4 paysage, rubriques côte à côte, noms et codes sur fond foncé, prix sur fond clair ──
+// Partagé par la saisie (modification) et le dashboard (consultation) ; couleurs relevées dans « Prix Franchise 2026.xlsx » (t = titre, d = foncé, l = clair, c = catégorie).
+const PXP_TH = [
+  { t: '#FFD966', tt: '#806000', d: '#806000', dt: '#FFF2CC', l: '#FFF2CC', lt: '#806000', c: '#FFE699', ct: '#806000' },
+  { t: '#F4B183', tt: '#843C0B', d: '#843C0B', dt: '#FBE5D6', l: '#FBE5D6', lt: '#843C0B', c: '#F8CBAD', ct: '#843C0B' },
+  { t: '#9DC3E6', tt: '#1F4E79', d: '#1F4E79', dt: '#DEEBF7', l: '#DEEBF7', lt: '#1F4E79', c: '#BDD7EE', ct: '#1F4E79' },
+  { t: '#B294D3', tt: '#7030A0', d: '#7030A0', dt: '#EBDEF8', l: '#EBDEF8', lt: '#7030A0', c: '#D7CAE2', ct: '#7030A0' },
+  { t: '#A9D18E', tt: '#385724', d: '#385724', dt: '#E2F0D9', l: '#E2F0D9', lt: '#385724', c: '#C5E0B4', ct: '#548235' }];
+const pxpTh = i => PXP_TH[((i % PXP_TH.length) + PXP_TH.length) % PXP_TH.length];
+const pxpEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const pxpF = v => v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
+const pxpUsed = b => b.variantes.filter(v => b.cats.some(c => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined)));
+// o = { doc, canal, title, sub, price(b,c,l,k) → nombre|undefined, code(b,c,l,k) → texte|undefined }
+function pxpBlocks(o) {
+  const blocks = o.doc.modele.map((b, bi) => ({ b, bi, th: pxpTh(bi), cols: pxpUsed(b) })).filter(x => x.b.cats.some(c => c.lignes.length));
+  return blocks.map(({ b, th, cols }) => {
+    const cs = cols.length || 1, w = 2.1 + cs * 1.05;
+    const head = `<tr><th class="nm" style="background:${th.d};color:${th.dt}"></th>${cols.map(v => `<th style="background:${th.d};color:${th.dt}">${pxpEsc(v.l)}</th><th class="kc" style="background:${th.d};color:${th.dt}">CODE</th>`).join('')}</tr>`;
+    let rows = '';
+    for (const c of b.cats) {
+      if (!c.lignes.length) continue;
+      rows += `<tr><td class="cat" colspan="${1 + 2 * cs}" style="background:${th.c};color:${th.ct}">${pxpEsc(c.cat || b.titre)}</td></tr>`;
+      for (const l of c.lignes) rows += `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(l.produit)}</td>${cols.map(v => { const p = o.price(b, c, l, v.k), k = o.code(b, c, l, v.k);
+        return p === undefined ? `<td class="p" style="background:${th.d}"></td><td class="k" style="background:${th.d}"></td>` : `<td class="p" style="background:${th.l};color:${th.lt}">${pxpF(p)}</td><td class="k" style="background:${th.d};color:${th.dt}">${pxpEsc(k || '')}</td>`; }).join('')}</tr>`;
+    }
+    return { w, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(b.titre)}</div><table><colgroup><col style="width:38%">${cols.map(() => `<col style="width:${(62 / cs) * .6}%"><col style="width:${(62 / cs) * .4}%">`).join('')}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table></div>` };
+  });
+}
+function pxpRepasBlocks(doc) {
+  const g = {}; (doc.repas || []).forEach(x => { (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push(x); });
+  return Object.keys(g).map((k, i) => { const th = pxpTh(i);
+    return { w: 2.4, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(k.toUpperCase())}</div><table><colgroup><col style="width:78%"><col style="width:22%"></colgroup><thead><tr><th class="nm" style="background:${th.d};color:${th.dt}"></th><th style="background:${th.d};color:${th.dt}">POINTS</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(x.produit)}</td><td class="p" style="background:${th.l};color:${th.lt}">${pxpF(x.points)}</td></tr>`).join('')}</tbody></table></div>` }; });
+}
+function pxpPageHtml(o) {
+  const bl = o.canal === 'repas' ? pxpRepasBlocks(o.doc) : pxpBlocks(o), rules = o.canal === 'repas' && (o.doc.repasRegles || []).length ? `<div class="rg">${o.doc.repasRegles.map(t => `<div>${pxpEsc(t)}</div>`).join('')}</div>` : '';
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${pxpEsc(o.title)}</title><style>
+@page { size: A4 landscape; margin: 5mm; }
+* { box-sizing: border-box; } html, body { margin: 0; padding: 0; background: #fff; } body { width: 287mm; font-family: 'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #000; }
+.fit { transform-origin: top left; width: 287mm; }
+.hd { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 4px; font-size: 9px; color: #555; } .hd b { font-size: 12px; color: #000; letter-spacing: .3px; }
+.rg { font-weight: 800; font-size: 9px; margin: 0 0 5px; line-height: 1.35; }
+.grid { display: grid; gap: 6px; align-items: start; grid-template-columns: ${bl.map(x => x.w + 'fr').join(' ')}; } .b { min-width: 0; }
+.t { text-align: center; font-weight: 800; font-size: 15px; padding: 4px 2px; border-radius: 4px 4px 0 0; letter-spacing: .2px; }
+table { width: 100%; border-collapse: separate; border-spacing: 0 1.5px; table-layout: fixed; }
+th { font-size: 6.2px; text-align: center; font-weight: 800; padding: 2px 1px; overflow: hidden; line-height: 1.05; } th.kc { font-size: 4.6px; }
+td.cat { font-size: 11px; font-weight: 800; padding: 2px 5px; border-radius: 3px; }
+td.nm, th.nm { font-weight: 700; font-size: 7.6px; padding: 2px 3px; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+td.p { text-align: center; font-weight: 800; font-size: 8.4px; padding: 2px 0; } td.k { text-align: center; font-size: 6px; padding: 2px 0; overflow: hidden; }
+</style></head><body><div class="fit" id="fit"><div class="hd"><span><b>${pxpEsc(o.title)}</b>${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><span>${pxpEsc(o.meta || '')}</span></div>${rules}<div class="grid">${bl.map(x => x.html).join('')}</div></div></body></html>`;
+}
+function pxpPrint(o) {                                                              // une page A4 paysage : la mise en page est réduite pour tout tenir, comme le modèle
+  const f = document.createElement('iframe'); f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+  f.onload = () => {
+    try {
+      const d = f.contentDocument, el = d.getElementById('fit'), W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / el.scrollHeight, W / el.scrollWidth);
+      if (s < 1) { el.style.transform = 'scale(' + s + ')'; el.style.width = (287 / s) + 'mm'; }
+      f.contentWindow.focus(); setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 250);
+    } catch (e) { f.remove(); }
+  };
+  document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
+}
+
 // ── Prix franchise : consultation (la modification se fait dans la saisie, onglet « Prix franchise », par le franchisé et le superviseur) ──
 const PXD = { doc: null, version: 0, at: '', by: '', can: false, state: 'idle', err: '', view: '', canal: 'restaurant', bloc: 0, q: '' };
-const pxdEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-const pxdF = v => v == null ? '—' : String(Math.round(v * 100) / 100).replace('.', ',');
+const PXD_CANAUX = [['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']];
+const pxdEsc = pxpEsc, pxdF = v => v == null ? '' : pxpF(v);
 const pxdR1 = x => Math.round(x * 10 + 1e-9) / 10;
 const pxdKey = (b, c, l) => b.titre + '|' + c.cat + '|' + l.produit;
 const pxdDate = s => { s = String(s || ''); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); if (m) return m[3] + '/' + m[2] + '/' + m[1]; const d = new Date(s); return isNaN(d) ? '' : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
+const pxdVars = th => `--t:${th.t};--tt:${th.tt};--d:${th.d};--dt:${th.dt};--l:${th.l};--lt:${th.lt};--c:${th.c};--ct:${th.ct}`;
 function pxdExc(r, canal, key, k) { const e = PXD.doc.exceptions[r]; return e && e[canal] && e[canal][key] ? e[canal][key][k] : undefined; }
 function pxdPrice(canal, r, key, l, k) {
   if (canal === 'restaurant') { const e = r ? pxdExc(r, 'restaurant', key, k) : undefined; return e !== undefined ? { v: e, src: 'exc' } : { v: l.prix[k], src: '' }; }
@@ -10393,19 +10462,23 @@ async function loadPrixDash() {
 }
 const pxdPick = (k, v) => { PXD[k] = v; pxdRender(); };
 function pxdBloc(canal) {
-  const bi = Math.min(PXD.bloc, PXD.doc.modele.length - 1), b = PXD.doc.modele[bi], q = PXD.q.trim().toLowerCase(); let out = '';
+  const bi = Math.min(PXD.bloc, PXD.doc.modele.length - 1), b = PXD.doc.modele[bi], th = pxpTh(bi), q = PXD.q.trim().toLowerCase(), used = pxpUsed(b), cols = used.length ? used : b.variantes.slice(0, 1), nc = 1 + 2 * cols.length; let rows = '';
   b.cats.forEach(c => {
-    const used = b.variantes.filter(v => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined)), cols = used.length ? used : b.variantes.slice(0, 1);
-    const rows = c.lignes.filter(l => !q || l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!rows.length) return;
-    out += `<div class="px-h">${pxdEsc(c.cat || b.titre)}</div><div class="px-wrap"><table class="px"><thead><tr><th class="l">Produit</th>${cols.map(v => `<th>${pxdEsc(v.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(l => { const key = pxdKey(b, c, l);
-      return `<tr><td class="l">${pxdEsc(l.produit)}</td>${cols.map(v => { const P = pxdPrice(canal, PXD.view, key, l, v.k), cd = pxdCode(canal, key, l, v.k); return `<td class="${P.src}">${P.v === undefined ? '—' : pxdF(P.v)}${cd ? `<span class="px-k">${pxdEsc(cd)}</span>` : ''}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+    const list = c.lignes.filter(l => !q || l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!list.length) return;
+    rows += `<tr><td class="cat" colspan="${nc}">${pxdEsc(c.cat || b.titre)}</td></tr>`;
+    list.forEach(l => { const key = pxdKey(b, c, l); rows += `<tr><td class="nm">${pxdEsc(l.produit)}</td>${cols.map(v => { const P = pxdPrice(canal, PXD.view, key, l, v.k), cd = pxdCode(canal, key, l, v.k); return `<td class="p${P.v === undefined ? ' e' : ''}${P.src ? ' ' + P.src : ''}">${P.v === undefined ? '' : pxdF(P.v)}</td><td class="k">${pxdEsc(cd || '')}</td>`; }).join('')}</tr>`; });
   });
-  return out || `<div class="pc-empty">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</div>`;
+  return `<div class="pxb" style="${pxdVars(th)}"><div class="pxt">${pxdEsc(b.titre)}</div><div class="pxw"><table class="pxm"><thead><tr><th class="nm"></th>${cols.map(v => `<th>${pxdEsc(v.l)}</th><th class="kc">CODE</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="cat" colspan="${nc}">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</td></tr>`}</tbody></table></div></div>`;
 }
 function pxdRepas() {
   const q = PXD.q.trim().toLowerCase(), g = {}; PXD.doc.repas.forEach(x => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push(x); });
-  const rules = PXD.doc.repasRegles.length ? `<div class="px-rule"><b>Politique de repas</b><ul>${PXD.doc.repasRegles.map(t => `<li>${pxdEsc(t)}</li>`).join('')}</ul></div>` : '';
-  return rules + (Object.keys(g).map(k => `<div class="px-h">${pxdEsc(k)}</div><div class="px-wrap"><table class="px" style="min-width:320px"><thead><tr><th class="l">Produit</th><th>Points</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="l">${pxdEsc(x.produit)}</td><td>${pxdF(x.points)}</td></tr>`).join('')}</tbody></table></div>`).join('') || `<div class="pc-empty">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</div>`);
+  const groups = [...new Set(PXD.doc.repas.map(x => x.groupe || 'Autres'))], rules = PXD.doc.repasRegles.length ? `<div class="px-rule"><b>Politique de repas</b><ul>${PXD.doc.repasRegles.map(t => `<li>${pxdEsc(t)}</li>`).join('')}</ul></div>` : '';
+  return rules + (Object.keys(g).map(k => `<div class="pxb" style="${pxdVars(pxpTh(groups.indexOf(k)))}"><div class="pxt">${pxdEsc(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="nm">${pxdEsc(x.produit)}</td><td class="p">${pxdF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`).join('') || `<div class="pc-empty">Aucun produit ne correspond à « ${pxdEsc(PXD.q)} ».</div>`);
+}
+function pxdPrint() {                                                                  // une page A4 paysage comme le modèle
+  const canal = PXD.canal, r = canal === 'repas' ? '' : PXD.view, nm = r ? (typeof restoDisplay === 'function' ? restoDisplay(r) : r) : 'Modèle global', cl = (PXD_CANAUX.find(x => x[0] === canal) || [0, canal])[1];
+  pxpPrint({ doc: PXD.doc, canal, title: 'PRIX FRANCHISE · ' + cl.toUpperCase(), sub: canal === 'repas' ? '' : nm, meta: 'Version ' + PXD.version + (PXD.at ? ' · mise à jour le ' + pxdDate(PXD.at) : '') + ' · imprimé le ' + new Date().toLocaleDateString('fr-FR'),
+    price: (b, c, l, k) => pxdPrice(canal, r, pxdKey(b, c, l), l, k).v, code: (b, c, l, k) => pxdCode(canal, pxdKey(b, c, l), l, k) });
 }
 function pxdRender() {
   const card = document.getElementById('pxCard'); if (!card) return;
@@ -10414,13 +10487,13 @@ function pxdRender() {
   const resto = typeof RESTOS !== 'undefined' ? RESTOS : [], name = r => (typeof restoDisplay === 'function' ? restoDisplay(r) : r), canal = PXD.canal;
   if (PXD.view === '' && !PXD._init) { PXD._init = 1; if (resto.length === 1) PXD.view = resto[0]; }
   const views = `<select onchange="pxdPick('view',this.value)" aria-label="Voir les prix de"><option value="">Modèle global</option>${resto.map(r => `<option value="${pxdEsc(r)}" ${PXD.view === r ? 'selected' : ''}>${pxdEsc(name(r))}${PXD.doc.exceptions[r] ? ' · exceptions' : ''}</option>`).join('')}</select>`;
-  const bloc = canal === 'repas' ? '' : `<div class="px-chips">${PXD.doc.modele.map((b, i) => `<button class="${i === Math.min(PXD.bloc, PXD.doc.modele.length - 1) ? 'on' : ''}" onclick="pxdPick('bloc',${i})">${pxdEsc(b.titre)}</button>`).join('')}</div>`;
-  const leg = canal === 'repas' ? '' : `<div class="px-leg"><span><i style="background:rgba(234,88,12,.5)"></i>prix propre au restaurant (exception)</span>${canal !== 'restaurant' ? '<span><i style="background:rgba(37,99,235,.45)"></i>prix fixé (hors majoration)</span>' : ''}<span>petit chiffre = code caisse</span></div>`;
-  card.innerHTML = `<div class="px-chips">${[['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']].map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxdPick('canal','${k}')">${n}</button>`).join('')}</div>` +
-    `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" id="pxdQ" placeholder="Rechercher un produit" value="${pxdEsc(PXD.q)}" oninput="PXD.q=this.value;clearTimeout(PXD.qt);PXD.qt=setTimeout(()=>{pxdRender();const e=document.getElementById('pxdQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},300)"><span style="font-size:.74rem;color:var(--muted)">Version ${PXD.version}${PXD.at ? ' · mise à jour le ' + pxdDate(PXD.at) : ''}${PXD.by ? ' par ' + pxdEsc(PXD.by) : ''}</span></div>` +
+  const bloc = canal === 'repas' ? '' : `<div class="px-chips bl">${PXD.doc.modele.map((b, i) => `<button style="${pxdVars(pxpTh(i))}" class="${i === Math.min(PXD.bloc, PXD.doc.modele.length - 1) ? 'on' : ''}" onclick="pxdPick('bloc',${i})">${pxdEsc(b.titre)}</button>`).join('')}</div>`;
+  const leg = canal === 'repas' ? '' : `<div class="px-leg"><span><i style="box-shadow:inset 0 0 0 2.5px #ea580c"></i>prix propre au restaurant (exception)</span>${canal !== 'restaurant' ? '<span><i style="box-shadow:inset 0 0 0 2.5px #2563eb"></i>prix fixé (hors majoration)</span>' : ''}<span>petit chiffre sur fond foncé = code caisse</span></div>`;
+  card.innerHTML = `<div class="px-chips">${PXD_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxdPick('canal','${k}')">${n}</button>`).join('')}</div>` +
+    `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" id="pxdQ" placeholder="Rechercher un produit" value="${pxdEsc(PXD.q)}" oninput="PXD.q=this.value;clearTimeout(PXD.qt);PXD.qt=setTimeout(()=>{pxdRender();const e=document.getElementById('pxdQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},300)"><button type="button" class="px-btn" onclick="pxdPrint()" title="Une page A4 paysage, comme le modèle">Imprimer</button><span style="font-size:.74rem;color:var(--muted)">Version ${PXD.version}${PXD.at ? ' · mise à jour le ' + pxdDate(PXD.at) : ''}${PXD.by ? ' par ' + pxdEsc(PXD.by) : ''}</span></div>` +
     (canal === 'uber' || canal === 'deliveroo' ? `<div class="px-leg">Prix = prix du restaurant + ${pxdF(PXD.doc.canaux[canal].taux)} % (arrondi à 0,1 €), sauf prix fixé.</div>` : '') +
     bloc + leg + (canal === 'repas' ? pxdRepas() : pxdBloc(canal)) +
-    (PXD.can ? `<div class="pc-note">Pour modifier les prix : saisie → onglet « Prix franchise » (franchisé et superviseur).</div>` : '');
+    (PXD.can ? `<div class="pc-note">Pour modifier les prix ou ajouter / supprimer des produits : saisie → onglet « Prix franchise » (franchisé et superviseur).</div>` : '');
 }
 </script>
 
@@ -10915,7 +10988,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261109-145542';
+const BUILD_VERSION = '20261109-152747';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

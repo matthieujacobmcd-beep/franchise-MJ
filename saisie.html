@@ -3226,13 +3226,73 @@ function bcDismiss() { const x = BC.byKey[bcKey(curResto, +SIM.ty)]; if (!x) ret
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bcEnsure(true); });
   setTimeout(() => bcEnsure(true), 2000);
 })();
+// ── Prix franchise : couleurs du modèle (une teinte par rubrique) et IMPRESSION « comme le modèle » : une page A4 paysage, rubriques côte à côte, noms et codes sur fond foncé, prix sur fond clair ──
+// Partagé par la saisie (modification) et le dashboard (consultation) ; couleurs relevées dans « Prix Franchise 2026.xlsx » (t = titre, d = foncé, l = clair, c = catégorie).
+const PXP_TH = [
+  { t: '#FFD966', tt: '#806000', d: '#806000', dt: '#FFF2CC', l: '#FFF2CC', lt: '#806000', c: '#FFE699', ct: '#806000' },
+  { t: '#F4B183', tt: '#843C0B', d: '#843C0B', dt: '#FBE5D6', l: '#FBE5D6', lt: '#843C0B', c: '#F8CBAD', ct: '#843C0B' },
+  { t: '#9DC3E6', tt: '#1F4E79', d: '#1F4E79', dt: '#DEEBF7', l: '#DEEBF7', lt: '#1F4E79', c: '#BDD7EE', ct: '#1F4E79' },
+  { t: '#B294D3', tt: '#7030A0', d: '#7030A0', dt: '#EBDEF8', l: '#EBDEF8', lt: '#7030A0', c: '#D7CAE2', ct: '#7030A0' },
+  { t: '#A9D18E', tt: '#385724', d: '#385724', dt: '#E2F0D9', l: '#E2F0D9', lt: '#385724', c: '#C5E0B4', ct: '#548235' }];
+const pxpTh = i => PXP_TH[((i % PXP_TH.length) + PXP_TH.length) % PXP_TH.length];
+const pxpEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const pxpF = v => v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
+const pxpUsed = b => b.variantes.filter(v => b.cats.some(c => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined)));
+// o = { doc, canal, title, sub, price(b,c,l,k) → nombre|undefined, code(b,c,l,k) → texte|undefined }
+function pxpBlocks(o) {
+  const blocks = o.doc.modele.map((b, bi) => ({ b, bi, th: pxpTh(bi), cols: pxpUsed(b) })).filter(x => x.b.cats.some(c => c.lignes.length));
+  return blocks.map(({ b, th, cols }) => {
+    const cs = cols.length || 1, w = 2.1 + cs * 1.05;
+    const head = `<tr><th class="nm" style="background:${th.d};color:${th.dt}"></th>${cols.map(v => `<th style="background:${th.d};color:${th.dt}">${pxpEsc(v.l)}</th><th class="kc" style="background:${th.d};color:${th.dt}">CODE</th>`).join('')}</tr>`;
+    let rows = '';
+    for (const c of b.cats) {
+      if (!c.lignes.length) continue;
+      rows += `<tr><td class="cat" colspan="${1 + 2 * cs}" style="background:${th.c};color:${th.ct}">${pxpEsc(c.cat || b.titre)}</td></tr>`;
+      for (const l of c.lignes) rows += `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(l.produit)}</td>${cols.map(v => { const p = o.price(b, c, l, v.k), k = o.code(b, c, l, v.k);
+        return p === undefined ? `<td class="p" style="background:${th.d}"></td><td class="k" style="background:${th.d}"></td>` : `<td class="p" style="background:${th.l};color:${th.lt}">${pxpF(p)}</td><td class="k" style="background:${th.d};color:${th.dt}">${pxpEsc(k || '')}</td>`; }).join('')}</tr>`;
+    }
+    return { w, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(b.titre)}</div><table><colgroup><col style="width:38%">${cols.map(() => `<col style="width:${(62 / cs) * .6}%"><col style="width:${(62 / cs) * .4}%">`).join('')}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table></div>` };
+  });
+}
+function pxpRepasBlocks(doc) {
+  const g = {}; (doc.repas || []).forEach(x => { (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push(x); });
+  return Object.keys(g).map((k, i) => { const th = pxpTh(i);
+    return { w: 2.4, html: `<div class="b"><div class="t" style="background:${th.t};color:${th.tt}">${pxpEsc(k.toUpperCase())}</div><table><colgroup><col style="width:78%"><col style="width:22%"></colgroup><thead><tr><th class="nm" style="background:${th.d};color:${th.dt}"></th><th style="background:${th.d};color:${th.dt}">POINTS</th></tr></thead><tbody>${g[k].map(x => `<tr><td class="nm" style="background:${th.d};color:${th.dt}">${pxpEsc(x.produit)}</td><td class="p" style="background:${th.l};color:${th.lt}">${pxpF(x.points)}</td></tr>`).join('')}</tbody></table></div>` }; });
+}
+function pxpPageHtml(o) {
+  const bl = o.canal === 'repas' ? pxpRepasBlocks(o.doc) : pxpBlocks(o), rules = o.canal === 'repas' && (o.doc.repasRegles || []).length ? `<div class="rg">${o.doc.repasRegles.map(t => `<div>${pxpEsc(t)}</div>`).join('')}</div>` : '';
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${pxpEsc(o.title)}</title><style>
+@page { size: A4 landscape; margin: 5mm; }
+* { box-sizing: border-box; } html, body { margin: 0; padding: 0; background: #fff; } body { width: 287mm; font-family: 'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #000; }
+.fit { transform-origin: top left; width: 287mm; }
+.hd { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 4px; font-size: 9px; color: #555; } .hd b { font-size: 12px; color: #000; letter-spacing: .3px; }
+.rg { font-weight: 800; font-size: 9px; margin: 0 0 5px; line-height: 1.35; }
+.grid { display: grid; gap: 6px; align-items: start; grid-template-columns: ${bl.map(x => x.w + 'fr').join(' ')}; } .b { min-width: 0; }
+.t { text-align: center; font-weight: 800; font-size: 15px; padding: 4px 2px; border-radius: 4px 4px 0 0; letter-spacing: .2px; }
+table { width: 100%; border-collapse: separate; border-spacing: 0 1.5px; table-layout: fixed; }
+th { font-size: 6.2px; text-align: center; font-weight: 800; padding: 2px 1px; overflow: hidden; line-height: 1.05; } th.kc { font-size: 4.6px; }
+td.cat { font-size: 11px; font-weight: 800; padding: 2px 5px; border-radius: 3px; }
+td.nm, th.nm { font-weight: 700; font-size: 7.6px; padding: 2px 3px; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+td.p { text-align: center; font-weight: 800; font-size: 8.4px; padding: 2px 0; } td.k { text-align: center; font-size: 6px; padding: 2px 0; overflow: hidden; }
+</style></head><body><div class="fit" id="fit"><div class="hd"><span><b>${pxpEsc(o.title)}</b>${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><span>${pxpEsc(o.meta || '')}</span></div>${rules}<div class="grid">${bl.map(x => x.html).join('')}</div></div></body></html>`;
+}
+function pxpPrint(o) {                                                              // une page A4 paysage : la mise en page est réduite pour tout tenir, comme le modèle
+  const f = document.createElement('iframe'); f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+  f.onload = () => {
+    try {
+      const d = f.contentDocument, el = d.getElementById('fit'), W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / el.scrollHeight, W / el.scrollWidth);
+      if (s < 1) { el.style.transform = 'scale(' + s + ')'; el.style.width = (287 / s) + 'mm'; }
+      f.contentWindow.focus(); setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 250);
+    } catch (e) { f.remove(); }
+  };
+  document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
+}
 // ── Prix franchise : modèle global (tarif restaurant, majorations Uber / Deliveroo, points repas) + exceptions par restaurant ──
-// Modifiable par le franchisé et le superviseur, en lecture seule pour les directeurs (qui voient le modèle et les prix de leur restaurant).
+// Même présentation que le modèle « Prix Franchise » : une couleur par rubrique, noms et codes sur fond foncé, prix sur fond clair ; impression en une page A4 paysage comme le modèle (prix_print.js).
+// Modifiable par le franchisé et le superviseur (prix, codes, ajout / suppression de produits, de catégories, de formats, de rubriques), en lecture seule pour les directeurs.
 // Un seul document partagé dans le Sheet (Apps Script, actions px_*), enregistré avec un contrôle de version : jamais d'écrasement silencieux.
-//   • tarif « Restaurant » : un prix et un code caisse par produit et par format (à l'unité, BO, MxBO, petite / moyenne / grande…) ;
-//   • « Uber » et « Deliveroo » : prix du restaurant + majoration (28 % au départ, arrondi à 0,1 €), sauf prix fixé à la main ; codes propres à chaque canal ;
-//   • « Repas » : points par produit pour la politique de repas ;
-//   • exception = prix différent pour UN restaurant sur UN produit (orange) ; effacer la case revient au modèle.
+//   • exception = prix différent pour UN restaurant sur UN produit (cadre orange) ; effacer la case revient au modèle ;
+//   • « Uber » et « Deliveroo » : prix du restaurant + majoration (28 % au départ, arrondi à 0,1 €), sauf prix fixé à la main (cadre bleu) ; codes propres à chaque canal.
 const PX = { doc: null, base: null, version: 0, can: false, state: 'idle', err: '', view: '', viewSet: false, canal: 'restaurant', bloc: 0, q: '', at: '', by: '', conflict: null, saving: false, flash: null, journal: null };
 const PX_CANAUX = [['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']];
 const pxClone = o => JSON.parse(JSON.stringify(o));
@@ -3242,21 +3302,34 @@ const pxF = v => v == null ? '' : String(Math.round(v * 100) / 100).replace('.',
 const pxParse = t => { t = String(t == null ? '' : t).replace(/[€\s]/g, '').replace(',', '.'); if (t === '') return null; const n = parseFloat(t); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined; };
 const pxProf = () => accProfiles().find(p => ['franchise', 'superviseur', 'owner'].includes(p.role) && p.scope === '*') || accProfiles()[0] || null;
 const pxCall = body => { const p = pxProf(); return postJson(Object.assign({ pwd: p ? p.h : pwdHash() }, body)); };
+const pxVarKey = n => String(n).toLowerCase().replace(/à l'unite|a l'unite|à l'unité/g, 'unite').replace(/œ/g, 'oe').replace(/[^a-z0-9]+/g, '');
 (function () {
   const st = document.createElement('style');
   st.textContent = `
 .px-chips{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; } .px-chips button{ border:1.5px solid var(--border); background:var(--card); border-radius:999px; padding:7px 14px; font:inherit; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--text); }
-.px-chips button.on{ background:var(--accent,#b8892b); border-color:var(--accent,#b8892b); color:#fff; }
+.px-chips button.on{ background:var(--accent,#b8892b); border-color:var(--accent,#b8892b); color:#fff; } .px-chips.bl button{ border-color:var(--d); color:var(--tt); background:var(--t); opacity:.55; } .px-chips.bl button.on{ opacity:1; box-shadow:0 0 0 2.5px var(--d); }
 .px-bar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 12px; } .px-bar select,.px-bar input[type=text]{ padding:8px 10px; border:1.5px solid var(--border); border-radius:10px; font-family:inherit; font-size:.84rem; background:var(--card); color:var(--text); }
-table.px{ min-width:520px; } table.px th{ white-space:nowrap; } table.px td.l{ min-width:190px; font-weight:600; }
-.px-c{ min-width:96px; } .px-i{ width:72px; padding:5px 6px; border:1.5px solid var(--border); border-radius:8px; font:inherit; font-size:.84rem; text-align:right; background:var(--card); color:var(--text); }
-.px-k{ display:block; margin-top:3px; width:72px; padding:2px 5px; border:1px dashed var(--border); border-radius:6px; font:inherit; font-size:.66rem; color:var(--muted); background:transparent; text-align:right; }
-.px-c.exc{ background:rgba(234,88,12,.14); } .px-c.exc .px-i{ border-color:#ea580c; font-weight:800; } .px-c.sur{ background:rgba(37,99,235,.10); } .px-c.sur .px-i{ border-color:#2563eb; }
-.px-c.rule .px-i{ color:var(--muted); } .px-v{ font-weight:700; } .px-vk{ display:block; font-size:.66rem; color:var(--muted); }
-.px-leg{ display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-2px; }
+.pxb{ border:2px solid var(--t); border-radius:14px; overflow:hidden; background:var(--card); margin:0 0 14px; }
+.pxt{ background:var(--t); color:var(--tt); font-weight:800; font-size:1.15rem; padding:9px 14px; letter-spacing:.3px; }
+.pxw{ overflow-x:auto; padding:6px 10px 10px; }
+table.pxm{ border-collapse:separate; border-spacing:0 3px; width:100%; min-width:560px; font-variant-numeric:tabular-nums; }
+table.pxm th{ background:var(--d); color:var(--dt); font-size:.72rem; font-weight:800; padding:6px 8px; text-align:center; white-space:nowrap; } table.pxm th.kc{ font-size:.55rem; opacity:.85; } table.pxm th.nm{ border-radius:8px 0 0 8px; } table.pxm th:last-child{ border-radius:0 8px 8px 0; }
+table.pxm td.cat{ background:var(--c); color:var(--ct); font-weight:800; font-size:.95rem; padding:6px 12px; border-radius:8px; letter-spacing:.2px; }
+table.pxm td.nm{ background:var(--d); color:var(--dt); font-weight:700; font-size:.84rem; padding:5px 10px; min-width:200px; border-radius:8px 0 0 8px; position:relative; }
+table.pxm td.p{ background:var(--l); color:var(--lt); text-align:center; font-weight:800; font-size:.9rem; padding:3px 6px; min-width:78px; } table.pxm td.p.e{ background:var(--d); }
+table.pxm td.k{ background:var(--d); color:var(--dt); text-align:center; font-size:.68rem; padding:3px 6px; min-width:58px; } table.pxm tr td:last-child{ border-radius:0 8px 8px 0; }
+table.pxm td.p.exc{ box-shadow:inset 0 0 0 2.5px #ea580c; } table.pxm td.p.sur{ box-shadow:inset 0 0 0 2.5px #2563eb; }
+.pxi{ width:100%; border:0; background:transparent; color:inherit; font:inherit; text-align:center; padding:3px 0; border-radius:6px; } .pxi:focus{ outline:2px solid var(--d); background:rgba(255,255,255,.7); }
+td.k .pxi{ font-size:.68rem; font-weight:500; } td.k .pxi:focus{ background:rgba(0,0,0,.25); color:#fff; }
+.pxn{ background:transparent; border:0; color:inherit; font:inherit; font-weight:700; width:calc(100% - 24px); padding:2px 0; border-radius:5px; } .pxn:focus{ outline:2px solid rgba(255,255,255,.7); background:rgba(0,0,0,.25); }
+.pxd{ position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:rgba(255,255,255,.2); color:inherit; border-radius:50%; width:18px; height:18px; line-height:16px; cursor:pointer; font-size:.8rem; padding:0; opacity:.55; } .pxd:hover{ opacity:1; background:#dc2626; color:#fff; }
+table.pxm td.add{ background:transparent; padding:2px 0 0; } .pxa{ width:100%; border:1.5px dashed var(--d); background:transparent; color:var(--d); font:inherit; font-size:.78rem; font-weight:700; padding:5px 10px; border-radius:8px; } .pxa::placeholder{ color:var(--d); opacity:.7; }
+.pxs{ margin:0 10px 10px; font-size:.8rem; } .pxs summary{ cursor:pointer; font-weight:800; color:var(--d); } .pxs .r{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; } .pxs input[type=text]{ padding:6px 9px; border:1.5px solid var(--border); border-radius:9px; font:inherit; font-size:.8rem; background:var(--card); color:var(--text); } .pxs .tag{ display:inline-flex; align-items:center; gap:4px; background:var(--l); color:var(--lt); border-radius:999px; padding:2px 4px 2px 10px; font-weight:700; } .pxs .tag button{ border:0; background:rgba(0,0,0,.12); color:inherit; border-radius:50%; width:18px; height:18px; cursor:pointer; line-height:16px; padding:0; }
+.px-leg{ display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin:0 0 10px; } .px-leg i{ display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:5px; vertical-align:-3px; box-sizing:border-box; }
 .px-save{ position:sticky; bottom:8px; z-index:5; }`;
   document.head.appendChild(st);
 })();
+const pxVars = (css, th) => `--t:${th.t};--tt:${th.tt};--d:${th.d};--dt:${th.dt};--l:${th.l};--lt:${th.lt};--c:${th.c};--ct:${th.ct}`;
 // ── Prix d'un produit pour un canal et un restaurant ('' = modèle global) : { v, src } avec src = modele | regle | surcharge | exception ──
 function pxExc(r, canal, key, k) { const e = PX.doc.exceptions[r]; return e && e[canal] && e[canal][key] ? e[canal][key][k] : undefined; }
 function pxPrice(canal, r, key, l, k, skipExc) {
@@ -3272,8 +3345,7 @@ const pxCode = (canal, key, l, k) => canal === 'restaurant' ? (l.code || {})[k] 
 async function pxLoad() {
   PX.state = 'loading'; PX.err = '';
   const j = await pxCall({ action: 'px_load' });
-  if (!j.ok) { PX.state = 'idle'; }
-  if (!j.ok) { PX.err = /action inconnue/.test(j.error || '') ? "Les prix demandent une mise à jour de l'Apps Script du Sheet : colle le nouveau fichier " + ((CFG.files && CFG.files.apps_script) || 'AppsScript') + ' puis « Nouvelle version ».' : (j.error || 'lecture impossible'); }
+  if (!j.ok) { PX.state = 'idle'; PX.err = /action inconnue/.test(j.error || '') ? "Les prix demandent une mise à jour de l'Apps Script du Sheet : colle le nouveau fichier " + ((CFG.files && CFG.files.apps_script) || 'AppsScript') + ' puis « Nouvelle version ».' : (j.error || 'lecture impossible'); }
   else { PX.can = !!j.can; PX.version = j.version || 0; PX.at = j.at || ''; PX.by = j.by || ''; PX.doc = j.doc ? pxNorm(j.doc) : null; PX.base = PX.doc ? pxClone(PX.doc) : null; PX.conflict = null; PX.journal = null; PX.state = PX.doc ? 'ready' : 'empty'; }
   if (!PX.viewSet) { PX.view = PX.can ? '' : (curResto || ''); PX.viewSet = true; }
   if (curTab === 'prix') renderPrix();
@@ -3282,9 +3354,8 @@ function pxNorm(d) { d.canaux = d.canaux || {}; for (const c of ['uber', 'delive
 // ── Différences avec la version enregistrée (journal) ──
 function pxFlat(doc) {
   const o = {};
-  for (const b of doc.modele) for (const c of b.cats) for (const l of c.lignes) {
-    const key = pxKey(b, c, l); for (const k of Object.keys(l.prix || {})) o['M|' + key + '|' + k + '|p'] = l.prix[k]; for (const k of Object.keys(l.code || {})) o['M|' + key + '|' + k + '|c'] = l.code[k];
-  }
+  for (const b of doc.modele) { o['B|' + b.titre] = 1; for (const v of b.variantes) o['V|' + b.titre + '|' + v.k] = v.l; for (const c of b.cats) { o['G|' + b.titre + '|' + c.cat] = 1; for (const l of c.lignes) {
+    const key = pxKey(b, c, l); o['P|' + key] = 1; for (const k of Object.keys(l.prix || {})) o['M|' + key + '|' + k + '|p'] = l.prix[k]; for (const k of Object.keys(l.code || {})) o['M|' + key + '|' + k + '|c'] = l.code[k]; } } }
   for (const cn of ['uber', 'deliveroo']) { const cfg = doc.canaux[cn]; o['K|' + cn + '|taux'] = cfg.taux; for (const key of Object.keys(cfg.surcharges)) for (const k of Object.keys(cfg.surcharges[key])) o['K|' + cn + '|' + key + '|' + k + '|p'] = cfg.surcharges[key][k]; for (const key of Object.keys(cfg.codes)) for (const k of Object.keys(cfg.codes[key])) o['K|' + cn + '|' + key + '|' + k + '|c'] = cfg.codes[key][k]; }
   doc.repas.forEach(x => { o['R|' + x.produit] = x.points; });
   for (const r of Object.keys(doc.exceptions)) for (const cn of Object.keys(doc.exceptions[r])) for (const key of Object.keys(doc.exceptions[r][cn])) for (const k of Object.keys(doc.exceptions[r][cn][key])) o['E|' + r + '|' + cn + '|' + key + '|' + k] = doc.exceptions[r][cn][key][k];
@@ -3293,15 +3364,21 @@ function pxFlat(doc) {
 function pxChanges() {
   if (!PX.doc || !PX.base) return [];
   const a = pxFlat(PX.base), b = pxFlat(PX.doc), out = [], lab = {}, name = r => (RESTOS.find(x => x[0] === r) || [0, r])[1], cn = { restaurant: 'Restaurant', uber: 'Uber', deliveroo: 'Deliveroo' };
-  for (const bl of PX.doc.modele) for (const v of bl.variantes) lab[bl.titre + '|' + v.k] = v.l;
-  const vl = (key, k) => lab[key.split('|')[0] + '|' + k] || k, pn = key => key.split('|')[2];
-  for (const p of new Set([...Object.keys(a), ...Object.keys(b)])) {
+  for (const bl of PX.doc.modele.concat(PX.base.modele)) for (const v of bl.variantes) lab[bl.titre + '|' + v.k] = v.l;
+  const vl = (key, k) => lab[key.split('|')[0] + '|' + k] || k, pn = key => key.split('|')[2], all = new Set([...Object.keys(a), ...Object.keys(b)]), struct = new Set();
+  for (const p of all) { if (a[p] === b[p]) continue; const s = p.split('|');
+    if (s[0] === 'P') { struct.add(s.slice(1).join('|')); out.push(`${b[p] ? 'Produit ajouté' : 'Produit supprimé'} : ${s[3]} (${s[1]} › ${s[2]})`); }
+    else if (s[0] === 'G') out.push(`${b[p] ? 'Catégorie ajoutée' : 'Catégorie supprimée'} : ${s[2]} (${s[1]})`);
+    else if (s[0] === 'B') out.push(`${b[p] ? 'Rubrique ajoutée' : 'Rubrique supprimée'} : ${s[1]}`);
+    else if (s[0] === 'V') out.push(`${b[p] ? 'Format ajouté' : 'Format supprimé'} : ${b[p] || a[p]} (${s[1]})`); }
+  for (const p of all) {
     if (a[p] === b[p]) continue; const s = p.split('|'), f = (x) => x === undefined ? 'aucun' : pxF(+x) || String(x);
-    if (s[0] === 'M') out.push(`Modèle · ${pn(s[1] + '|' + s[2] + '|' + s[3])} · ${vl(s[1], s[4])}${s[5] === 'c' ? ' (code)' : ''} : ${s[5] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`);
+    if (['P', 'G', 'B', 'V'].includes(s[0])) continue;
+    if (s[0] === 'M') { if (struct.has(s[1] + '|' + s[2] + '|' + s[3])) continue; out.push(`Modèle · ${pn(s[1] + '|' + s[2] + '|' + s[3])} · ${vl(s[1], s[4])}${s[5] === 'c' ? ' (code)' : ''} : ${s[5] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`); }
     else if (s[0] === 'K' && s[2] === 'taux') out.push(`${cn[s[1]]} · majoration : ${a[p]} % → ${b[p]} %`);
-    else if (s[0] === 'K') out.push(`${cn[s[1]]} · ${s[4]} · ${vl(s[2], s[5])}${s[6] === 'c' ? ' (code)' : ' (prix fixé)'} : ${s[6] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`);
-    else if (s[0] === 'R') out.push(`Repas · ${s[1]} : ${a[p] === undefined ? 'aucun' : a[p]} → ${b[p] === undefined ? 'aucun' : b[p]} point(s)`);
-    else if (s[0] === 'E') out.push(`${name(s[1])} · ${cn[s[2]]} · ${s[5]} · ${vl(s[3], s[6])} : ${a[p] === undefined ? 'modèle' : f(a[p])} → ${b[p] === undefined ? 'modèle' : f(b[p])}`);
+    else if (s[0] === 'K') { if (struct.has(s[2] + '|' + s[3] + '|' + s[4])) continue; out.push(`${cn[s[1]]} · ${s[4]} · ${vl(s[2], s[5])}${s[6] === 'c' ? ' (code)' : ' (prix fixé)'} : ${s[6] === 'c' ? (a[p] || 'aucun') + ' → ' + (b[p] || 'aucun') : f(a[p]) + ' → ' + f(b[p])}`); }
+    else if (s[0] === 'R') out.push(`Repas · ${s[1]} : ${a[p] === undefined ? 'ajouté' : a[p]} → ${b[p] === undefined ? 'supprimé' : b[p] + ' point(s)'}`);
+    else if (s[0] === 'E') { if (struct.has(s[3] + '|' + s[4] + '|' + s[5])) continue; out.push(`${name(s[1])} · ${cn[s[2]]} · ${s[5]} · ${vl(s[3], s[6])} : ${a[p] === undefined ? 'modèle' : f(a[p])} → ${b[p] === undefined ? 'modèle' : f(b[p])}`); }
   }
   return out.slice(0, 300);
 }
@@ -3316,15 +3393,19 @@ async function pxSave() {
   renderPrix();
 }
 function pxCancel() { if (!pxChanges().length || !confirm('Annuler toutes les modifications non enregistrées ?')) return; PX.doc = pxClone(PX.base); PX.flash = null; renderPrix(); }
-function pxReload() { if (pxChanges().length && !confirm('Recharger la version enregistrée et perdre tes modifications non enregistrées ?')) return; PX.doc = null; PX.base = null; PX.conflict = null; PX.flash = null; PX.state = 'idle'; renderPrix(); }
-// ── Édition ──
+// ── Clés d'un produit (rubrique | catégorie | nom) : utilisées par les prix Uber / Deliveroo, les codes et les exceptions ──
+function pxEach(fn) { for (const cn of ['uber', 'deliveroo']) { const c = PX.doc.canaux[cn]; fn(c.surcharges, cn); fn(c.codes, cn); } for (const r of Object.keys(PX.doc.exceptions)) for (const cn of Object.keys(PX.doc.exceptions[r])) fn(PX.doc.exceptions[r][cn], cn); }
+function pxPrune() { for (const r of Object.keys(PX.doc.exceptions)) { for (const cn of Object.keys(PX.doc.exceptions[r])) { const m = PX.doc.exceptions[r][cn]; for (const k of Object.keys(m)) if (!Object.keys(m[k]).length) delete m[k]; if (!Object.keys(m).length) delete PX.doc.exceptions[r][cn]; } if (!Object.keys(PX.doc.exceptions[r]).length) delete PX.doc.exceptions[r]; } }
+function pxDropKey(key) { pxEach(m => { delete m[key]; }); pxPrune(); }
+function pxMoveKey(a, b) { pxEach(m => { if (m[a] !== undefined) { m[b] = m[a]; delete m[a]; } }); }
+// ── Édition des prix et des codes ──
 function pxClean(o, ...path) { let cur = o; const st = [o]; for (const p of path.slice(0, -1)) { cur = cur && cur[p]; st.push(cur); } for (let i = path.length - 1; i >= 0; i--) { const c = st[i]; if (c && c[path[i]] && typeof c[path[i]] === 'object' && !Object.keys(c[path[i]]).length) delete c[path[i]]; } }
 function pxEdit(canal, bi, ci, li, k, txt) {
   if (!PX.can) return;
   const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li], key = pxKey(b, c, l), v = pxParse(txt); if (v === undefined) return renderPrix();
   if (!PX.view) {                                                          // modèle global
     if (canal === 'restaurant') { if (v === null) delete l.prix[k]; else l.prix[k] = v; }
-    else { const cfg = PX.doc.canaux[canal], dflt = pxPrice(canal, '', key, l, k, true); const rule = (() => { const x = pxR1(((l.prix || {})[k] || 0) * (1 + (+cfg.taux || 0) / 100)); return l.prix[k] === undefined ? undefined : x; })();
+    else { const cfg = PX.doc.canaux[canal], rule = l.prix[k] === undefined ? undefined : pxR1(l.prix[k] * (1 + (+cfg.taux || 0) / 100));
       const su = cfg.surcharges[key] = cfg.surcharges[key] || {}; if (v === null || (rule !== undefined && Math.abs(v - rule) < 0.005)) delete su[k]; else su[k] = v; pxClean(cfg.surcharges, key); }
   } else {                                                                 // exception du restaurant
     const r = PX.view, dflt = pxPrice(canal, r, key, l, k, true).v, ex = PX.doc.exceptions[r] = PX.doc.exceptions[r] || {}, cx = ex[canal] = ex[canal] || {}, o = cx[key] = cx[key] || {};
@@ -3341,32 +3422,59 @@ function pxEditCode(canal, bi, ci, li, k, txt) {
 }
 function pxTaux(canal, txt) { if (!PX.can || PX.view) return; const v = pxParse(txt); if (v === undefined || v === null) return renderPrix(); PX.doc.canaux[canal].taux = v; renderPrix(); }
 function pxPoints(i, txt) { if (!PX.can) return; const v = pxParse(txt); if (v === undefined || v === null) return renderPrix(); PX.doc.repas[i].points = v; renderPrix(); }
+// ── Ajouter / supprimer / renommer : produits, catégories, formats, rubriques, produits « repas » ──
+const pxNm = t => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 60);
+const pxVal = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+function pxAddProduct(bi, ci) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], n = pxNm(pxVal('pxAP_' + bi + '_' + ci)); if (!n) return;
+  if (c.lignes.some(l => l.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans ' + c.cat + '.']; return renderPrix(); }
+  c.lignes.push({ produit: n, prix: {}, code: {} }); PX.flash = ['ok', '« ' + n + ' » ajouté : renseigne ses prix et ses codes puis enregistre.']; renderPrix();
+}
+function pxDelProduct(bi, ci, li) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li];
+  if (!confirm('Supprimer « ' + l.produit + ' » (' + c.cat + ') ?\nSes prix, ses codes Uber / Deliveroo et ses exceptions par restaurant sont supprimés aussi (à l\'enregistrement).')) return;
+  pxDropKey(pxKey(b, c, l)); c.lignes.splice(li, 1); PX.flash = null; renderPrix();
+}
+function pxRenameProduct(bi, ci, li, txt) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], l = c.lignes[li], n = pxNm(txt); if (!n || n === l.produit) return renderPrix();
+  if (c.lignes.some((x, i) => i !== li && x.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans ' + c.cat + '.']; return renderPrix(); }
+  const a = pxKey(b, c, l); l.produit = n; pxMoveKey(a, pxKey(b, c, l)); renderPrix();
+}
+function pxAddCat(bi) { if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], n = pxNm(pxVal('pxAC_' + bi)); if (!n) return; if (b.cats.some(c => c.cat === n)) { PX.flash = ['err', 'La catégorie « ' + n + ' » existe déjà.']; return renderPrix(); } b.cats.push({ cat: n, lignes: [] }); renderPrix(); }
+function pxRenameCat(bi, ci, txt) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci], n = pxNm(txt); if (!n || n === c.cat) return renderPrix(); if (b.cats.some((x, i) => i !== ci && x.cat === n)) { PX.flash = ['err', 'La catégorie « ' + n + ' » existe déjà.']; return renderPrix(); }
+  const olds = c.lignes.map(l => pxKey(b, c, l)); c.cat = n; c.lignes.forEach((l, i) => pxMoveKey(olds[i], pxKey(b, c, l))); renderPrix();
+}
+function pxDelCat(bi, ci) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], c = b.cats[ci];
+  if (!confirm('Supprimer la catégorie « ' + c.cat + ' »' + (c.lignes.length ? ' et ses ' + c.lignes.length + ' produit(s)' : '') + ' ?')) return; c.lignes.forEach(l => pxDropKey(pxKey(b, c, l))); b.cats.splice(ci, 1); renderPrix();
+}
+function pxAddVar(bi) { if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], l = pxNm(pxVal('pxAV_' + bi)), k = pxVarKey(l); if (!l || !k) return; if (b.variantes.some(v => v.k === k)) { PX.flash = ['err', 'Le format « ' + l + ' » existe déjà.']; return renderPrix(); } b.variantes.push({ k, l }); renderPrix(); }
+function pxRenameVar(bi, vi, txt) { if (!PX.can || PX.view) return; const n = pxNm(txt); if (n) PX.doc.modele[bi].variantes[vi].l = n; renderPrix(); }
+function pxDelVar(bi, vi) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi], v = b.variantes[vi];
+  if (!confirm('Supprimer le format « ' + v.l + ' » de la rubrique ' + b.titre + ' ?\nTous les prix et codes de ce format sont supprimés (à l\'enregistrement).')) return;
+  b.cats.forEach(c => c.lignes.forEach(l => { delete l.prix[v.k]; if (l.code) delete l.code[v.k]; pxEach(m => { const e = m[pxKey(b, c, l)]; if (e) delete e[v.k]; }); })); pxEach(m => { for (const k of Object.keys(m)) if (m[k] && !Object.keys(m[k]).length) delete m[k]; }); pxPrune(); b.variantes.splice(vi, 1); renderPrix();
+}
+function pxAddBloc() { if (!PX.can || PX.view) return; const n = pxNm(pxVal('pxAB')); if (!n) return; if (PX.doc.modele.some(b => b.titre === n)) { PX.flash = ['err', 'La rubrique « ' + n + ' » existe déjà.']; return renderPrix(); } PX.doc.modele.push({ titre: n, variantes: [{ k: 'prix', l: 'PRIX' }], cats: [{ cat: n, lignes: [] }] }); PX.bloc = PX.doc.modele.length - 1; renderPrix(); }
+function pxDelBloc(bi) {
+  if (!PX.can || PX.view) return; const b = PX.doc.modele[bi]; const n = b.cats.reduce((a, c) => a + c.lignes.length, 0);
+  if (!confirm('Supprimer la rubrique « ' + b.titre + ' »' + (n ? ' et ses ' + n + ' produit(s)' : '') + ' ?')) return; b.cats.forEach(c => c.lignes.forEach(l => pxDropKey(pxKey(b, c, l)))); PX.doc.modele.splice(bi, 1); PX.bloc = 0; renderPrix();
+}
+function pxAddRepas() {
+  if (!PX.can) return; const n = pxNm(pxVal('pxAR_n')), g = pxVal('pxAR_g'), p = pxParse(pxVal('pxAR_p')); if (!n) return;
+  if (PX.doc.repas.some(x => x.produit === n)) { PX.flash = ['err', '« ' + n + ' » existe déjà dans la politique de repas.']; return renderPrix(); }
+  PX.doc.repas.push({ produit: n, points: p == null ? 1 : p, groupe: g || 'Gamme' }); renderPrix();
+}
+function pxDelRepas(i) { if (!PX.can) return; const x = PX.doc.repas[i]; if (!confirm('Retirer « ' + x.produit + ' » de la politique de repas ?')) return; PX.doc.repas.splice(i, 1); renderPrix(); }
 const pxPick = (k, v) => { PX[k] = v; renderPrix(); };
-// ── Écran ──
-function pxCell(canal, bi, ci, li, v, b, c, l) {
-  const key = pxKey(b, c, l), P = pxPrice(canal, PX.view, key, l, v.k), cd = pxCode(canal, key, l, v.k), editPrice = PX.can, editCode = PX.can && !PX.view;
-  if (P.v === undefined && !cd && !editPrice) return '<td class="px-c">—</td>';
-  const cls = P.src === 'exception' ? 'exc' : P.src === 'surcharge' ? 'sur' : (P.src === 'regle' ? 'rule' : '');
-  const model = PX.view && P.src === 'exception' ? ` title="Modèle : ${pxF(pxPrice(canal, '', key, l, v.k).v)} €"` : '';
-  if (!editPrice) return `<td class="px-c ${cls}"${model}><span class="px-v">${P.v === undefined ? '—' : pxF(P.v)}</span>${cd ? `<span class="px-vk">${escH(cd)}</span>` : ''}</td>`;
-  const a = `${canal === 'restaurant' ? '' : ''}'${canal}',${bi},${ci},${li},'${v.k}'`;
-  return `<td class="px-c ${cls}"${model}><input class="px-i" inputmode="decimal" value="${P.v === undefined ? '' : pxF(P.v)}" ${canal !== 'restaurant' && P.src === 'regle' ? 'placeholder="" ' : ''}onchange="pxEdit(${a},this.value)" aria-label="Prix ${escH(l.produit)} ${escH(v.l)}">${editCode && (P.v !== undefined || cd) ? `<input class="px-k" value="${escH(cd || '')}" placeholder="code" onchange="pxEditCode(${a},this.value)" aria-label="Code ${escH(l.produit)} ${escH(v.l)}">` : (cd ? `<span class="px-vk">${escH(cd)}</span>` : '')}</td>`;
+// ── Impression : une page A4 paysage comme le modèle ──
+function pxPrintNow() {
+  const canal = PX.canal, r = canal === 'repas' ? '' : PX.view, nm = r ? (RESTOS.find(x => x[0] === r) || [0, r])[1] : 'Modèle global', cl = (PX_CANAUX.find(x => x[0] === canal) || [0, canal])[1];
+  pxpPrint({ doc: PX.doc, canal, title: 'PRIX FRANCHISE · ' + cl.toUpperCase(), sub: canal === 'repas' ? '' : nm, meta: 'Version ' + PX.version + (PX.at ? ' · mise à jour le ' + wfDate(PX.at) : '') + ' · imprimé le ' + new Date().toLocaleDateString('fr-FR'),
+    price: (b, c, l, k) => pxPrice(canal, r, pxKey(b, c, l), l, k).v, code: (b, c, l, k) => pxCode(canal, pxKey(b, c, l), l, k) });
 }
-function pxBlocHtml(canal) {
-  const bi = Math.min(PX.bloc, PX.doc.modele.length - 1), b = PX.doc.modele[bi], q = PX.q.trim().toLowerCase(); let out = '', n = 0;
-  b.cats.forEach((c, ci) => {
-    const used = b.variantes.filter(v => c.lignes.some(l => l.prix[v.k] !== undefined || (l.code || {})[v.k] !== undefined));
-    const rows = c.lignes.map((l, li) => ({ l, li })).filter(x => !q || x.l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!rows.length) return; n += rows.length;
-    const cols = used.length ? used : b.variantes.slice(0, 1);
-    out += `<div class="sim-h" style="margin-top:14px">${escH(c.cat || b.titre)}</div><div class="sim-wrap"><table class="sim px"><thead><tr><th class="l">Produit</th>${cols.map(v => `<th>${escH(v.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(x => `<tr><td class="l">${escH(x.l.produit)}</td>${cols.map(v => pxCell(canal, bi, ci, x.li, v, b, c, x.l)).join('')}</tr>`).join('')}</tbody></table></div>`;
-  });
-  return out || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`;
-}
-function pxRepasHtml() {
-  const q = PX.q.trim().toLowerCase(), g = {}; PX.doc.repas.forEach((x, i) => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push({ x, i }); });
-  const rules = PX.doc.repasRegles.length ? `<div class="wf-box" style="margin-bottom:12px"><b>Politique de repas</b><ul style="margin:6px 0 0 18px;padding:0">${PX.doc.repasRegles.map(t => `<li>${escH(t)}</li>`).join('')}</ul></div>` : '';
-  return rules + (Object.keys(g).map(k => `<div class="sim-h" style="margin-top:14px">${escH(k)}</div><div class="sim-wrap"><table class="sim px" style="min-width:320px"><thead><tr><th class="l">Produit</th><th>Points</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="l">${escH(x.produit)}</td><td class="px-c">${PX.can ? `<input class="px-i" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : `<span class="px-v">${pxF(x.points)}</span>`}</td></tr>`).join('')}</tbody></table></div>`).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
-}
+// ── Journal ──
 async function pxJournalLoad() { if (PX.journal) return; const j = await pxCall({ action: 'px_journal' }); PX.journal = j.ok ? j.rows : []; const el = document.getElementById('pxJournal'); if (el) el.innerHTML = pxJournalHtml(); }
 const pxJournalHtml = () => !PX.journal ? '<div class="hint">⏳ Chargement…</div>' : (PX.journal.length ? `<ul class="wf-log">${PX.journal.map(x => `<li><b>${escH(x.by)}</b> <small>· ${wfDate(x.at)} · v${x.version}</small><i>${escH(x.change)}</i></li>`).join('')}</ul>` : '<div class="hint">Aucune modification enregistrée pour le moment.</div>');
 async function pxImport(inp) {
@@ -3382,10 +3490,41 @@ async function pxImport(inp) {
   if (j.conflict) { PX.conflict = { version: j.version, by: j.by, at: j.at }; } else if (!j.ok) PX.flash = ['err', 'Import impossible : ' + (j.error || 'refusé')]; else { PX.doc = doc; PX.base = pxClone(doc); PX.version = j.version; PX.journal = null; PX.state = 'ready'; PX.flash = ['ok', 'Modèle importé (version ' + j.version + ').']; }
   renderPrix();
 }
+// ── Écran ──
+function pxCell(canal, bi, ci, li, v, b, c, l) {
+  const key = pxKey(b, c, l), P = pxPrice(canal, PX.view, key, l, v.k), cd = pxCode(canal, key, l, v.k), cls = P.src === 'exception' ? ' exc' : P.src === 'surcharge' ? ' sur' : '', model = PX.view && P.src === 'exception' ? ` title="Modèle : ${pxF(pxPrice(canal, '', key, l, v.k).v)} €"` : '', a = `'${canal}',${bi},${ci},${li},'${v.k}'`;
+  if (!PX.can) return `<td class="p${P.v === undefined ? ' e' : ''}${cls}"${model}>${P.v === undefined ? '' : pxF(P.v)}</td><td class="k">${escH(cd || '')}</td>`;
+  return `<td class="p${cls}"${model}><input class="pxi" inputmode="decimal" value="${P.v === undefined ? '' : pxF(P.v)}" onchange="pxEdit(${a},this.value)" aria-label="Prix ${escH(l.produit)} ${escH(v.l)}"></td>` +
+    `<td class="k">${PX.view ? escH(cd || '') : `<input class="pxi" value="${escH(cd || '')}" placeholder="code" onchange="pxEditCode(${a},this.value)" aria-label="Code ${escH(l.produit)} ${escH(v.l)}">`}</td>`;
+}
+function pxBlocHtml(canal) {
+  const bi = Math.min(PX.bloc, PX.doc.modele.length - 1), b = PX.doc.modele[bi], th = pxpTh(bi), q = PX.q.trim().toLowerCase(), edit = PX.can && !PX.view;
+  const used = pxpUsed(b), cols = PX.can ? b.variantes : (used.length ? used : b.variantes.slice(0, 1)), nc = 1 + 2 * cols.length;
+  let rows = '', n = 0;
+  b.cats.forEach((c, ci) => {
+    const list = c.lignes.map((l, li) => ({ l, li })).filter(x => !q || x.l.produit.toLowerCase().includes(q) || (c.cat || '').toLowerCase().includes(q)); if (!list.length && !(edit && !q)) return; n += list.length;
+    rows += `<tr><td class="cat" colspan="${nc}">${escH(c.cat || b.titre)}</td></tr>`;
+    list.forEach(x => { rows += `<tr><td class="nm">${edit ? `<input class="pxn" value="${escH(x.l.produit)}" maxlength="60" onchange="pxRenameProduct(${bi},${ci},${x.li},this.value)" aria-label="Nom du produit"><button type="button" class="pxd" title="Supprimer ce produit" aria-label="Supprimer ${escH(x.l.produit)}" onclick="pxDelProduct(${bi},${ci},${x.li})">×</button>` : escH(x.l.produit)}</td>${cols.map(v => pxCell(canal, bi, ci, x.li, v, b, c, x.l)).join('')}</tr>`; });
+    if (edit && !q) rows += `<tr><td class="add" colspan="${nc}"><input class="pxa" id="pxAP_${bi}_${ci}" maxlength="60" placeholder="+ Ajouter un produit à « ${escH(c.cat || b.titre)} » (Entrée)" onkeydown="if(event.key==='Enter')pxAddProduct(${bi},${ci})"></td></tr>`;
+  });
+  const head = `<tr><th class="nm"></th>${cols.map(v => `<th>${escH(v.l)}</th><th class="kc">CODE</th>`).join('')}</tr>`;
+  const struct = edit ? `<details class="pxs"><summary>Modifier la structure de « ${escH(b.titre)} »</summary>
+    <div class="r"><b>Catégories :</b>${b.cats.map((c, ci) => `<span class="tag"><input type="text" class="pxn" style="width:130px;color:inherit" value="${escH(c.cat)}" onchange="pxRenameCat(${bi},${ci},this.value)" aria-label="Nom de la catégorie"><button type="button" title="Supprimer la catégorie" onclick="pxDelCat(${bi},${ci})">×</button></span>`).join('')}<input type="text" id="pxAC_${bi}" placeholder="Nouvelle catégorie" maxlength="60" onkeydown="if(event.key==='Enter')pxAddCat(${bi})"><button class="step" type="button" onclick="pxAddCat(${bi})">Ajouter</button></div>
+    <div class="r"><b>Formats (colonnes) :</b>${b.variantes.map((v, vi) => `<span class="tag"><input type="text" class="pxn" style="width:110px;color:inherit" value="${escH(v.l)}" onchange="pxRenameVar(${bi},${vi},this.value)" aria-label="Nom du format"><button type="button" title="Supprimer le format" onclick="pxDelVar(${bi},${vi})">×</button></span>`).join('')}<input type="text" id="pxAV_${bi}" placeholder="Nouveau format (ex. MENU MAXI)" maxlength="40" onkeydown="if(event.key==='Enter')pxAddVar(${bi})"><button class="step" type="button" onclick="pxAddVar(${bi})">Ajouter</button></div>
+    <div class="r"><button class="step" type="button" onclick="pxDelBloc(${bi})">Supprimer cette rubrique</button></div></details>` : '';
+  return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(b.titre)}</div><div class="pxw"><table class="pxm"><thead>${head}</thead><tbody>${rows || `<tr><td class="cat" colspan="${nc}">${q ? 'Aucun produit ne correspond à « ' + escH(PX.q) + ' ».' : 'Aucun produit pour le moment.'}</td></tr>`}</tbody></table></div>${struct}</div>`;
+}
+function pxRepasHtml() {
+  const q = PX.q.trim().toLowerCase(), g = {}; PX.doc.repas.forEach((x, i) => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push({ x, i }); });
+  const groups = [...new Set(PX.doc.repas.map(x => x.groupe || 'Autres'))], rules = PX.doc.repasRegles.length ? `<div class="wf-box" style="margin-bottom:12px"><b>Politique de repas</b><ul style="margin:6px 0 0 18px;padding:0">${PX.doc.repasRegles.map(t => `<li>${escH(t)}</li>`).join('')}</ul></div>` : '';
+  const add = PX.can ? `<div class="px-bar"><input type="text" id="pxAR_n" placeholder="Nouveau produit repas" maxlength="60"><select id="pxAR_g">${groups.map(x => `<option>${escH(x)}</option>`).join('')}</select><input type="text" id="pxAR_p" placeholder="Points" inputmode="numeric" style="width:80px" value="1"><button class="step" type="button" onclick="pxAddRepas()">Ajouter</button></div>` : '';
+  return rules + add + (Object.keys(g).map((k, gi) => { const th = pxpTh(groups.indexOf(k));
+    return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="nm">${escH(x.produit)}${PX.can ? `<button type="button" class="pxd" title="Retirer de la politique de repas" aria-label="Retirer ${escH(x.produit)}" onclick="pxDelRepas(${i})">×</button>` : ''}</td><td class="p">${PX.can ? `<input class="pxi" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : pxF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
+}
 function renderPrix() {
   const p = document.getElementById('panel');
   if (!pwdHash()) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prix franchise</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec ton compte.</div>`; return; }
-  const head = `<div class="panel-head"><div><div class="panel-title">Prix franchise</div><div class="last-saisie">Les prix de vente en vigueur : un modèle commun à tous les restaurants, avec des exceptions par restaurant sur certains produits. ${PX.can ? 'Tu peux les modifier (franchisé et superviseur) ; les directeurs les consultent.' : 'Consultation : seuls le franchisé et le superviseur modifient les prix.'}</div></div></div>`;
+  const head = `<div class="panel-head"><div><div class="panel-title">Prix franchise</div><div class="last-saisie">Les prix de vente en vigueur, présentés comme le modèle : un tarif commun à tous les restaurants, avec des exceptions par restaurant sur certains produits. ${PX.can ? 'Tu peux les modifier, ajouter ou supprimer des produits (franchisé et superviseur) ; les directeurs les consultent.' : 'Consultation : seuls le franchisé et le superviseur modifient les prix.'}</div></div></div>`;
   if (PX.err) { p.innerHTML = head + `<div class="entry-banner err" style="display:block">${escH(PX.err)}</div><div class="foot"><button class="step" onclick="PX.err='';PX.doc=null;PX.state='idle';renderPrix()">Réessayer</button></div>`; return; }
   if (!PX.doc) {
     if (PX.state === 'empty' && !PX.saving) {
@@ -3397,15 +3536,15 @@ function renderPrix() {
   const name = r => (RESTOS.find(x => x[0] === r) || [0, r])[1], dirty = pxChanges(), canal = PX.canal, nExc = Object.keys(PX.doc.exceptions).reduce((a, r) => a + Object.keys(PX.doc.exceptions[r]).reduce((x, c) => x + Object.keys(PX.doc.exceptions[r][c]).length, 0), 0);
   const views = `<select onchange="pxPick('view',this.value)" aria-label="Voir les prix de"><option value="">Modèle global</option>${RESTOS.map(r => `<option value="${escH(r[0])}" ${PX.view === r[0] ? 'selected' : ''}>${escH(r[1])}${PX.doc.exceptions[r[0]] ? ' · exceptions' : ''}</option>`).join('')}</select>`;
   const taux = canal === 'uber' || canal === 'deliveroo' ? `<label style="font-size:.8rem;font-weight:700">Majoration ${canal === 'uber' ? 'Uber' : 'Deliveroo'} <input type="text" inputmode="decimal" style="width:64px" value="${pxF(PX.doc.canaux[canal].taux)}" ${PX.can && !PX.view ? '' : 'disabled'} onchange="pxTaux('${canal}',this.value)"> %</label>` : '';
-  const bloc = canal === 'repas' ? '' : `<div class="px-chips">${PX.doc.modele.map((b, i) => `<button class="${i === Math.min(PX.bloc, PX.doc.modele.length - 1) ? 'on' : ''}" onclick="pxPick('bloc',${i})">${escH(b.titre)}</button>`).join('')}</div>`;
-  const what = PX.view ? (PX.can ? `Tu modifies les prix de <b>${escH(name(PX.view))}</b> : chaque prix changé devient une <b>exception</b> (orange). Efface la case pour revenir au modèle.` : `Prix de <b>${escH(name(PX.view))}</b> ; les cases orange diffèrent du modèle.`) : (PX.can ? 'Tu modifies le <b>modèle global</b> : il s\'applique à tous les restaurants sans exception.' : 'Modèle global appliqué aux restaurants qui n\'ont pas d\'exception.');
-  const leg = canal === 'repas' ? '' : `<div class="px-leg"><span><i style="background:rgba(234,88,12,.5)"></i>exception du restaurant</span>${canal !== 'restaurant' ? '<span><i style="background:rgba(37,99,235,.45)"></i>prix fixé (hors majoration)</span><span><i style="background:var(--border)"></i>prix du restaurant + majoration</span>' : ''}<span>petit chiffre = code caisse</span></div>`;
+  const bloc = canal === 'repas' ? '' : `<div class="px-chips bl">${PX.doc.modele.map((b, i) => `<button style="${pxVars('', pxpTh(i))}" class="${i === Math.min(PX.bloc, PX.doc.modele.length - 1) ? 'on' : ''}" onclick="pxPick('bloc',${i})">${escH(b.titre)}</button>`).join('')}${PX.can && !PX.view ? `<span style="display:inline-flex;gap:6px;align-items:center"><input type="text" id="pxAB" placeholder="Nouvelle rubrique" maxlength="40" style="padding:6px 9px;border:1.5px solid var(--border);border-radius:999px;font:inherit;font-size:.78rem;background:var(--card);color:var(--text)" onkeydown="if(event.key==='Enter')pxAddBloc()"><button class="step" type="button" onclick="pxAddBloc()">+ Rubrique</button></span>` : ''}</div>`;
+  const what = PX.view ? (PX.can ? `Tu modifies les prix de <b>${escH(name(PX.view))}</b> : chaque prix changé devient une <b>exception</b> (cadre orange). Efface la case pour revenir au modèle. Pour ajouter ou supprimer un produit, choisis « Modèle global ».` : `Prix de <b>${escH(name(PX.view))}</b> ; les cadres orange diffèrent du modèle.`) : (PX.can ? 'Tu modifies le <b>modèle global</b> : il s\'applique à tous les restaurants sans exception. Tu peux aussi ajouter, renommer ou supprimer des produits.' : 'Modèle global appliqué aux restaurants qui n\'ont pas d\'exception.');
+  const leg = canal === 'repas' ? '' : `<div class="px-leg"><span><i style="box-shadow:inset 0 0 0 2.5px #ea580c"></i>exception du restaurant</span>${canal !== 'restaurant' ? '<span><i style="box-shadow:inset 0 0 0 2.5px #2563eb"></i>prix fixé (hors majoration)</span>' : ''}<span>petit chiffre sur fond foncé = code caisse</span></div>`;
   const conflict = PX.conflict ? `<div class="bd-sh warn">🔔 <b>Une version plus récente existe</b> (v${PX.conflict.version}${PX.conflict.at ? ' · ' + wfDate(PX.conflict.at) : ''}${PX.conflict.by ? ' par ' + escH(PX.conflict.by) : ''}). Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="PX.doc=null;PX.base=null;PX.conflict=null;PX.state='idle';renderPrix()">Recharger la version enregistrée</button></div>` : '';
   const flash = PX.flash ? `<div class="bd-sh ${PX.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PX.flash[1])}</div>` : '';
   const bar = PX.can ? `<div class="bd-sh ${dirty.length ? 'warn' : ''} px-save">${PX.saving ? '⏳ Enregistrement…' : dirty.length ? `<b>● ${dirty.length} modification${dirty.length > 1 ? 's' : ''} non enregistrée${dirty.length > 1 ? 's' : ''}</b> <button class="btn-save" onclick="pxSave()">Enregistrer les prix</button><button class="step" onclick="pxCancel()">Annuler</button> <span class="loc">${escH(dirty.slice(0, 3).join(' ; '))}${dirty.length > 3 ? ' …' : ''}</span>` : `Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. Rien à enregistrer.`}</div>` : `<div class="bd-sh"><span class="loc">Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. ${nExc ? nExc + ' exception' + (nExc > 1 ? 's' : '') + ' par restaurant.' : ''}</span></div>`;
   const admin = PX.can ? `<details class="sim-d"><summary>Administration : remplacer le modèle par un fichier</summary><div class="hint" style="margin:6px 0 8px">Pour la mise à jour annuelle : un fichier .json préparé à partir du classeur « Prix Franchise ». Il remplace le modèle global ; les exceptions par restaurant sont conservées et l'ancienne version reste dans le journal.</div><input type="file" accept=".json,application/json" onchange="pxImport(this)"></details>` : '';
   p.innerHTML = head + conflict + flash + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}</button>`).join('')}</div>` +
-    `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}</div>` +
+    `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}<button type="button" class="step" onclick="pxPrintNow()" title="Une page A4 paysage, comme le modèle">Imprimer</button></div>` +
     (canal === 'repas' ? '' : `<div class="hint" style="margin:0 0 10px">${what}</div>`) + bloc + leg + (canal === 'repas' ? pxRepasHtml() : pxBlocHtml(canal)) +
     bar + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">⏳ Chargement…</div>'}</div></details>` + admin;
 }
