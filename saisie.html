@@ -4256,6 +4256,12 @@ const SBA = (() => {
   const strict = () => enabled() && mode() === 'accounts';
   const MODULE = typeof FRANCHISE_CFG !== 'undefined' ? 'dashboard' : 'saisie';
   const SKEY = () => 'f' + CF().id + '_sb';
+  // ── APERÇU (« voir le site comme ce profil ») : page ouverte avec ?apercu=1 et les droits simulés dans l'adresse (#apercu=…). LECTURE SEULE : aucune écriture partie vers l'Apps Script ni Supabase,
+  //    aucune écriture dans le stockage local (sauf la session, jamais renouvelée ici), ni déconnexion, ni journal de connexion. Les droits simulés remplacent mes_droits ; le serveur, lui, ne voit que le jeton réel.
+  const APERCU = (() => { if (!/[?&]apercu=1(&|$)/.test(location.search)) return null; try { return JSON.parse(decodeURIComponent(String(location.hash || '').replace(/^#apercu=/, ''))) || {}; } catch (e) { return {}; } })();
+  const RPC_READ = /\/rest\/v1\/rpc\/(mes_droits|acces_218_liste|connexions_liste|planning_restos|semaine_reglage)(\?|$)/, READ_POST = /^(read|wf_load|wf_list|bc_load|bc_list|px_load|px_journal|pb_cfg_load|pb_list|pb_load|wf_archives|rv_load|acc_login|acc_list)$/;
+  const apercuOk = (url, method, body) => { if (!APERCU) return true; method = String(method || 'GET').toUpperCase(); if (method === 'GET' || method === 'HEAD') return true; if (RPC_READ.test(String(url))) return true; let a = ''; try { a = JSON.parse(String(body || '{}')).action || ''; } catch (e) {} return READ_POST.test(a); };
+  const APERCU_REFUS = "Aperçu : lecture seule, rien n'est enregistré.";
   let gateRes, refreshing = null, rightsC = null, legacyOk = false;
   const gate = new Promise(r => { gateRes = r; });
   const now = () => Math.floor(Date.now() / 1000);
@@ -4272,9 +4278,10 @@ const SBA = (() => {
       (keep ? localStorage : sessionStorage).setItem(SKEY(), t);
     } catch (e) {}
   }
-  function clear() { try { localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY()); } catch (e) {} rightsC = null; }
+  function clear() { if (APERCU) { rightsC = null; return; } try { localStorage.removeItem(SKEY()); sessionStorage.removeItem(SKEY()); } catch (e) {} rightsC = null; }
   async function api(path, opt) {                                                // appel à Supabase (Auth ou REST) avec la clé publique
     opt = opt || {};
+    if (!apercuOk(path, opt.method, opt.body == null ? '' : JSON.stringify(opt.body))) return { ok: false, status: 0, j: { msg: APERCU_REFUS, message: APERCU_REFUS } };
     const h = Object.assign({ apikey: AU().supabase_key, 'Content-Type': 'application/json' }, opt.headers || {});
     if (opt.tok) h.Authorization = 'Bearer ' + opt.tok;
     let r, j = null;
@@ -4294,11 +4301,12 @@ const SBA = (() => {
     })();
     return refreshing;
   }
-  async function token() { const s = load(); if (!s) return ''; return (s.expires_at - now() > 90) ? s.access_token : refresh(s); }
+  async function token() { const s = load(); if (!s) return ''; return (s.expires_at - now() > (APERCU ? 5 : 90)) ? s.access_token : (APERCU ? '' : refresh(s)); }   // aperçu : le jeton n'est jamais renouvelé (ça ferait tourner le jeton de la vraie session)
   const hasSession = () => !!load();
 
   // ── droits ──
   async function rights(force) {
+    if (APERCU) return APERCU.rights || null;                                    // droits simulés
     if (rightsC && !force && Date.now() - rightsC.at < 60000) return rightsC.r;
     const tok = await token(); if (!tok) return null;
     const r = await api('/rest/v1/rpc/mes_droits', { method: 'POST', tok, body: { f: AU().franchise } });
@@ -4335,6 +4343,7 @@ const SBA = (() => {
     rightsC = null; return { type: p.get('type') || 'magiclink' };
   }
   async function logout() {
+    if (APERCU) return;
     const tok = (load() || {}).access_token;
     if (tok) { try { await api('/auth/v1/logout', { method: 'POST', tok }); } catch (e) {} }
     clear();
@@ -4365,6 +4374,27 @@ const SBA = (() => {
     try { res.clone().text().then(t => { if (t.length < 700 && /"code":\s*"AUTH"/.test(t) && /session|accès retiré|connexion requise/.test(t)) expired(); }); } catch (e) {}
     return res;
   };
+
+  if (APERCU) {
+    const f1 = window.fetch;
+    window.fetch = function (input, init) {                                     // lectures seulement : tout le reste reçoit un refus, sans rien envoyer
+      const url = typeof input === 'string' ? input : ((input && input.url) || ''), m = (init && init.method) || (input && input.method) || 'GET';
+      if (apercuOk(url, m, init && init.body)) return f1.call(window, input, init);
+      return Promise.resolve(new Response(JSON.stringify({ ok: false, error: APERCU_REFUS }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    };
+    const si = Storage.prototype.setItem, ri = Storage.prototype.removeItem, ci = Storage.prototype.clear;     // le stockage local (brouillons, réglages) n'est jamais modifié ; la copie de session de cet onglet reste libre
+    Storage.prototype.setItem = function (k, v) { if (this === window.localStorage && k !== SKEY()) return; return si.call(this, k, v); };
+    Storage.prototype.removeItem = function (k) { if (this === window.localStorage && k !== SKEY()) return; return ri.call(this, k); };
+    Storage.prototype.clear = function () { if (this === window.localStorage) return; return ci.call(this); };
+    const go = () => {
+      const d = document.createElement('div'); d.id = 'sba-apercu'; d.setAttribute('role', 'status');
+      d.innerHTML = '<b>APERÇU</b><span>vous voyez le site comme « ' + esc(APERCU.nom || 'ce profil') + ' »' + (APERCU.poste ? ' (' + esc(APERCU.poste) + ')' : '') + ' · lecture seule : rien ne s\'enregistre</span><button type="button" id="sba-apercu-x">Fermer l\'aperçu</button>';
+      const st = document.createElement('style'); st.textContent = '#sba-apercu{position:fixed;top:0;left:0;right:0;z-index:2147483000;background:#1f2937;color:#fff;font:600 13px/1.2 system-ui,sans-serif;padding:9px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)}#sba-apercu b{background:#f59e0b;color:#1f2937;border-radius:6px;padding:2px 8px}#sba-apercu span{font-weight:500;opacity:.92}#sba-apercu button{margin-left:auto;border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}body{padding-top:40px !important}';
+      document.head.appendChild(st); document.body.appendChild(d); d.querySelector('#sba-apercu-x').onclick = () => { try { window.close(); } catch (e) {} };
+      try { document.title = 'Aperçu · ' + (APERCU.nom || '') + ' · ' + document.title; } catch (e) {}
+    };
+    if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
+  }
 
   // ── écran de connexion (inséré dans la boîte de connexion existante de la page) ──
   const CSS = '.sba-who{font-size:.8rem;font-weight:700;color:var(--muted,#6b7280);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}.sba-who:empty{display:none}#sba-box{text-align:left;margin:0 0 6px}#sba-box input[type=email],#sba-box input[type=password],#sba-box input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border,#d6dae4);border-radius:11px;font-size:1rem;font-family:inherit;margin:0 0 10px;box-sizing:border-box;background:#fff;color:#111}#sba-box button{width:100%;padding:11px;border:none;border-radius:11px;background:var(--gold,#27ae60);color:#fff;font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit}#sba-box button.sba-sec{background:transparent;color:inherit;border:1.5px solid var(--border,#d6dae4);font-weight:700;margin-top:8px}#sba-box button:disabled{opacity:.6;cursor:wait}#sba-box .sba-rem{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 12px;cursor:pointer}#sba-box .sba-rem input{width:auto;margin:0}#sba-box .sba-a{display:block;text-align:center;font-size:.8rem;color:var(--muted,#6b7280);margin-top:12px;cursor:pointer;text-decoration:underline}#sba-box .sba-msg{min-height:1.2em;font-size:.82rem;margin:2px 0 8px;text-align:center}#sba-box .sba-msg.err{color:var(--red,#c0392b)}#sba-box .sba-msg.ok{color:var(--green,#1e8449)}#sba-box h2{font-size:1rem;margin:0 0 8px;text-align:center}#sba-box p{font-size:.8rem;color:var(--muted,#6b7280);margin:0 0 10px;text-align:center}';
@@ -4461,11 +4491,11 @@ const SBA = (() => {
   }
   let noted = false;
   async function note() {                                                         // journal des connexions (visible du seul propriétaire) : une note par ouverture de la page
-    if (noted) return; noted = true;
+    if (noted || APERCU) return; noted = true;
     try { const tok = await token(); if (tok) await api('/rest/v1/rpc/connexion_note', { method: 'POST', tok, body: { f: AU().franchise, appli: MODULE } }); } catch (e) {}
   }
   const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
-  return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
+  return { apercu: APERCU, enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
 })();
 
 // ══ Catalogue des tuiles d'accès (partagé dashboard + saisie) : une tuile = un onglet, avec un niveau ══
@@ -4619,6 +4649,7 @@ const eqRoleOf = e => { const po = EQ.postes && eqPoste(e.poste_id); return po ?
 .pv-p.con{border-color:#2563eb;color:#1d4ed8;background:rgba(37,99,235,.08)} .pv-p.mod{border-color:#15803d;color:#166534;background:rgba(21,128,61,.1)} .pv-p.off{border-style:dashed;color:var(--muted);opacity:.5;text-decoration:line-through}
 .pv-sum{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)} .pv-line{margin:3px 0} .pv-warn{color:#b9770e;font-weight:700} .pv-none{color:var(--red);font-weight:800}
 .pv-leg{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:.66rem;color:var(--muted)} .pv-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1.5px solid var(--border)}
+.pv-site{margin-top:12px;padding:10px 12px;border:1.5px dashed var(--border);border-radius:12px;background:var(--card)} .pv-site b{font-size:.8rem} .pv-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px} .pv-btns .btn-save{padding:6px 12px;font-size:.76rem}
 @media (max-width:1000px){.eq-acc{grid-template-columns:1fr}.eq-pv{position:static}}`; document.head.appendChild(st); })();
 function eqPreviewHtml(eff, ctx) {                                         // « Voir comme » : ce qui s'afficherait pour ce profil avec les tuiles réglées ci-contre (simulation, rien n'est enregistré)
   ctx = ctx || {}; const lv = k => +eff[k] || 0, tabs = [], esps = [], autres = [];
@@ -4637,7 +4668,18 @@ function eqPreviewHtml(eff, ctx) {                                         // «
       <div class="pv-line">À l'ouverture : saisie → <b>${escH(first(tabs, '—'))}</b> · dashboard → <b>${escH(first(esps, '—'))}</b></div>
       ${can.length ? `<div class="pv-line" style="color:#1e8449">Enregistre : ${can.map(k => lab[k]).filter(Boolean).join(' · ')}</div>` : (vis(tabs).some(x => ['pv', 'pca', 'bud', 'val'].includes(x.k)) ? '<div class="pv-line pv-warn">Ne peut enregistrer ni prévision, ni budget, ni validation</div>' : '')}`}
       ${resto ? `<div class="pv-line">Restaurants : <b>${escH(resto)}</b></div>` : ''}${plan ? `<div class="pv-line">Planning : <b>${escH(plan)}</b></div>` : ''}</div>
+    <div class="pv-site"><b>Voir le vrai site comme ce profil</b><div class="pv-sub">Ouvre le site (nouvel onglet) tel que ce profil le voit, en lecture seule : rien ne s'enregistre.</div><div class="pv-btns"><button type="button" class="btn-save" onclick="eqSiteOpen('saisie')">Page de saisie ↗</button><button type="button" class="btn-save" onclick="eqSiteOpen('dash')">Dashboard ↗</button></div></div>
     <div class="pv-leg"><span><i style="border-style:dashed"></i>non visible</span><span><i style="background:rgba(37,99,235,.15);border-color:#2563eb"></i>consultation</span><span><i style="background:rgba(21,128,61,.18);border-color:#15803d"></i>modification</span></div></aside>`;
+}
+function eqSiteOpen(kind) {                                                // ouvre le vrai site sous les droits simulés (page ?apercu=1, lecture seule : voir auth_sb.js)
+  let po, eff, nom, restos, plan;
+  if (EQ.edit !== null) { eqSync(); const e = EQ.edit; po = eqPoste(e.poste_id); eff = eqEff(po, e.acces); nom = e.nom || 'Nouvelle personne'; restos = e.restos || []; plan = eqRoleOf(e) === 'directeur' ? (e.restos_planning || []) : []; }
+  else { po = eqPoste(EQ.pid) || (EQ.postes || [])[0]; if (!po) return; eff = Object.assign({}, po.acces, EQ.pd || {}); nom = 'Poste ' + po.nom; restos = ['*']; plan = []; }
+  const role = po ? po.role : 'directeur', full = {}; ACC_CAT.flatMap(g => g[1]).forEach(([k]) => { full[k] = +eff[k] || 0; });
+  const payload = { nom, poste: po ? po.nom : '', rights: { email: 'apercu@local', nom, franchise: CFG.auth.franchise, role, rang: EQ_RANK[role] || 0, modules: tileModules(full), restos: restos.length ? restos : ['*'], can: tileCan(full), poste: po ? po.nom : '', acces: full, restos_planning: plan } };
+  const dl = document.querySelector('.dash-link'), base = kind === 'dash' ? new URL((dl && dl.getAttribute('href')) || 'index.html', location.href).href : location.href;
+  const w = window.open(base.split('#')[0].split('?')[0] + '?apercu=1#apercu=' + encodeURIComponent(JSON.stringify(payload)), '_blank');
+  if (!w) eqSet('Le navigateur a bloqué l\'ouverture : autorisez les fenêtres pour ce site.', 'err');
 }
 function eqGrid(get, fn, base, ro) {                                    // ro = lecture seule (poste d'un échelon égal ou supérieur au mien)                                           // get(k) = niveau affiché ; base(k) = niveau du poste (marque « Personnalisé » si différent)
   return eqTiles().map(([g, L]) => `<div class="ap-h">${escH(g)}</div><div class="ap-grid">${L.map(([k, n]) => { const v = get(k), b = base ? base(k) : v, diff = base && v !== b, cl = v === 0 ? 's0' : (k === 'pb' ? 's' + v : (v === 1 ? 's1' : 'm2'));
