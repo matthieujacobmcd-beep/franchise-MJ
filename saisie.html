@@ -4382,11 +4382,17 @@ const SBA = (() => {
       if (apercuOk(url, m, init && init.body)) return f1.call(window, input, init);
       return Promise.resolve(new Response(JSON.stringify({ ok: false, error: APERCU_REFUS }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     };
+    try {                                                                         // copie en mémoire du sessionStorage (la session de la page parente n'est jamais écrite par l'aperçu)
+      const real = window.sessionStorage, mem = {}; for (let i = 0; i < real.length; i++) { const k = real.key(i); mem[k] = real.getItem(k); }
+      const shim = { getItem: k => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; }, clear: () => { Object.keys(mem).forEach(k => { delete mem[k]; }); }, key: i => Object.keys(mem)[i] || null, get length() { return Object.keys(mem).length; } };
+      Object.defineProperty(window, 'sessionStorage', { configurable: true, get: () => shim });
+    } catch (e) {}
     const si = Storage.prototype.setItem, ri = Storage.prototype.removeItem, ci = Storage.prototype.clear;     // le stockage local (brouillons, réglages) n'est jamais modifié ; la copie de session de cet onglet reste libre
     Storage.prototype.setItem = function (k, v) { if (this === window.localStorage && k !== SKEY()) return; return si.call(this, k, v); };
     Storage.prototype.removeItem = function (k) { if (this === window.localStorage && k !== SKEY()) return; return ri.call(this, k); };
     Storage.prototype.clear = function () { if (this === window.localStorage) return; return ci.call(this); };
     const go = () => {
+      if (/[?&]cadre=1(&|$)/.test(location.search)) return;                        // aperçu intégré en petit dans la page Équipes : pas de ruban
       const d = document.createElement('div'); d.id = 'sba-apercu'; d.setAttribute('role', 'status');
       d.innerHTML = '<b>APERÇU</b><span>vous voyez le site comme « ' + esc(APERCU.nom || 'ce profil') + ' »' + (APERCU.poste ? ' (' + esc(APERCU.poste) + ')' : '') + ' · lecture seule : rien ne s\'enregistre</span><button type="button" id="sba-apercu-x">Fermer l\'aperçu</button>';
       const st = document.createElement('style'); st.textContent = '#sba-apercu{position:fixed;top:0;left:0;right:0;z-index:2147483000;background:#1f2937;color:#fff;font:600 13px/1.2 system-ui,sans-serif;padding:9px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)}#sba-apercu b{background:#f59e0b;color:#1f2937;border-radius:6px;padding:2px 8px}#sba-apercu span{font-weight:500;opacity:.92}#sba-apercu button{margin-left:auto;border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}body{padding-top:40px !important}';
@@ -4642,44 +4648,52 @@ const eqPostesFor = () => (EQ.postes || []).filter(x => EQ_RANK[x.role] < ((SB_R
 const eqEff = (po, over) => Object.assign({}, po ? po.acces : {}, over || {});
 const eqRoleOf = e => { const po = EQ.postes && eqPoste(e.poste_id); return po ? po.role : e.role; };
 (function () { const st = document.createElement('style'); st.textContent = `
-.eq-acc{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start} .eq-acc>div{min-width:0}
+.eq-acc{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:18px;align-items:start} .eq-acc>div{min-width:0}
 .eq-pv{position:sticky;top:10px;border:1.5px solid var(--border);border-radius:14px;background:var(--card2);padding:12px 14px;font-size:.78rem;line-height:1.45;margin-top:14px} .eq-pv h5{margin:0 0 2px;font-size:.84rem} .pv-sub{font-size:.7rem;color:var(--muted);margin-bottom:4px}
 .pv-h{font-size:.66rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:11px 0 5px} .pv-w{display:flex;flex-wrap:wrap;gap:5px}
 .pv-p{display:inline-flex;align-items:center;gap:5px;border-radius:8px;padding:3px 8px;font-size:.7rem;font-weight:700;border:1.5px solid var(--border);background:var(--card);color:var(--text)} .pv-p svg{flex:0 0 auto}
 .pv-p.con{border-color:#2563eb;color:#1d4ed8;background:rgba(37,99,235,.08)} .pv-p.mod{border-color:#15803d;color:#166534;background:rgba(21,128,61,.1)} .pv-p.off{border-style:dashed;color:var(--muted);opacity:.5;text-decoration:line-through}
 .pv-sum{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)} .pv-line{margin:3px 0} .pv-warn{color:#b9770e;font-weight:700} .pv-none{color:var(--red);font-weight:800}
 .pv-leg{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:.66rem;color:var(--muted)} .pv-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1.5px solid var(--border)}
+.pv-tg{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0} .pv-tg button{border:1.5px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:4px 12px;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer} .pv-tg button.on{background:var(--text);color:var(--card);border-color:var(--text)} .pv-tg .pv-big{margin-left:auto;border-style:dashed}
+.pv-frame{position:relative;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;margin-top:8px;min-height:150px} .pv-frame iframe{position:absolute;top:0;left:0;border:0;background:#fff} .pv-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.72rem;color:#6b7280}
 .pv-site{margin-top:12px;padding:10px 12px;border:1.5px dashed var(--border);border-radius:12px;background:var(--card)} .pv-site b{font-size:.8rem} .pv-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px} .pv-btns .btn-save{padding:6px 12px;font-size:.76rem}
 @media (max-width:1000px){.eq-acc{grid-template-columns:1fr}.eq-pv{position:static}}`; document.head.appendChild(st); })();
-function eqPreviewHtml(eff, ctx) {                                         // « Voir comme » : ce qui s'afficherait pour ce profil avec les tuiles réglées ci-contre (simulation, rien n'est enregistré)
-  ctx = ctx || {}; const lv = k => +eff[k] || 0, tabs = [], esps = [], autres = [];
-  eqTiles().forEach(([g, L]) => L.forEach(([k, n, m]) => { const p = String(m || '').split('|'), it = { k, n, v: lv(k) }, t = p.some(x => x.indexOf('tab:') === 0), e = p.some(x => x.indexOf('esp:') === 0); if (t) tabs.push(it); if (e) esps.push(it); if (!t && !e) autres.push(it); }));
-  const ordT = ['q', 'h', 'm', 'p', 'pv', 'pca', 'bud', 'val', 'prix', 'pb', 'tps', 'doc', 'eq'], ordE = ['pil', 'perf', 'itv', 'form', 'mkt', 'com', 'prix', 'pb', 'act', 'tps', 'rev', 'plan'], idx = (o, k) => (o.indexOf(k) < 0 ? 99 : o.indexOf(k));
-  tabs.sort((x, y) => idx(ordT, x.k) - idx(ordT, y.k)); esps.sort((x, y) => idx(ordE, x.k) - idx(ordE, y.k));      // même ordre que l'application
-  const ico = v => ACC_ICO[v === 0 ? 0 : (v === 1 ? 1 : 2)], pill = it => `<span class="pv-p ${it.v === 0 ? 'off' : (it.v === 1 ? 'con' : 'mod')}" title="${escH(it.n + ' : ' + accLevelName(it.k, it.v))}">${ico(it.v)}${escH(it.n)}</span>`;
-  const vis = a => a.filter(x => x.v > 0), mod = a => a.filter(x => x.v >= 2), first = (a, none) => (vis(a)[0] ? vis(a)[0].n : none), pl = (n, w) => n + ' ' + w + (n > 1 ? 's' : '');
-  const can = tileCan(eff), lab = { sim: 'Prévision CA', budget: 'Budget & PNL', valid: 'Validation', edg: 'Salaires' }, nothing = !vis(tabs).length && !vis(esps).length && !vis(autres).length;
-  const resto = ctx.restos ? ((ctx.restos || []).includes('*') ? 'Tous' : (ctx.restos || []).map(eqNomR).join(', ') || 'aucun choisi') : '', plan = ctx.plan && ctx.plan.length ? ctx.plan.map(eqNomR).join(', ') : '';
-  return `<aside class="eq-pv" aria-label="Aperçu de ce que voit ce profil"><h5>${escH(ctx.titre || 'Aperçu')}</h5><div class="pv-sub">Se met à jour à chaque changement de tuile (simulation : rien n'est enregistré).</div>
-    <div class="pv-h">Page de saisie · onglets</div><div class="pv-w">${tabs.map(pill).join('')}</div>
-    <div class="pv-h">Dashboard · espaces</div><div class="pv-w">${esps.map(pill).join('')}</div>
-    ${autres.length ? `<div class="pv-h">Autres droits</div><div class="pv-w">${autres.map(pill).join('')}</div>` : ''}
-    <div class="pv-sum">${nothing ? '<div class="pv-none">Ce profil ne verrait rien : aucun accès.</div>' : `<div class="pv-line"><b>${pl(vis(tabs).length, 'onglet')}</b> de saisie (<b>${mod(tabs).length}</b> modifiable${mod(tabs).length > 1 ? 's' : ''}) · <b>${pl(vis(esps).length, 'espace')}</b> du dashboard</div>
-      <div class="pv-line">À l'ouverture : saisie → <b>${escH(first(tabs, '—'))}</b> · dashboard → <b>${escH(first(esps, '—'))}</b></div>
-      ${can.length ? `<div class="pv-line" style="color:#1e8449">Enregistre : ${can.map(k => lab[k]).filter(Boolean).join(' · ')}</div>` : (vis(tabs).some(x => ['pv', 'pca', 'bud', 'val'].includes(x.k)) ? '<div class="pv-line pv-warn">Ne peut enregistrer ni prévision, ni budget, ni validation</div>' : '')}`}
-      ${resto ? `<div class="pv-line">Restaurants : <b>${escH(resto)}</b></div>` : ''}${plan ? `<div class="pv-line">Planning : <b>${escH(plan)}</b></div>` : ''}</div>
-    <div class="pv-site"><b>Voir le vrai site comme ce profil</b><div class="pv-sub">Ouvre le site (nouvel onglet) tel que ce profil le voit, en lecture seule : rien ne s'enregistre.</div><div class="pv-btns"><button type="button" class="btn-save" onclick="eqSiteOpen('saisie')">Page de saisie ↗</button><button type="button" class="btn-save" onclick="eqSiteOpen('dash')">Dashboard ↗</button></div></div>
-    <div class="pv-leg"><span><i style="border-style:dashed"></i>non visible</span><span><i style="background:rgba(37,99,235,.15);border-color:#2563eb"></i>consultation</span><span><i style="background:rgba(21,128,61,.18);border-color:#15803d"></i>modification</span></div></aside>`;
-}
-function eqSiteOpen(kind) {                                                // ouvre le vrai site sous les droits simulés (page ?apercu=1, lecture seule : voir auth_sb.js)
+const EQ_PV = { kind: 'saisie', t: 0, w: 1280, h: 800 };
+function eqSitePayload() {                                                 // droits simulés du profil affiché (personne en cours de modification, ou poste avec son brouillon)
   let po, eff, nom, restos, plan;
   if (EQ.edit !== null) { eqSync(); const e = EQ.edit; po = eqPoste(e.poste_id); eff = eqEff(po, e.acces); nom = e.nom || 'Nouvelle personne'; restos = e.restos || []; plan = eqRoleOf(e) === 'directeur' ? (e.restos_planning || []) : []; }
-  else { po = eqPoste(EQ.pid) || (EQ.postes || [])[0]; if (!po) return; eff = Object.assign({}, po.acces, EQ.pd || {}); nom = 'Poste ' + po.nom; restos = ['*']; plan = []; }
+  else { po = eqPoste(EQ.pid) || (EQ.postes || [])[0]; if (!po) return null; eff = Object.assign({}, po.acces, EQ.pd || {}); nom = 'Poste ' + po.nom; restos = ['*']; plan = []; }
   const role = po ? po.role : 'directeur', full = {}; ACC_CAT.flatMap(g => g[1]).forEach(([k]) => { full[k] = +eff[k] || 0; });
-  const payload = { nom, poste: po ? po.nom : '', rights: { email: 'apercu@local', nom, franchise: CFG.auth.franchise, role, rang: EQ_RANK[role] || 0, modules: tileModules(full), restos: restos.length ? restos : ['*'], can: tileCan(full), poste: po ? po.nom : '', acces: full, restos_planning: plan } };
+  return { nom, poste: po ? po.nom : '', rights: { email: 'apercu@local', nom, franchise: CFG.auth.franchise, role, rang: EQ_RANK[role] || 0, modules: tileModules(full), restos: restos.length ? restos : ['*'], can: tileCan(full), poste: po ? po.nom : '', acces: full, restos_planning: plan } };
+}
+function eqSiteUrl(kind, framed) {                                         // adresse du vrai site en mode aperçu (lecture seule : voir auth_sb.js) ; framed = petit cadre dans cette page
+  const p = eqSitePayload(); if (!p) return '';
   const dl = document.querySelector('.dash-link'), base = kind === 'dash' ? new URL((dl && dl.getAttribute('href')) || 'index.html', location.href).href : location.href;
-  const w = window.open(base.split('#')[0].split('?')[0] + '?apercu=1#apercu=' + encodeURIComponent(JSON.stringify(payload)), '_blank');
-  if (!w) eqSet('Le navigateur a bloqué l\'ouverture : autorisez les fenêtres pour ce site.', 'err');
+  return base.split('#')[0].split('?')[0] + '?apercu=1' + (framed ? '&cadre=1' : '') + '#apercu=' + encodeURIComponent(JSON.stringify(p));
+}
+function eqPreviewHtml(eff, ctx) {                                         // « Voir comme » : le vrai site, en petit, tel que ce profil le voit (nulle part ailleurs que dans cette page : rien n'est enregistré)
+  if (typeof SBA !== 'undefined' && SBA.apercu) return '';
+  ctx = ctx || {};
+  return `<aside class="eq-pv" aria-label="Aperçu visuel du site"><h5>${escH(ctx.titre || 'Aperçu')}</h5><div class="pv-sub">Le site en petit, tel que ce profil le voit (lecture seule). Il se recharge quand vous arrêtez de changer les tuiles.</div>
+    <div class="pv-tg"><button type="button" class="${EQ_PV.kind === 'saisie' ? 'on' : ''}" onclick="eqPvKind('saisie')">Page de saisie</button><button type="button" class="${EQ_PV.kind === 'dash' ? 'on' : ''}" onclick="eqPvKind('dash')">Dashboard</button><button type="button" class="pv-big" onclick="eqSiteOpen(EQ_PV.kind)">Ouvrir en grand ↗</button></div>
+    <div class="pv-frame" id="eqPvFrame"><div class="pv-load">Mise à jour de l'aperçu…</div></div></aside>`;
+}
+function eqPvKind(k) { EQ_PV.kind = k; document.querySelectorAll('.pv-tg button:not(.pv-big)').forEach(b => b.classList.toggle('on', (b.textContent === 'Dashboard') === (k === 'dash'))); eqPvSchedule(150); }
+function eqPvSchedule(ms) {                                                // charge (ou recharge) le visuel une fois les réglages au repos : un clic de tuile = un autre profil
+  clearTimeout(EQ_PV.t); const box = document.getElementById('eqPvFrame'); if (!box) return;
+  box.style.height = ''; box.innerHTML = '<div class="pv-load">Mise à jour de l\'aperçu…</div>';
+  EQ_PV.t = setTimeout(() => {
+    const b = document.getElementById('eqPvFrame'); if (!b) return; const u = eqSiteUrl(EQ_PV.kind, true); if (!u) return;
+    b.innerHTML = '<div class="pv-load">Chargement du site…</div>';
+    const f = document.createElement('iframe'), k = Math.max(.1, (b.clientWidth || 400) / EQ_PV.w);
+    f.title = 'Aperçu du site'; f.src = u; f.style.cssText = 'width:' + EQ_PV.w + 'px;height:' + EQ_PV.h + 'px;transform:scale(' + k + ');transform-origin:0 0'; b.style.height = Math.round(EQ_PV.h * k) + 'px';
+    f.onload = () => { const l = b.querySelector('.pv-load'); if (l) l.remove(); }; b.appendChild(f);
+  }, ms == null ? 800 : ms);
+}
+function eqSiteOpen(kind) {                                                // ouvre le vrai site sous les droits simulés dans un nouvel onglet (page ?apercu=1, lecture seule : voir auth_sb.js)
+  const u = eqSiteUrl(kind, false); if (!u) return;
+  const w = window.open(u, '_blank'); if (!w) eqSet('Le navigateur a bloqué l\'ouverture : autorisez les fenêtres pour ce site.', 'err');
 }
 function eqGrid(get, fn, base, ro) {                                    // ro = lecture seule (poste d'un échelon égal ou supérieur au mien)                                           // get(k) = niveau affiché ; base(k) = niveau du poste (marque « Personnalisé » si différent)
   return eqTiles().map(([g, L]) => `<div class="ap-h">${escH(g)}</div><div class="ap-grid">${L.map(([k, n]) => { const v = get(k), b = base ? base(k) : v, diff = base && v !== b, cl = v === 0 ? 's0' : (k === 'pb' ? 's' + v : (v === 1 ? 's1' : 'm2'));
@@ -4739,6 +4753,7 @@ function eqPaint() {
     ${eqPostesHtml()}
     ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}
     ${SB_RIGHTS && SB_RIGHTS.role === 'owner' ? `<details class="sim-d" style="margin-top:12px" ontoggle="if(this.open)eqCxLoad()"><summary>Journal des connexions (visible de vous seul)</summary><div id="eqCx" style="margin-top:8px;font-size:.8rem;color:var(--muted)">Chargement…</div></details>` : ''}`;
+  if (document.getElementById('eqPvFrame')) eqPvSchedule();                  // aperçu visuel du poste ouvert dans « Postes et accès par défaut »
 }
 // ── Journal des connexions : réservé au propriétaire (la base refuse tout autre compte) ──
 const eqUa = ua => { ua = String(ua || ''); const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '', nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''; return [nav, os].filter(Boolean).join(' · ') || (ua ? 'autre' : '—'); };
@@ -4830,7 +4845,7 @@ function eqFormP() {
     <div class="eq-actions"><button class="btn-save" id="eqGo" onclick="eqSave()">Enregistrer</button>
       ${isNew ? '' : `<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqResend()">Renvoyer l'invitation</button><button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red)" onclick="eqToggle()">${e.actif ? 'Désactiver (départ)' : 'Réactiver'}</button>`}
       <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqBack()">Annuler</button></div></div>`;
-  window.scrollTo(0, y);
+  window.scrollTo(0, y); eqPvSchedule();
 }
 function eqTile(k, v) {
   eqSync(); const e = EQ.edit, po = eqPoste(e.poste_id), eff = eqEff(po, e.acces), nv = v === undefined ? ((+eff[k] || 0) + 1) % (accMax(k) + 1) : Math.max(0, Math.min(accMax(k), +v)), base = po ? +po.acces[k] || 0 : 0;

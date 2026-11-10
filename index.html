@@ -346,11 +346,17 @@ const SBA = (() => {
       if (apercuOk(url, m, init && init.body)) return f1.call(window, input, init);
       return Promise.resolve(new Response(JSON.stringify({ ok: false, error: APERCU_REFUS }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     };
+    try {                                                                         // copie en mémoire du sessionStorage (la session de la page parente n'est jamais écrite par l'aperçu)
+      const real = window.sessionStorage, mem = {}; for (let i = 0; i < real.length; i++) { const k = real.key(i); mem[k] = real.getItem(k); }
+      const shim = { getItem: k => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; }, clear: () => { Object.keys(mem).forEach(k => { delete mem[k]; }); }, key: i => Object.keys(mem)[i] || null, get length() { return Object.keys(mem).length; } };
+      Object.defineProperty(window, 'sessionStorage', { configurable: true, get: () => shim });
+    } catch (e) {}
     const si = Storage.prototype.setItem, ri = Storage.prototype.removeItem, ci = Storage.prototype.clear;     // le stockage local (brouillons, réglages) n'est jamais modifié ; la copie de session de cet onglet reste libre
     Storage.prototype.setItem = function (k, v) { if (this === window.localStorage && k !== SKEY()) return; return si.call(this, k, v); };
     Storage.prototype.removeItem = function (k) { if (this === window.localStorage && k !== SKEY()) return; return ri.call(this, k); };
     Storage.prototype.clear = function () { if (this === window.localStorage) return; return ci.call(this); };
     const go = () => {
+      if (/[?&]cadre=1(&|$)/.test(location.search)) return;                        // aperçu intégré en petit dans la page Équipes : pas de ruban
       const d = document.createElement('div'); d.id = 'sba-apercu'; d.setAttribute('role', 'status');
       d.innerHTML = '<b>APERÇU</b><span>vous voyez le site comme « ' + esc(APERCU.nom || 'ce profil') + ' »' + (APERCU.poste ? ' (' + esc(APERCU.poste) + ')' : '') + ' · lecture seule : rien ne s\'enregistre</span><button type="button" id="sba-apercu-x">Fermer l\'aperçu</button>';
       const st = document.createElement('style'); st.textContent = '#sba-apercu{position:fixed;top:0;left:0;right:0;z-index:2147483000;background:#1f2937;color:#fff;font:600 13px/1.2 system-ui,sans-serif;padding:9px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)}#sba-apercu b{background:#f59e0b;color:#1f2937;border-radius:6px;padding:2px 8px}#sba-apercu span{font-weight:500;opacity:.92}#sba-apercu button{margin-left:auto;border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}body{padding-top:40px !important}';
@@ -11246,7 +11252,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261110-170416';
+const BUILD_VERSION = '20261110-171149';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
