@@ -4386,6 +4386,24 @@ const SBA = (() => {
   const release = () => { legacyOk = true; gateRes(); };                         // connexion par l'ancien mot de passe partagé (mode « both »)
   return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
 })();
+
+// ══ Catalogue des tuiles d'accès (partagé dashboard + saisie) : une tuile = un onglet, avec un niveau ══
+// 0 aucun accès · 1 consultation (peut juste voir) · 2 modification (peut modifier) ; Point Business : 1 consultation · 2 réponse du directeur · 3 rédaction.
+// Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
+const ACC_CAT = [
+  ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
+  ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
+const accMax = k => k === 'pb' ? 3 : 2;
+const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
+const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
+const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
+const accEspLvl = (r, esp) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('esp:' + esp)); return t ? accLvl(r, t[0]) : null; };
+function tileModules(a) {                                                       // mêmes règles que la base (acces_modules) : sert aux contrôles de formulaire
+  const n = k => +((a || {})[k]) || 0, any = ks => ks.some(k => n(k) >= 1);
+  return [any(['pil', 'perf', 'itv', 'form', 'mkt', 'com', 'act', 'tps']) && 'dashboard', any(['q', 'h', 'm', 'p', 'pv', 'pca', 'bud', 'val', 'doc']) && 'saisie', n('rev') >= 1 && 'revue', n('plan') >= 1 && 'planning', n('eq') >= 1 && 'utilisateurs'].filter(Boolean);
+}
+function tileCan(a) { const n = k => +((a || {})[k]) || 0; return [n('pca') >= 2 && 'sim', (n('bud') >= 2 || n('pv') >= 2) && 'budget', n('val') >= 2 && 'valid', n('sal') >= 2 && 'edg'].filter(Boolean); }
 // ══ COMPTES INDIVIDUELS — côté saisie : connexion, périmètre de la personne, onglet « Équipes » ══
 // Dépend de auth_sb.js (SBA). Inactif tant que auth.mode = 'legacy' (aucun écran, aucun onglet).
 let SB_RIGHTS = null;                                                      // droits de la personne connectée (relus dans la base à chaque ouverture)
@@ -4404,12 +4422,23 @@ function saisieMountLogin() {
   const q = s => document.querySelector(s);
   return SBA.mount({ box: q('#login .login-box'), legacy: [q('#pwd'), q('#login label.rem'), q('#loginBtn'), q('#loginErr')], onOk: saisieEnter, scope: saisieScope });
 }
-function sbTabOk(k) {                                                      // onglets propres aux comptes
-  if (k !== 'equipes') return true;
-  return !!SB_RIGHTS && ((SB_RIGHTS.modules || []).includes('utilisateurs'));
+function sbTabOk(k) {                                                      // onglets : visibles si la tuile correspondante n'est pas à « aucun accès » (anciens droits : comme avant)
+  const lv = SB_RIGHTS ? accTabLvl(SB_RIGHTS, k) : null;
+  if (k === 'equipes') return !!SB_RIGHTS && (lv !== null ? lv >= 1 : (SB_RIGHTS.modules || []).includes('utilisateurs'));
+  return lv === null ? true : lv >= 1;
 }
+(function () { const st = document.createElement('style'); st.textContent = '#panel.ro .btn-save{opacity:.45;pointer-events:none}'; document.head.appendChild(st); })();
+function sbMarkRO() {                                                      // consultation seule : bandeau + boutons d'enregistrement grisés (le serveur refuse de toute façon l'écriture)
+  const p = document.getElementById('panel'); if (p) p.classList.remove('ro');
+  if (!SB_RIGHTS) return; const lv = accTabLvl(SB_RIGHTS, curTab);
+  if (lv !== 1 || ['prix', 'pb', 'documents', 'equipes', 'acces'].includes(curTab)) return;
+  if (!p || p.querySelector('.ro-note')) return; p.classList.add('ro');
+  p.insertAdjacentHTML('afterbegin', '<div class="ro-note bd-sh warn" style="margin:0 0 10px">Consultation seule pour cet onglet : tu peux tout voir, mais pas enregistrer. Si tu as besoin de le modifier, demande l\'accès à ton responsable.</div>');
+  p.querySelectorAll('.btn-save').forEach(b => { b.disabled = true; b.title = 'Consultation seule'; });
+}
+if (typeof renderPanel === 'function') { const __rpAcc = renderPanel; renderPanel = function () { const r = __rpAcc.apply(this, arguments); try { sbMarkRO(); } catch (e) {} return r; }; }
 // ── Onglet « Équipes » : les personnes de CETTE franchise, leurs accès (modules, restaurants, niveau) ──
-const EQ = { rows: [], journal: [], f218: null, edit: null, loading: false, msg: ['', ''] };
+const EQ = { rows: [], journal: [], f218: null, edit: null, loading: false, msg: ['', ''], postes: null, pid: '', pd: null, pnew: null };
 const EQ_218 = { employe: 'Salarié', superviseur: 'Superviseur', lecteur: 'Lecteur', admin: 'Administrateur (DRH)' }, EQ_218_URL = 'https://matthieujacobmcd-beep.github.io/franchise-py-forfait/';
 const EQ_MODS = [['dashboard', 'Dashboard'], ['saisie', 'Saisie'], ['revue', 'Business Review'], ['planning', 'Planning EDG'], ['utilisateurs', 'Équipes (gestion des accès)']];
 const EQ_CAN = [['sim', 'Prévision CA et simulation'], ['budget', 'Budget & PNL'], ['valid', 'Circuit de validation'], ['edg', "Salaires de l'équipe de gestion"]];
@@ -4432,13 +4461,34 @@ async function renderEquipes() {
   if (!SB_RIGHTS || !sbTabOk('equipes')) { p.innerHTML = '<div class="hint">🔒 Réservé aux personnes qui gèrent les accès.</div>'; return; }
   p.innerHTML = '<div class="hint">⏳ Chargement des équipes…</div>';
   const fr = encodeURIComponent(CFG.auth.franchise);
-  const [a, b, c] = await Promise.all([eqCall('/rest/v1/droits?franchise=eq.' + fr + '&select=*&order=nom.asc'), eqCall('/rest/v1/droits_journal?franchise=eq.' + fr + '&select=*&order=quand.desc&limit=12'), eqCall('/rest/v1/rpc/acces_218_liste', 'POST', { f: CFG.auth.franchise })]);
+  const [a, b, c, d] = await Promise.all([eqCall('/rest/v1/droits?franchise=eq.' + fr + '&select=*&order=nom.asc'), eqCall('/rest/v1/droits_journal?franchise=eq.' + fr + '&select=*&order=quand.desc&limit=12'), eqCall('/rest/v1/rpc/acces_218_liste', 'POST', { f: CFG.auth.franchise }), eqCall('/rest/v1/postes?franchise=eq.' + fr + '&select=*&order=ordre.asc,nom.asc')]);
+  EQ.postes = d.ok && Array.isArray(d.j) && d.j.length ? d.j : null;                                // null = postes pas encore installés côté base : l'écran d'avant s'affiche
   if (!a.ok) { p.innerHTML = `<div class="entry-banner err" style="display:block">Impossible de charger les équipes${a.j && a.j.message ? ' : ' + escH(a.j.message) : ''}.</div>`; return; }
-  EQ.rows = a.j || []; EQ.journal = (b.ok && b.j) || []; EQ.edit = null;
+  EQ.rows = a.j || []; EQ.journal = (b.ok && b.j) || []; EQ.edit = null; if (EQ.postes && !eqPoste(EQ.pid)) { EQ.pid = (eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[0] || EQ.postes[0]).id; EQ.pd = null; EQ.pnew = null; }
   EQ.f218 = c.ok && Array.isArray(c.j) ? Object.fromEntries(c.j.map(x => [String(x.email).toLowerCase(), x])) : null;     // null = lien avec le 218 jours pas encore installé côté base
   eqPaint();
 }
 const eqLabel = k => (ACC_ROLE && ACC_ROLE[k]) || k;
+// ── Postes et accès par tuile : un poste = un modèle d'accès ; chaque personne a un poste + ses écarts (« Personnalisé ») ──
+(function () { const st = document.createElement('style'); st.textContent = `
+.ap-h{font-size:.74rem;color:var(--muted);margin:14px 0 6px;font-weight:700;letter-spacing:.02em} .ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ap-t{border:1.5px solid var(--border);border-radius:12px;padding:9px 11px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:2px;background:var(--card);min-height:66px;position:relative;font:inherit;color:var(--text)}
+.ap-t .n{font-size:.8rem;font-weight:800;padding-right:2px} .ap-t .l{font-size:.74rem;display:flex;gap:5px;align-items:center} .ap-t .p{font-size:.68rem;color:var(--muted)}
+.ap-t.s0{border-style:dashed;background:transparent;color:var(--muted)} .ap-t.s1{background:rgba(37,99,235,.1);border-color:#2563eb;color:#1d4ed8} .ap-t.s2{background:rgba(234,88,12,.1);border-color:#ea580c;color:#c2410c} .ap-t.s3,.ap-t.m2{background:rgba(21,128,61,.12);border-color:#15803d;color:#166534}
+.ap-t.ov{box-shadow:0 0 0 2.5px var(--text)} .ap-dot{position:absolute;top:6px;right:6px;font-size:.6rem;font-weight:800;background:var(--text);color:var(--card);border-radius:999px;padding:1px 7px}
+.ap-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:.74rem;color:var(--muted);margin:6px 0} .ap-leg i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-2px;border:1.5px solid var(--border)}
+.eq-pills{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px} .eq-pills button{border:1.5px solid var(--border);background:var(--card);border-radius:999px;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer;color:var(--text)} .eq-pills button.on{background:var(--text);color:var(--card);border-color:var(--text)}`; document.head.appendChild(st); })();
+const ACC_ICO = { 0: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>', 1: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>', 2: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>' };
+const eqTiles = () => ACC_CAT.map(([g, L]) => [g, L.filter(([k]) => k !== 'rev' || CFG.id === 'py')]);
+const eqPoste = id => (EQ.postes || []).find(x => x.id === id) || null;
+const eqPostesFor = () => (EQ.postes || []).filter(x => EQ_RANK[x.role] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0));          // seuls les postes d'un échelon inférieur au mien se modifient
+const eqEff = (po, over) => Object.assign({}, po ? po.acces : {}, over || {});
+const eqRoleOf = e => { const po = EQ.postes && eqPoste(e.poste_id); return po ? po.role : e.role; };
+function eqGrid(get, fn, base) {                                           // get(k) = niveau affiché ; base(k) = niveau du poste (marque « Personnalisé » si différent)
+  return eqTiles().map(([g, L]) => `<div class="ap-h">${escH(g)}</div><div class="ap-grid">${L.map(([k, n]) => { const v = get(k), b = base ? base(k) : v, diff = base && v !== b, cl = v === 0 ? 's0' : (k === 'pb' ? 's' + v : (v === 1 ? 's1' : 'm2'));
+    return `<button type="button" class="ap-t ${cl}${diff ? ' ov' : ''}" onclick="${fn}('${k}')" aria-label="${escH(n)} : ${escH(accLevelName(k, v))}">${diff ? '<span class="ap-dot">Personnalisé</span>' : ''}<span class="n">${escH(n)}</span><span class="l">${ACC_ICO[v === 0 ? 0 : (k === 'pb' ? (v === 1 ? 1 : 2) : v)]} ${escH(accLevelName(k, v))}</span>${diff ? `<span class="p">Poste : ${escH(accLevelName(k, b))}</span>` : ''}</button>`; }).join('')}</div>`).join('') + `<div class="ap-leg"><span><i style="border-style:dashed"></i>Aucun accès</span><span><i style="background:rgba(37,99,235,.1);border-color:#2563eb"></i>Consultation (peut juste voir)</span><span><i style="background:rgba(21,128,61,.12);border-color:#15803d"></i>Modification (peut modifier)</span><span><i style="background:rgba(234,88,12,.1);border-color:#ea580c"></i>Réponse du directeur (Point Business)</span></div>`;
+}
+const eqNPerso = r => Object.keys(r.acces || {}).length;
 const eqResto = r => (r.restos || []).includes('*') ? 'Tous' : (r.restos || []).map(x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1]).join(', ') || '—';
 const eqNomR = x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1];
 const eqPlan = r => { if (r.role !== 'directeur' || !(r.modules || []).includes('planning')) return ''; const p = r.restos_planning || []; return '<br><span style="font-size:.74rem;color:' + (p.length ? 'var(--muted)' : 'var(--gold)') + '">Planning : ' + (p.length ? p.map(eqNomR).map(escH).join(', ') : 'à définir (tous pour le moment)') + '</span>'; };
@@ -4456,8 +4506,8 @@ function eqPaint() {
   const rows = EQ.rows.map(r => {
     const st = eqState(r), me = SB_RIGHTS && r.email.toLowerCase() === SB_RIGHTS.email.toLowerCase(), low = EQ_RANK[r.role] < (SB_RIGHTS.rang || 0) && !me;
     return `<tr><td style="${td}"><b>${escH(r.nom)}</b>${me ? ' <small style="color:var(--muted)">(vous)</small>' : ''}<br><span style="font-size:.76rem;color:var(--muted)">${escH(r.email)}</span></td>
-      <td data-l="Fonction · restaurants" style="${td};font-size:.82rem">${escH(eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span>${eqPlan(r)}</td>
-      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}${eqCanLine(r)}</td>
+      <td data-l="Poste · restaurants" style="${td};font-size:.82rem">${escH(EQ.postes && eqPoste(r.poste_id) ? eqPoste(r.poste_id).nom : eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span>${eqPlan(r)}</td>
+      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}${eqCanLine(r)}${EQ.postes && eqNPerso(r) ? `<br><b style="color:var(--text)">${eqNPerso(r)} accès personnalisé${eqNPerso(r) > 1 ? 's' : ''}</b>` : ''}</td>
       <td data-l="218 jours" style="${td};font-size:.78rem;font-weight:700;color:${eq218(r)[1]}">${escH(eq218(r)[0])}</td>
       <td data-l="Statut" style="${td};font-size:.8rem;font-weight:700;color:${st[1]}">${st[0]}</td>
       <td style="${td};text-align:right;white-space:nowrap">${low ? `<button class="btn-save" style="padding:5px 10px;font-size:.78rem" onclick="eqOpen('${r.id}')">Modifier</button>` : ''}</td></tr>`;
@@ -4466,7 +4516,8 @@ function eqPaint() {
   p.innerHTML = `<style>@media (max-width:700px){.eq-t{min-width:0 !important}.eq-t thead{display:none}.eq-t,.eq-t tbody,.eq-t tr,.eq-t td{display:block;width:100%;box-sizing:border-box}.eq-t tr{border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;margin-bottom:10px;background:var(--card)}.eq-t td{border-top:0 !important;padding:4px 0 !important;text-align:left !important;white-space:normal !important}.eq-t td[data-l]::before{content:attr(data-l);display:block;font-size:.68rem;font-weight:600;color:var(--muted)}.eq-t td:last-child:not([data-l]){padding-top:8px !important}}</style><div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.</div>${banner}
     ${can ? '<div style="margin:0 0 12px"><button class="btn-save" onclick="eqOpen(\'\')">+ Ajouter une personne</button></div>' : ''}
     <div id="eqForm"></div>
-    <div class="sim-wrap"><table class="eq-t" style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th style="${th}">Personne</th><th style="${th}">Fonction · restaurants</th><th style="${th}">Accès</th><th style="${th}">218 jours</th><th style="${th}">Statut</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" style="${td};color:var(--muted)">Aucune personne pour le moment.</td></tr>`}</tbody></table></div>
+    ${eqPostesHtml()}
+    <div class="sim-wrap"><table class="eq-t" style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th style="${th}">Personne</th><th style="${th}">${EQ.postes ? 'Poste' : 'Fonction'} · restaurants</th><th style="${th}">Accès</th><th style="${th}">218 jours</th><th style="${th}">Statut</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" style="${td};color:var(--muted)">Aucune personne pour le moment.</td></tr>`}</tbody></table></div>
     <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin-top:8px">${escH(EQ.msg[1])}</div>
     ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}
     ${SB_RIGHTS && SB_RIGHTS.role === 'owner' ? `<details class="sim-d" style="margin-top:12px" ontoggle="if(this.open)eqCxLoad()"><summary>Journal des connexions (visible de vous seul)</summary><div id="eqCx" style="margin-top:8px;font-size:.8rem;color:var(--muted)">Chargement…</div></details>` : ''}`;
@@ -4491,8 +4542,13 @@ function eqCxPaint() {
     <div style="margin-top:6px">Notées : les connexions par compte individuel (ni adresse IP ni saisies). Les tentatives échouées se voient dans Supabase (Authentication → Logs). Conservation : 13 mois.</div>`;
 }
 
-function eqOpen(id) { EQ.edit = id === '' ? { id: '', role: eqRolesFor().slice(-1)[0] || 'directeur', isNew: true } : EQ.rows.find(r => r.id === id) || null; eqSet(''); eqPaint(); const f = document.getElementById('eqForm'); if (f) f.scrollIntoView({ block: 'nearest' }); }
+function eqOpen(id) {
+  const dp = eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[eqPostesFor().length - 1] || null;
+  EQ.edit = id === '' ? { id: '', role: dp ? dp.role : (eqRolesFor().slice(-1)[0] || 'directeur'), poste_id: dp ? dp.id : null, acces: {}, isNew: true } : (EQ.rows.find(r => r.id === id) ? Object.assign({}, EQ.rows.find(r => r.id === id), { acces: Object.assign({}, EQ.rows.find(r => r.id === id).acces || {}) }) : null);
+  eqSet(''); eqPaint(); const f = document.getElementById('eqForm'); if (f) f.scrollIntoView({ block: 'nearest' });
+}
 function eqForm() {
+  if (EQ.postes) return eqFormP();
   const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
   const d = EQ_DEF[e.role] || EQ_DEF.directeur, has = (a, k) => (a || []).includes(k), isNew = !!e.isNew;
   const modules = isNew ? d.modules : (e.modules || []), cans = isNew ? d.can : (e.can || []), restos = isNew ? (d.tous ? ['*'] : []) : (e.restos || []);
@@ -4520,6 +4576,106 @@ function eqForm() {
       ${isNew ? '' : `<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqResend()">Renvoyer l'invitation</button><button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red)" onclick="eqToggle()">${e.actif ? 'Désactiver (départ)' : 'Réactiver'}</button>`}
       <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.edit=null;eqPaint()">Annuler</button></div></div>`;
 }
+// ── Formulaire d'une personne avec postes : poste + restaurants + tuiles (écarts « Personnalisé ») ──
+const EQ_ECH = { directeur: 'Restaurant (directeur, adjoint, manager…)', superviseur: 'Zone (supervise plusieurs restaurants)', collab: 'Bureau et support', franchise: 'Franchisé', owner: "Gestionnaire de l'application" };
+function eqSync() {                                                         // reprend ce qui est tapé avant de redessiner le formulaire
+  const e = EQ.edit; if (!e) return; const v = id => { const x = document.getElementById(id); return x ? x.value : undefined; };
+  if (v('eqNom') !== undefined) e.nom = v('eqNom'); if (v('eqMail') !== undefined) e.email = String(v('eqMail') || '').trim().toLowerCase();
+  const all = document.getElementById('eqAll'); if (all) e.restos = all.checked ? ['*'] : [...document.querySelectorAll('.eqR')].filter(x => x.checked).map(x => x.value);
+  const pl = [...document.querySelectorAll('.eqP')]; if (pl.length) e.restos_planning = pl.filter(x => x.checked).map(x => x.value);
+}
+function eqFormP() {
+  const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
+  const po = eqPoste(e.poste_id), isNew = !!e.isNew, has = (a, k) => (a || []).includes(k), allR = CFG.restos.map(c => [c.key, c.label]);
+  if (!e.restos) e.restos = po && EQ_DEF[po.role] && EQ_DEF[po.role].tous ? ['*'] : [];
+  const all = has(e.restos, '*'), inp = 'padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box';
+  const opts = eqPostesFor(); if (po && !opts.some(x => x.id === po.id)) opts.unshift(po);
+  const eff = eqEff(po, e.acces), nPerso = Object.keys(e.acces || {}).length;
+  f.innerHTML = `<div style="border:1.5px solid var(--border);border-radius:12px;padding:14px;margin:0 0 14px;background:var(--card2)">
+    <div style="font-weight:800;margin-bottom:10px">${isNew ? 'Ajouter une personne' : 'Modifier ' + escH(e.nom)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
+      <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
+      <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" placeholder="prenom@entreprise.fr"></label>
+      <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
+    ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin:-6px 0 12px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants <span style="font-weight:400">(propres à cette personne, pas au poste)</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
+      ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+    ${eqRoleOf(e) === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres postes ouvrent tous les plannings)</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:.78rem;color:var(--muted)"><b style="color:var(--text)">Accès</b> · poste « ${escH(po ? po.nom : '')} » ${nPerso ? `· <b style="color:var(--text)">${nPerso} personnalisé${nPerso > 1 ? 's' : ''}</b>` : '· aucune personnalisation'} <span style="font-weight:400">— cliquez sur une tuile pour changer son niveau</span></div>${nPerso ? '<button type="button" class="btn-save" style="padding:4px 12px;font-size:.76rem;background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqReset()">Revenir au poste</button>' : ''}</div>
+    ${eqGrid(k => +eff[k] || 0, 'eqTile', k => po ? +po.acces[k] || 0 : 0)}
+    <div style="height:12px"></div>
+    ${eq218Block(e)}
+    ${isNew ? '<label style="font-size:.84rem;display:block;margin-bottom:12px"><input type="checkbox" id="eqInv" checked> Envoyer l\'invitation par e-mail (lien pour choisir son mot de passe)</label>' : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-save" id="eqGo" onclick="eqSave()">Enregistrer</button>
+      ${isNew ? '' : `<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqResend()">Renvoyer l'invitation</button><button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red)" onclick="eqToggle()">${e.actif ? 'Désactiver (départ)' : 'Réactiver'}</button>`}
+      <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.edit=null;eqPaint()">Annuler</button></div></div>`;
+}
+function eqTile(k) {
+  eqSync(); const e = EQ.edit, po = eqPoste(e.poste_id), eff = eqEff(po, e.acces), nv = ((+eff[k] || 0) + 1) % (accMax(k) + 1), base = po ? +po.acces[k] || 0 : 0;
+  e.acces = Object.assign({}, e.acces); if (nv === base) delete e.acces[k]; else e.acces[k] = nv;                 // remettre le niveau du poste = plus de personnalisation
+  eqFormP();
+}
+function eqReset() { eqSync(); EQ.edit.acces = {}; eqFormP(); eqSet('Accès remis sur ceux du poste.', ''); }
+function eqPosteChanged(id) {
+  eqSync(); const e = EQ.edit, po = eqPoste(id); if (!po) return; const had = Object.keys(e.acces || {}).length;
+  e.poste_id = id; e.role = po.role; e.acces = {}; if (e.isNew || !(e.restos || []).length) e.restos = EQ_DEF[po.role] && EQ_DEF[po.role].tous ? ['*'] : (e.restos || []);
+  eqFormP(); eqSet('Poste « ' + po.nom + ' » : ses accès sont affichés ci-dessous' + (had ? ' (les ' + had + ' accès personnalisés précédents sont effacés)' : '') + '. Vérifiez-les puis enregistrez.', '');
+}
+function eqReadP() {
+  eqSync(); const e = EQ.edit, po = eqPoste(e.poste_id), eff = eqEff(po, e.acces);
+  return { nom: String(e.nom || '').trim(), email: String(e.email || '').trim().toLowerCase(), role: po ? po.role : e.role, poste_id: e.poste_id, restos: e.restos || [], restos_planning: po && po.role === 'directeur' ? (e.restos_planning || []) : [], acces: e.acces || {}, modules: tileModules(eff), can: tileCan(eff) };
+}
+// ── Postes : modèles d'accès (création, modification, alerte sur les personnalisations) ──
+function eqPostesHtml() {
+  if (!EQ.postes) return '';
+  const po = eqPoste(EQ.pid) || EQ.postes[0], mine = eqPostesFor().some(x => x.id === po.id), draft = EQ.pd || (EQ.pd = Object.assign({}, po.acces)), users = EQ.rows.filter(r => r.poste_id === po.id);
+  const pills = EQ.postes.map(x => `<button type="button" class="${x.id === po.id && !EQ.pnew ? 'on' : ''}" onclick="eqPSel('${x.id}')">${escH(x.nom)}</button>`).join('') + (eqRolesFor().length ? `<button type="button" class="${EQ.pnew ? 'on' : ''}" style="border-style:dashed" onclick="eqPNewOpen()">+ Nouveau poste</button>` : '');
+  const nw = EQ.pnew ? `<div style="border:1.5px solid var(--border);border-radius:12px;padding:12px;margin:0 0 12px;background:var(--card)"><div style="font-weight:800;margin-bottom:8px">Nouveau poste</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:10px">
+      <label style="font-size:.78rem;color:var(--muted)">Nom du poste<input id="eqPNnom" maxlength="60" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box" value="${escH(EQ.pnew.nom || '')}" placeholder="ex. Responsable de secteur"></label>
+      <label style="font-size:.78rem;color:var(--muted)">Niveau hiérarchique<select id="eqPNech" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box">${eqRolesFor().map(k => `<option value="${k}" ${EQ.pnew.role === k ? 'selected' : ''}>${escH(EQ_ECH[k] || k)}</option>`).join('')}</select></label>
+      <label style="font-size:.78rem;color:var(--muted)">Partir des accès de<select id="eqPNcopy" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box"><option value="">Aucun accès</option>${EQ.postes.map(x => `<option value="${escH(x.id)}" ${EQ.pnew.copy === x.id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
+      <div class="hint" style="margin:0 0 10px">Le niveau hiérarchique fixe qui peut gérer qui, et le rôle dans le circuit de validation et le Point Business (directeur : répond ; zone et franchisé : rédigent). Il ne se change plus une fois le poste utilisé.</div>
+      <button class="btn-save" onclick="eqPNewSave()">Créer le poste</button> <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.pnew=null;eqPaint()">Annuler</button></div>` : '';
+  const diff = ACC_CAT.flatMap(g => g[1]).map(x => x[0]).filter(k => (+draft[k] || 0) !== (+po.acces[k] || 0)).length;
+  const ed = EQ.pnew ? '' : `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 6px"><input id="eqPNom" value="${escH(po.nom)}" maxlength="60" ${mine ? '' : 'disabled'} style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font:inherit;font-weight:800;min-width:min(100%,300px)" aria-label="Nom du poste"><span style="font-size:.78rem;color:var(--muted)">${escH(EQ_ECH[po.role] || po.role)} · ${users.length} personne${users.length > 1 ? 's' : ''}</span></div>
+    ${mine ? '' : '<div class="hint">Ce poste est d\'un niveau égal ou supérieur au vôtre : vous le consultez sans pouvoir le modifier.</div>'}
+    ${eqGrid(k => +draft[k] || 0, 'eqPTile', null)}
+    ${mine ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn-save" onclick="eqPSave()">Enregistrer le poste${diff ? ' (' + diff + ' tuile' + (diff > 1 ? 's' : '') + ' modifiée' + (diff > 1 ? 's' : '') + ')' : ''}</button>${diff ? '<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.pd=null;eqPaint()">Annuler les changements</button>' : ''}<button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red);margin-left:auto" onclick="eqPDel()" ${users.length ? 'disabled title="Poste utilisé : changez d\'abord le poste des personnes concernées"' : ''}>Supprimer le poste</button></div>` : ''}`;
+  return `<details class="sim-d" style="margin:0 0 14px" open><summary>Postes et accès par défaut</summary><div style="margin-top:10px"><div class="hint" style="margin:0 0 10px">Un poste est un modèle d'accès : chaque personne qui l'occupe reçoit ses tuiles, et peut avoir des accès personnalisés (réglés dans sa fiche). Modifier un poste met à jour toutes les personnes qui n'ont pas personnalisé la tuile concernée.</div><div class="eq-pills">${pills}</div>${nw}${ed}</div></details>`;
+}
+function eqPSel(id) { EQ.pid = id; EQ.pd = null; EQ.pnew = null; eqPPaint(); }
+function eqPTile(k) { const po = eqPoste(EQ.pid); if (!po || !eqPostesFor().some(x => x.id === po.id)) return; const d = EQ.pd || (EQ.pd = Object.assign({}, po.acces)); d[k] = ((+d[k] || 0) + 1) % (accMax(k) + 1); eqPPaint(); }
+function eqPPaint() { const y = window.scrollY, n = (document.getElementById('eqPNom') || {}).value; if (EQ.pd && n !== undefined) EQ.pd.__nom = n; eqPaint(); window.scrollTo(0, y); }
+function eqPNewOpen() { EQ.pnew = { nom: '', role: eqRolesFor().slice(-1)[0] || 'directeur', copy: EQ.pid }; eqPPaint(); }
+async function eqPNewSave() {
+  const v = id => ((document.getElementById(id) || {}).value || '').trim(), nom = v('eqPNnom').slice(0, 60), role = v('eqPNech'), copy = eqPoste(v('eqPNcopy'));
+  if (!nom) return eqSet('Donnez un nom au poste', 'err');
+  const full = {}; ACC_CAT.flatMap(g => g[1]).forEach(([k]) => { full[k] = copy ? +copy.acces[k] || 0 : 0; });
+  const r = await eqCall('/rest/v1/postes', 'POST', { franchise: CFG.auth.franchise, nom, role, acces: full, ordre: Math.max(0, ...EQ.postes.map(x => x.ordre || 0)) + 1 }, { Prefer: 'return=representation' });
+  if (!r.ok) return eqSet(r.status === 409 ? 'Ce nom de poste existe déjà' : (((r.j && r.j.message) || 'Création refusée')).replace(/^postes : /, ''), 'err');
+  EQ.pid = Array.isArray(r.j) && r.j[0] ? r.j[0].id : EQ.pid; EQ.pd = null; EQ.pnew = null; await renderEquipes(); eqSet('✓ Poste « ' + nom + ' » créé : réglez ses tuiles puis enregistrez.', 'ok');
+}
+async function eqPSave() {
+  const po = eqPoste(EQ.pid), d = EQ.pd; if (!po) return; const nom = (((document.getElementById('eqPNom') || {}).value) || po.nom).trim().slice(0, 60) || po.nom, keys = ACC_CAT.flatMap(g => g[1]).map(x => x[0]);
+  const full = {}; keys.forEach(k => { full[k] = +(d || po.acces)[k] || 0; });
+  const changed = keys.filter(k => full[k] !== (+po.acces[k] || 0)), users = EQ.rows.filter(r => r.poste_id === po.id);
+  if (!changed.length && nom === po.nom) return eqSet('Aucun changement à enregistrer', '');
+  const perso = users.filter(r => changed.some(k => r.acces && r.acces[k] !== undefined)), lab = k => (ACC_CAT.flatMap(g => g[1]).find(x => x[0] === k) || [k, k])[1];
+  const keep = changed.filter(k => perso.some(r => r.acces[k] !== undefined));
+  if (perso.length && !confirm('⚠ ' + perso.length + ' personne' + (perso.length > 1 ? 's ont' : ' a') + ' un accès personnalisé sur ' + keep.map(lab).join(', ') + ' et ne suivr' + (perso.length > 1 ? 'ont' : 'a') + ' pas ce changement :\n• ' + perso.map(r => r.nom).join('\n• ') + '\n\n' + (users.length - perso.length) + ' autre' + (users.length - perso.length > 1 ? 's' : '') + ' personne' + (users.length - perso.length > 1 ? 's' : '') + ' du poste le suivront.\n\nEnregistrer le poste quand même ?')) return;
+  if (!perso.length && changed.length && !confirm('Modifier le poste « ' + po.nom + ' » ? ' + users.length + ' personne' + (users.length > 1 ? 's' : '') + ' ' + (users.length > 1 ? 'seront mises' : 'sera mise') + ' à jour (' + changed.map(lab).join(', ') + ').')) return;
+  const r = await eqCall('/rest/v1/postes?id=eq.' + po.id, 'PATCH', { nom, acces: full }, { Prefer: 'return=representation' });
+  if (!r.ok || (Array.isArray(r.j) && !r.j.length)) return eqSet(((r.j && r.j.message) || 'Modification refusée').replace(/^postes : /, ''), 'err');
+  EQ.pd = null; await renderEquipes(); eqSet('✓ Poste « ' + nom + ' » enregistré : ' + (users.length - perso.length) + ' personne' + (users.length - perso.length > 1 ? 's' : '') + ' mise' + (users.length - perso.length > 1 ? 's' : '') + ' à jour' + (perso.length ? ', ' + perso.length + ' personnalisée' + (perso.length > 1 ? 's' : '') + ' inchangée' + (perso.length > 1 ? 's' : '') : '') + '.', 'ok');
+}
+async function eqPDel() {
+  const po = eqPoste(EQ.pid); if (!po || !confirm('Supprimer le poste « ' + po.nom + ' » ?')) return;
+  const r = await eqCall('/rest/v1/postes?id=eq.' + po.id, 'DELETE', null, { Prefer: 'return=representation' });
+  if (!r.ok || (Array.isArray(r.j) && !r.j.length)) return eqSet(((r.j && r.j.message) || 'Suppression refusée').replace(/^postes : /, ''), 'err');
+  EQ.pid = ''; EQ.pd = null; await renderEquipes(); eqSet('✓ Poste supprimé.', 'ok');
+}
 function eq218Block(e) {                                                  // accès à l'application « Suivi du forfait 218 jours » (comptes et fiches gérés dans cette appli)
   const lien = `<a href="${EQ_218_URL}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir l'application 218 jours</a>`, ttl = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Application 218 jours (suivi du forfait jours)</div>';
   if (e.isNew) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Si la personne est au forfait jours, sa fiche se crée dans l'application 218 jours (${lien}) ; elle apparaîtra ici ensuite.</div></div>`;
@@ -4542,19 +4698,20 @@ function eqRead() {
   return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), restos_planning: v('eqRole') === 'directeur' ? ck('.eqP') : [], modules: ck('.eqM'), can: ck('.eqC') };
 }
 async function eqSave() {
-  const e = EQ.edit, o = eqRead(), b = document.getElementById('eqGo');
+  const e = EQ.edit, o = EQ.postes ? eqReadP() : eqRead(), b = document.getElementById('eqGo');
   if (!o.nom) return eqSet('Indiquez le prénom et l\'initiale', 'err');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
   const orig = e.isNew ? null : EQ.rows.find(r => r.id === e.id);
   if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length && (e.isNew || (orig && ((orig.restos_planning || []).length || orig.role !== 'directeur')))) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');   // obligatoire pour un nouveau directeur ; un directeur existant « à affecter » peut être enregistré sans (transition)
-  if (orig && orig.role !== o.role && !confirm('Passer ' + o.nom + ' de « ' + eqLabel(orig.role) + ' » à « ' + eqLabel(o.role) + ' » ?\n\nSes accès seront ceux affichés dans le formulaire.')) return;
+  if (EQ.postes ? (orig && orig.poste_id !== o.poste_id && !confirm('Passer ' + o.nom + ' du poste « ' + ((eqPoste(orig.poste_id) || {}).nom || eqLabel(orig.role)) + ' » au poste « ' + ((eqPoste(o.poste_id) || {}).nom || '') + ' » ?\n\nSes accès personnalisés sont effacés : elle reprend ceux du nouveau poste (visibles dans le formulaire).'))
+      : (orig && orig.role !== o.role && !confirm('Passer ' + o.nom + ' de « ' + eqLabel(orig.role) + ' » à « ' + eqLabel(o.role) + ' » ?\n\nSes accès seront ceux affichés dans le formulaire.'))) return;
   const mailChanged = !!orig && o.email !== String(orig.email).toLowerCase();
   if (mailChanged && !confirm('Changer l\'adresse de ' + o.nom + ' ?\n\nAncienne : ' + orig.email + '\nNouvelle : ' + o.email + '\n\n' + (orig.user_id ? 'Son ancien compte perdra l\'accès tout de suite : elle devra cliquer sur « Première connexion ou mot de passe oublié » avec la nouvelle adresse (une invitation lui est envoyée).' : 'Une invitation est envoyée à la nouvelle adresse.'))) return;
   const inv = (e.isNew && !!(document.getElementById('eqInv') || {}).checked) || mailChanged;
   if (b) b.disabled = true; eqSet('Enregistrement…');
-  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : Object.assign({ nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can }, mailChanged ? Object.assign({ email: o.email }, orig.user_id ? { user_id: null } : {}) : {});
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : Object.assign({ nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can }, EQ.postes ? { poste_id: o.poste_id, acces: o.acces } : {}, mailChanged ? Object.assign({ email: o.email }, orig.user_id ? { user_id: null } : {}) : {});
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');

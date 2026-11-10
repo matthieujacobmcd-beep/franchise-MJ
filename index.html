@@ -432,6 +432,24 @@ const SBA = (() => {
   return { enabled, strict, mode, mount, start, enter, rights, allowed, token, hasSession, logout, clear, release, api, note, view, sendLink, setPassword, MODULE, get legacy() { return legacyOk; }, get ui() { return ui; } };
 })();
 
+// ══ Catalogue des tuiles d'accès (partagé dashboard + saisie) : une tuile = un onglet, avec un niveau ══
+// 0 aucun accès · 1 consultation (peut juste voir) · 2 modification (peut modifier) ; Point Business : 1 consultation · 2 réponse du directeur · 3 rédaction.
+// Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
+const ACC_CAT = [
+  ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
+  ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
+const accMax = k => k === 'pb' ? 3 : 2;
+const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
+const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
+const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
+const accEspLvl = (r, esp) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('esp:' + esp)); return t ? accLvl(r, t[0]) : null; };
+function tileModules(a) {                                                       // mêmes règles que la base (acces_modules) : sert aux contrôles de formulaire
+  const n = k => +((a || {})[k]) || 0, any = ks => ks.some(k => n(k) >= 1);
+  return [any(['pil', 'perf', 'itv', 'form', 'mkt', 'com', 'act', 'tps']) && 'dashboard', any(['q', 'h', 'm', 'p', 'pv', 'pca', 'bud', 'val', 'doc']) && 'saisie', n('rev') >= 1 && 'revue', n('plan') >= 1 && 'planning', n('eq') >= 1 && 'utilisateurs'].filter(Boolean);
+}
+function tileCan(a) { const n = k => +((a || {})[k]) || 0; return [n('pca') >= 2 && 'sim', (n('bud') >= 2 || n('pv') >= 2) && 'budget', n('val') >= 2 && 'valid', n('sal') >= 2 && 'edg'].filter(Boolean); }
+
 let SB_SCOPE = false, SB_DASH = null;
 function dashScope(r) {                                              // personne limitée à certains restaurants : onglets, adaptateur de données et vue de départ
   const al = SBA.allowed(r); if (!al) return;
@@ -439,13 +457,18 @@ function dashScope(r) {                                              // personne
   if (typeof SheetAdapter !== 'undefined') SheetAdapter.configure({ stores: keep });
   if (keep.length === 1) currentResto = keep[0];
 }
+function dashPills(r) {                                             // espaces masqués quand la tuile correspondante est à « aucun accès » (anciens droits : tout reste visible)
+  if (!r || !r.acces) return;
+  document.querySelectorAll('.espace-pill[data-esp]').forEach(b => { const lv = accEspLvl(r, b.dataset.esp); if (lv === 0) b.style.display = 'none'; });
+  if (accEspLvl(r, currentEspace || 'pilotage') === 0) { const ok = ['pilotage', 'performance', 'interventions', 'formation', 'marketing', 'plancom', 'planning', 'actualite', 'prix', 'pb', 'revue'].find(e => accEspLvl(r, e) !== 0 && document.querySelector('.espace-pill[data-esp="' + e + '"]')); if (ok && typeof switchEspace === 'function') switchEspace(ok); }
+}
 function dashEnter(r) {
   SB_DASH = r; try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
   if (typeof plgOnLogin === 'function') plgOnLogin(r);
   if (typeof rvOnLogin === 'function') rvOnLogin(r);
   try { SBA.note(); } catch (e) {}
   document.getElementById('app').style.display = 'block';
-  renderTabs(); renderMain();
+  renderTabs(); renderMain(); try { dashPills(r); } catch (e) {}
   document.getElementById('login-screen').style.display = 'none';
 }
 function dashMountLogin() {
@@ -11125,7 +11148,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261110-080548';
+const BUILD_VERSION = '20261110-104157';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
