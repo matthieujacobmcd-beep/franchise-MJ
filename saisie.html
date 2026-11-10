@@ -265,7 +265,7 @@ function showApp(){ document.getElementById('login').style.display='none'; docum
 // ── Modèle ──
 const RESTOS=CFG.restos.map(r=>[r.key,r.label]);
 const MONTHS=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
-const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['budget','Budget & PNL'],['valid','Validation du prévisionnel'],['prix','Prix franchise'],['documents','Documents'],['acces','Mots de passe'],['equipes','Équipes']];
+const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel','Mensuel'],['ponctuel','Ponctuel (visites & audits)'],['previsionnel','Prévisionnel'],['prevca','Prévision CA (calendrier)'],['budget','Budget & PNL'],['valid','Validation du prévisionnel'],['prix','Prix franchise'],['pb','Point Business'],['documents','Documents'],['acces','Mots de passe'],['equipes','Équipes']];
 // Indicateurs saisis chaque semaine : le mois correspondant (onglet Mensuel)
 // se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
 const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
@@ -475,6 +475,7 @@ function renderPanel(keepPeriod){
   if(curTab==='budget') return renderBudget();
   if(curTab==='valid') return renderValid();
   if(curTab==='prix') return renderPrix();
+  if(curTab==='pb') return renderPB();
   const p=document.getElementById('panel');
   if(['quotidien','hebdomadaire','mensuel'].includes(curTab) && LAST_STATE==='loading'){   // jamais de date « du jour » par défaut : on attend la dernière saisie
     GATE_ON=true;
@@ -3733,6 +3734,273 @@ function renderPrix() {
     `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}<button type="button" class="step" onclick="pxPrintNow()" title="Une page A4 paysage, comme le modèle">Imprimer</button></div>` +
     (canal === 'repas' ? '' : `<div class="hint" style="margin:0 0 10px">${what}</div>`) + bloc + leg + (canal === 'repas' ? pxRepasHtml() : pxBlocHtml(canal)) +
     bar + pxGuardHtml() + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">⏳ Chargement…</div>'}</div></details>` + admin;
+}
+// ── Point Business : le DOCUMENT (écran du dashboard + impression A4 comme le modèle « Accompagnement : tour opérationnel / Point Business ») ──
+// Partagé par la saisie et le dashboard. Un point = { restaurant, date, type, avec, prochain, sup:{ crit:[{id,label}], bl:[{id,titre}], notes:{id:{n,c}}, blocs:{id:texte}, plan:[{id,t}], photos:[{fid,lg}] }, dir:{ notes:{id:texte}, rep, plan:{id:{s,c}}, photos } }.
+// « sup » = partie écrite par le superviseur / franchisé (bleu), « dir » = réponse du directeur (vert).
+const PBP_ST = { afaire: ['À faire', '#6b7280'], en_cours: ['En cours', '#c2410c'], fait: ['Fait', '#15803d'] };
+const pbpEsc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const pbpNl = s => pbpEsc(s).replace(/\n/g, '<br>');
+const pbpDate = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; };
+const pbpDateLong = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return ''; const d = new Date(+m[1], +m[2] - 1, +m[3]); return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
+const pbpImg = (fid, w) => 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w' + (w || 800);
+const pbpStars = n => { n = +n || 0; let s = ''; for (let i = 1; i <= 5; i++) s += i <= n ? '<span class="pbp-sf">★</span>' : '<span class="pbp-se">•</span>'; return `<span class="pbp-stars" role="img" aria-label="${n ? n + ' sur 5' : 'non noté'}">${s}</span>`; };
+function pbpAvg(p) { const v = Object.values(((p || {}).sup || {}).notes || {}).map(x => +(x && x.n)).filter(x => x > 0); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : null; }
+const PBP_CSS = `
+.pbp-doc{ font-family:'Helvetica Neue',Arial,sans-serif; color:#1f2937; font-size:12px; line-height:1.4; }
+.pbp-title{ text-align:center; font-size:17px; letter-spacing:.3px; margin:0 0 10px; }
+.pbp-box{ border:1.5px solid #222; padding:8px 10px 10px; background:#fff; }
+.pbp-band{ background:#FFF2CC; padding:4px 8px; margin-top:3px; font-size:11.5px; break-after:avoid; }
+.pbp-bold{ font-weight:800; padding:3px 8px 3px 36px; } .pbp-info{ padding:3px 8px 4px; display:flex; gap:24px; flex-wrap:wrap; }
+.pbp-row{ display:flex; align-items:flex-start; gap:16px; padding:3px 8px 5px; break-inside:avoid; } .pbp-cc{ flex:1; min-width:0; }
+.pbp-stars{ white-space:nowrap; letter-spacing:4px; font-size:16px; color:#0070C0; min-width:112px; line-height:1.15; } .pbp-se{ font-size:12px; opacity:.85; }
+.pbp-c{ color:#0070C0; } .pbp-d{ color:#15803d; margin-top:2px; } .pbp-d b{ font-weight:800; }
+.pbp-sect{ background:#DDEBF7; border:1.5px solid #9DC3E6; margin:9px 0; break-inside:avoid; } .pbp-sect h4{ margin:0; padding:5px 8px; font-size:11.5px; background:#CDE8FA; } .pbp-sect .t{ padding:7px 9px 9px; color:#0070C0; min-height:26px; }
+.pbp-dsect{ background:#E8F5E9; border-color:#A5D6A7; } .pbp-dsect h4{ background:#C8E6C9; } .pbp-dsect .t{ color:#15803d; }
+.pbp-act{ padding:2px 0 5px; font-weight:700; } .pbp-act .pbp-d{ font-weight:400; } .pbp-st{ display:inline-block; font-size:10px; font-weight:800; color:#fff; background:var(--c,#6b7280); border-radius:999px; padding:1px 8px; margin-left:6px; vertical-align:1px; }
+.pbp-next{ background:#FFF2CC; padding:4px 8px; margin-top:6px; }
+.pbp-ptitle{ text-align:center; font-size:15px; letter-spacing:.4px; margin:14px 0 8px; }
+.pbp-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; } .pbp-grid figure{ margin:0; break-inside:avoid; border:1px solid #d1d5db; padding:4px; background:#fff; } .pbp-grid img{ width:100%; height:170px; object-fit:cover; display:block; background:#f3f4f6; } .pbp-grid figcaption{ font-size:11px; padding:3px 2px 1px; min-height:16px; } .pbp-grid em{ color:#15803d; }
+@media (max-width:640px){ .pbp-row{ flex-direction:column; gap:2px; } .pbp-grid{ grid-template-columns:repeat(2,1fr); } }`;
+function pbpDocHtml(p, o) {
+  o = o || {}; const sup = p.sup || {}, dir = p.dir || {}, crit = sup.crit || [], bl = sup.bl || [], plan = sup.plan || [], notes = sup.notes || {}, dp = dir.plan || {}, nm = o.restoName || p.restaurant;
+  const rows = crit.map(c => { const nt = notes[c.id] || {}, dc = (dir.notes || {})[c.id];
+    return `<div class="pbp-band">${pbpEsc(c.label)}</div><div class="pbp-row">${pbpStars(nt.n)}<div class="pbp-cc"><span class="pbp-c">${pbpNl(nt.c || '')}</span>${dc ? `<div class="pbp-d"><b>Directeur :</b> ${pbpNl(dc)}</div>` : ''}</div></div>`; }).join('');
+  const sect = bl.map(b => `<div class="pbp-sect"><h4>${pbpEsc(b.titre)}</h4><div class="t">${pbpNl((sup.blocs || {})[b.id] || '')}</div></div>`).join('');
+  const planH = `<div class="pbp-sect"><h4>Plan d'action :</h4><div class="t">${plan.length ? plan.map((a, i) => { const d = dp[a.id] || {}, S = PBP_ST[d.s || 'afaire'] || PBP_ST.afaire;
+    return `<div class="pbp-act">${i + 1} - ${pbpEsc(a.t)} <span class="pbp-st" style="--c:${S[1]}">${S[0]}</span>${d.c ? `<div class="pbp-d">${pbpNl(d.c)}</div>` : ''}</div>`; }).join('') : '<i>Aucune action.</i>'}</div></div>`;
+  const rep = dir.rep ? `<div class="pbp-sect pbp-dsect"><h4>Réponse du directeur</h4><div class="t">${pbpNl(dir.rep)}</div></div>` : '';
+  const photos = [].concat((sup.photos || []).map(x => ({ x, who: 'sup' })), (dir.photos || []).map(x => ({ x, who: 'dir' })));
+  const ph = photos.length ? `<div class="pbp-photos" style="${o.print ? 'break-before:page;page-break-before:always' : 'margin-top:14px'}"><div class="pbp-ptitle">PHOTOGRAPHIES</div><div class="pbp-grid">${photos.map(({ x, who }) => `<figure><img src="${pbpImg(x.fid, 700)}" ${o.print ? '' : 'loading="lazy"'} alt="${pbpEsc(x.lg || 'Photo')}"><figcaption>${pbpEsc(x.lg || '')}${who === 'dir' ? ' <em>(directeur)</em>' : ''}</figcaption></figure>`).join('')}</div></div>` : '';
+  return `<div class="pbp-doc"><div class="pbp-title">ACCOMPAGNEMENT : ${pbpEsc((o.typeNom || p.type || '').toUpperCase())} / POINT BUSINESS</div><div class="pbp-box">
+    <div class="pbp-band">Date</div><div class="pbp-bold">${pbpEsc(pbpDateLong(p.date))}</div>
+    <div class="pbp-band">Restaurant</div><div class="pbp-info"><span>${pbpEsc(nm)}</span>${p.avec ? `<span>Réalisé avec ${pbpEsc(p.avec)}</span>` : ''}${o.par ? `<span>Par ${pbpEsc(o.par)}</span>` : ''}</div>
+    ${rows}${sect}${planH}${rep}<div class="pbp-next">Date du prochain point : ${pbpEsc(pbpDate(p.prochain))}</div></div>${ph}</div>`;
+}
+function pbpPrint(p, o) {                                                   // une page A4 portrait (+ pages de photos), comme le modèle
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  const d = f.contentDocument; d.open(); d.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Point Business · ' + pbpEsc(((o || {}).restoName || p.restaurant) + ' · ' + pbpDate(p.date)) + '</title><style>' + PBP_CSS + '@page{size:A4 portrait;margin:10mm} body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>' + pbpDocHtml(p, Object.assign({}, o, { print: true })) + '</body></html>'); d.close();
+  const imgs = [...d.images].filter(i => !i.complete); let left = imgs.length, done = false;
+  const go = () => { if (done) return; done = true; try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} setTimeout(() => f.remove(), 4000); };
+  if (!left) return setTimeout(go, 150);
+  const t = setTimeout(go, 9000); imgs.forEach(i => { const fin = () => { if (--left <= 0) { clearTimeout(t); setTimeout(go, 150); } }; i.addEventListener('load', fin); i.addEventListener('error', fin); });
+}
+// ── Point Business (saisie) : diagnostic régulier superviseur ↔ directeur ──
+// Même principe que les prix : on saisit ici, on consulte au dashboard. Superviseur / franchisé : créent et rédigent le point (note 1 à 5, commentaire par critère, remarques, plan d'action, photos) ;
+// le directeur ne voit QUE les points publiés de SON restaurant et y répond (commentaire par critère, réponse libre, avancement et commentaire de chaque action, photos). Critères, types de visite et blocs de texte modifiables.
+// Les points sont figés avec leurs critères du jour (sup.crit / sup.bl) : changer la configuration ne casse jamais l'historique.
+const PB = { cfg: null, cfgV: 0, role: '', can: false, cfgEdit: false, list: [], listFor: null, loaded: false, state: 'idle', err: '', view: 'list', cur: null, orig: '', flash: null, saving: false, resto: null, busy: '', conflict: null, cfgDraft: null, cfgR: '', prevMsg: '' };
+const PB_CRIT = ['Propreté des extérieurs', 'Propreté de la salle', 'Propreté des toilettes clients', 'Propreté du comptoir', 'Propreté de la Cuisine', 'Propreté de la Plonge', 'Propreté des arrières (salle équipier - vestiaires)', 'Propreté des stocks', 'Aire de Jeu', 'Sécurité alimentaire', 'Sécurité (EPI - Extincteur)', 'EDG', 'Staffing équipier'];
+const pbDefCfg = () => ({ v: 1, types: [{ id: 't1', nom: 'Tour opérationnel', criteres: PB_CRIT.map((l, i) => ({ id: 'c' + (i + 1), label: l })), bl: [{ id: 'b1', titre: 'Remarques propreté' }, { id: 'b2', titre: 'Point Business / Produits & Planification' }] }], restos: {} });
+const pbClone = o => JSON.parse(JSON.stringify(o));
+const pbUid = p => p + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+const pbToday = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+const pbName = r => (RESTOS.find(x => x[0] === r) || [0, r])[1];
+const pbCall = body => { const p = pxProf(); return postJson(Object.assign({ pwd: p ? p.h : pwdHash() }, body)); };
+const pbRestos = () => RESTOS.filter(x => accProfiles().some(p => accCovers(p, x[0])));
+const pbCfgOf = () => PB.cfg || pbDefCfg();
+function pbType(typeId, resto) {                                          // type de visite pour un restaurant : liste commune, ou liste propre au restaurant
+  const t = (pbCfgOf().types.find(x => x.id === typeId) || pbCfgOf().types[0]), ov = ((pbCfgOf().restos || {})[resto] || {})[t.id] || {};
+  return { id: t.id, nom: t.nom, criteres: ov.criteres || t.criteres, bl: ov.bl || t.bl };
+}
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `
+.pb-bar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 12px; } .pb-bar select,.pb-bar input[type=text],.pb-bar input[type=date]{ padding:8px 10px; border:1.5px solid var(--border); border-radius:10px; font-family:inherit; font-size:.84rem; background:var(--card); color:var(--text); }
+.pb-list{ display:grid; gap:10px; } .pb-item{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; border:1.5px solid var(--border); background:var(--card); border-radius:14px; padding:12px 14px; cursor:pointer; text-align:left; font:inherit; color:var(--text); width:100%; } .pb-item:hover{ border-color:var(--accent,#b8892b); }
+.pb-date{ min-width:96px; font-weight:800; } .pb-date small{ display:block; font-weight:600; color:var(--muted); } .pb-grow{ flex:1 1 180px; min-width:0; } .pb-grow b{ display:block; }
+.pb-badge{ display:inline-block; font-size:.68rem; font-weight:800; border-radius:999px; padding:2px 9px; margin:2px 4px 0 0; background:rgba(100,116,139,.15); color:#475569; } .pb-badge.w{ background:rgba(234,88,12,.15); color:#c2410c; } .pb-badge.g{ background:rgba(21,128,61,.15); color:#15803d; } .pb-badge.b{ background:rgba(0,112,192,.14); color:#0070C0; }
+.pb-avg{ color:#0070C0; font-weight:800; white-space:nowrap; }
+.pb-card{ border:1.5px solid var(--border); background:var(--card); border-radius:14px; padding:14px; margin:0 0 12px; }
+.pb-meta{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; } .pb-meta label{ display:flex; flex-direction:column; gap:3px; font-size:.72rem; font-weight:700; color:var(--muted); } .pb-meta input,.pb-meta select{ padding:8px 10px; border:1.5px solid var(--border); border-radius:10px; font:inherit; font-size:.85rem; background:var(--card); color:var(--text); }
+.pb-crit{ border-top:1px solid var(--border); padding:10px 0; display:grid; gap:6px; } .pb-crit:first-of-type{ border-top:0; }
+.pb-lbl{ font-weight:800; font-size:.86rem; background:#FFF2CC; color:#5b4a00; border-radius:8px; padding:5px 10px; display:flex; gap:6px; align-items:center; } .pb-lbl input{ flex:1; background:transparent; border:0; font:inherit; font-weight:800; color:inherit; min-width:0; } .pb-lbl button{ border:0; background:transparent; cursor:pointer; color:#9a3412; font-size:1rem; }
+.pb-line{ display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; } .pb-stars{ display:inline-flex; white-space:nowrap; } .pb-star{ border:0; background:none; font-size:1.55rem; line-height:1; padding:0 2px; color:#cbd5e1; cursor:pointer; } .pb-star.on{ color:#0070C0; } .pb-ro{ font-size:1.25rem; letter-spacing:3px; color:#0070C0; } .pb-ro .pbp-se{ font-size:.9rem; }
+.pb-line textarea,.pb-card textarea,.pb-in{ flex:1 1 240px; width:100%; box-sizing:border-box; border:1.5px solid var(--border); border-radius:10px; padding:8px 10px; font:inherit; font-size:.85rem; background:var(--card); color:var(--text); resize:vertical; }
+.pb-sup{ color:#0070C0; } .pb-dir{ color:#15803d; } .pb-dirin{ border-color:rgba(21,128,61,.5) !important; background:rgba(21,128,61,.05) !important; } .pb-note{ font-size:.8rem; color:#15803d; margin-top:2px; }
+.pb-sect{ margin:14px 0 0; } .pb-sect h4{ margin:0 0 6px; font-size:.9rem; } .pb-ro-t{ white-space:pre-wrap; border:1.5px solid var(--border); border-radius:10px; padding:8px 10px; font-size:.85rem; background:rgba(0,112,192,.05); color:#0b5a99; min-height:24px; }
+.pb-act{ display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border); } .pb-act:first-of-type{ border-top:0; } .pb-act .n{ font-weight:800; min-width:20px; } .pb-act select{ padding:7px 9px; border:1.5px solid var(--border); border-radius:10px; font:inherit; font-size:.8rem; background:var(--card); color:var(--text); }
+.pb-st{ display:inline-block; font-size:.68rem; font-weight:800; color:#fff; border-radius:999px; padding:2px 9px; }
+.pb-ph{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; } .pb-ph figure{ margin:0; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); position:relative; } .pb-ph img{ width:100%; height:120px; object-fit:cover; display:block; background:#f1f5f9; } .pb-ph figcaption{ padding:5px 6px; } .pb-ph input{ width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:8px; padding:4px 6px; font:inherit; font-size:.76rem; background:var(--card); color:var(--text); } .pb-ph .x{ position:absolute; top:5px; right:5px; width:24px; height:24px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; cursor:pointer; line-height:22px; padding:0; } .pb-ph .who{ position:absolute; left:5px; top:5px; font-size:.64rem; font-weight:800; color:#fff; background:#15803d; border-radius:999px; padding:1px 7px; }
+.pb-add{ display:inline-flex; align-items:center; gap:6px; border:1.5px dashed var(--border); border-radius:10px; padding:8px 12px; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--text); } .pb-add input{ display:none; }
+.pb-foot{ position:sticky; bottom:8px; z-index:5; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.pb-cfg h4{ margin:0 0 8px; } .pb-cfgrow{ display:flex; gap:6px; align-items:center; margin:4px 0; } .pb-cfgrow input{ flex:1; padding:7px 10px; border:1.5px solid var(--border); border-radius:10px; font:inherit; font-size:.84rem; background:var(--card); color:var(--text); min-width:0; } .pb-cfgrow button{ border:1.5px solid var(--border); background:var(--card); border-radius:8px; width:30px; height:30px; cursor:pointer; color:var(--text); padding:0; }
+@media (max-width:640px){ .pb-line{ flex-direction:column; } .pb-item{ gap:8px; } }`;
+  document.head.appendChild(st);
+})();
+// ── Chargement ──
+async function pbLoad() {
+  if (PB.state === 'loading') return; const r = PB.resto || curResto; PB.state = 'loading'; PB.err = '';
+  const [c, l] = await Promise.all([pbCall({ action: 'pb_cfg_load' }), pbCall({ action: 'pb_list', restaurant: r })]);
+  PB.state = 'idle';
+  if (!c.ok || !l.ok) { const e = (!c.ok ? c.error : l.error) || 'lecture impossible'; PB.err = /action inconnue/.test(e) ? "Le Point Business demande une mise à jour de l'Apps Script du Sheet : colle le nouveau fichier " + ((CFG.files && CFG.files.apps_script) || 'AppsScript') + ' puis « Nouvelle version ».' : e; }
+  else { PB.cfg = c.cfg; PB.cfgV = c.version || 0; PB.role = c.role; PB.can = !!c.can; PB.cfgEdit = !!c.cfgEdit; PB.list = l.rows; PB.listFor = r; PB.loaded = true; }
+  if (curTab === 'pb') renderPB();
+}
+const pbRefreshList = async () => { PB.loaded = false; PB.listFor = null; PB.state = 'idle'; await pbLoad(); };
+async function pbOpen(id) {
+  PB.busy = 'Ouverture…'; renderPB(); const j = await pbCall({ action: 'pb_load', id }); PB.busy = '';
+  if (!j.ok) { PB.flash = ['err', j.error || 'Ouverture impossible']; return renderPB(); }
+  const p = j.point; p.sup = p.sup || {}; p.dir = p.dir || {}; p.sup.notes = p.sup.notes || {}; p.sup.blocs = p.sup.blocs || {}; p.sup.plan = p.sup.plan || []; p.sup.photos = p.sup.photos || []; p.sup.crit = p.sup.crit || []; p.sup.bl = p.sup.bl || [];
+  p.dir.notes = p.dir.notes || {}; p.dir.plan = p.dir.plan || {}; p.dir.photos = p.dir.photos || [];
+  PB.cur = p; PB.orig = JSON.stringify(p); PB.view = 'point'; PB.flash = null; PB.conflict = null; renderPB(); window.scrollTo(0, 0);
+}
+async function pbNew() {
+  if (!PB.can) return; const r = PB.resto || curResto, t0 = pbCfgOf().types[0]; if (!t0) return;
+  const T = pbType(t0.id, r), p = { id: '', restaurant: r, date: pbToday(), type: T.nom, typeId: T.id, brouillon: false, avec: '', prochain: '', sv: 0, dv: 0, sup: { crit: pbClone(T.criteres), bl: pbClone(T.bl), notes: {}, blocs: {}, plan: [], photos: [] }, dir: { notes: {}, plan: {}, photos: [] } };
+  PB.busy = 'Préparation…'; renderPB();
+  const prev = PB.list.find(x => x.restaurant === r && x.actOuvertes > 0);                       // reprend les actions non soldées du point précédent
+  if (prev) { const j = await pbCall({ action: 'pb_load', id: prev.id }); if (j.ok) { const dp = (j.point.dir || {}).plan || {}; const open = ((j.point.sup || {}).plan || []).filter(a => (dp[a.id] || {}).s !== 'fait'); if (open.length) { p.sup.plan = open.map(a => ({ id: pbUid('a'), t: a.t })); PB.prevMsg = open.length + ' action' + (open.length > 1 ? 's' : '') + ' non soldée' + (open.length > 1 ? 's' : '') + ' reprise' + (open.length > 1 ? 's' : '') + ' du point du ' + pbpDate(prev.date) + '.'; } } }
+  PB.busy = ''; PB.cur = p; PB.orig = ''; PB.view = 'point'; PB.flash = PB.prevMsg ? ['ok', PB.prevMsg] : null; PB.prevMsg = ''; PB.conflict = null; renderPB(); window.scrollTo(0, 0);
+}
+function pbBack() { if (PB.cur && pbDirtyNow() && !confirm('Quitter sans enregistrer les modifications de ce point ?')) return; PB.view = 'list'; PB.cur = null; PB.flash = null; PB.conflict = null; pbRefreshList(); }
+const pbDirtyNow = () => !!PB.cur && JSON.stringify(PB.cur) !== PB.orig;
+// ── Édition (le modèle est modifié sans tout redessiner : on garde le curseur dans les champs) ──
+const pbEditSup = () => PB.can && PB.view === 'point';
+const pbEditDir = () => (PB.role === 'directeur' || PB.role === 'owner') && PB.view === 'point' && !!PB.cur && !!PB.cur.id;
+const pbNote = id => (PB.cur.sup.notes[id] = PB.cur.sup.notes[id] || { n: null, c: '' });
+function pbDirty() { const e = document.getElementById('pbFoot'); if (e) e.innerHTML = pbFootHtml(); }
+function pbSet(path, v) { const a = path.split('.'); let o = PB.cur; for (let i = 0; i < a.length - 1; i++) o = o[a[i]]; o[a[a.length - 1]] = v; pbDirty(); }
+function pbStar(id, n) { const nt = pbNote(id); nt.n = nt.n === n ? null : n; pbRender(); }
+function pbRender() { const y = window.scrollY; renderPB(); window.scrollTo(0, y); }
+function pbType_(typeId) {                                                                      // changer de type avant le premier enregistrement : critères du nouveau type
+  if (PB.cur.id) return; const T = pbType(typeId, PB.cur.restaurant); PB.cur.type = T.nom; PB.cur.typeId = T.id; PB.cur.sup.crit = pbClone(T.criteres); PB.cur.sup.bl = pbClone(T.bl); pbRender();
+}
+function pbAddCrit() { const v = (document.getElementById('pbNC') || {}).value.trim(); if (!v) return; PB.cur.sup.crit.push({ id: pbUid('c'), label: v.slice(0, 120) }); pbRender(); }
+function pbDelCrit(i) { const c = PB.cur.sup.crit[i]; if (!confirm('Retirer « ' + c.label + ' » de ce point ?')) return; PB.cur.sup.crit.splice(i, 1); delete PB.cur.sup.notes[c.id]; pbRender(); }
+function pbAddAct() { const e = document.getElementById('pbNA'), v = e ? e.value.trim() : ''; if (!v) return; PB.cur.sup.plan.push({ id: pbUid('a'), t: v.slice(0, 300) }); pbRender(); }
+function pbDelAct(i) { const a = PB.cur.sup.plan[i]; PB.cur.sup.plan.splice(i, 1); delete PB.cur.dir.plan[a.id]; pbRender(); }
+function pbDirAct(id, k, v) { const o = PB.cur.dir.plan[id] = PB.cur.dir.plan[id] || { s: 'afaire', c: '' }; o[k] = v; if (k === 's') pbRender(); else pbDirty(); }
+// ── Enregistrement ──
+async function pbSave(silent) {
+  if (PB.saving || !PB.cur) return false; const p = PB.cur; if (!p.date) { PB.flash = ['err', 'Choisis la date du point.']; renderPB(); return false; }
+  PB.saving = true; PB.flash = null; PB.conflict = null; pbDirty();
+  let ok = true, msg = '';
+  if (pbEditSup()) {
+    const j = await pbCall({ action: 'pb_save', point: { id: p.id, restaurant: p.restaurant, date: p.date, type: p.type, brouillon: !!p.brouillon, avec: p.avec, prochain: p.prochain, sup: p.sup }, base_sv: p.sv });
+    if (j.conflict) { PB.conflict = { par: j.par, maj: j.maj }; ok = false; } else if (!j.ok) { ok = false; msg = j.error || 'refusé'; } else { p.id = j.id; p.sv = j.sv; }
+  }
+  if (ok && pbEditDir()) {
+    const j = await pbCall({ action: 'pb_dir_save', id: p.id, dir: p.dir, base_dv: p.dv });
+    if (j.conflict) { PB.conflict = { par: j.par, maj: j.maj }; ok = false; } else if (!j.ok) { ok = false; msg = j.error || 'refusé'; } else p.dv = j.dv;
+  }
+  PB.saving = false;
+  if (ok) { PB.orig = JSON.stringify(p); if (!silent) PB.flash = ['ok', pbEditDir() && !PB.can ? 'Réponse enregistrée : le superviseur la voit aussitôt.' : (p.brouillon ? 'Brouillon enregistré (invisible du directeur).' : 'Point enregistré : le directeur du restaurant le voit aussitôt.')]; }
+  else if (!PB.conflict) PB.flash = ['err', 'Enregistrement impossible : ' + msg + '. Tes modifications sont conservées à l\'écran.'];
+  renderPB(); return ok;
+}
+async function pbDelete() {
+  if (!PB.can || !PB.cur || !PB.cur.id) return; if (!confirm('Supprimer définitivement ce point du ' + pbpDate(PB.cur.date) + ' (' + pbName(PB.cur.restaurant) + ') et ses photos ?')) return;
+  const j = await pbCall({ action: 'pb_delete', id: PB.cur.id }); if (!j.ok) { PB.flash = ['err', j.error || 'Suppression impossible']; return renderPB(); }
+  PB.view = 'list'; PB.cur = null; PB.orig = ''; await pbRefreshList(); PB.flash = ['ok', 'Point supprimé.']; renderPB();
+}
+const pbPrintNow = () => pbpPrint(PB.cur, { restoName: pbName(PB.cur.restaurant), typeNom: PB.cur.type });
+// ── Photos : réduites ici (1280 px, JPEG) puis rangées dans Drive par le serveur, comme les demandes d'intervention ──
+function pbShrink(file, max = 1280, q = 0.72) {
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onerror = rej; fr.onload = () => { const im = new Image(); im.onerror = rej; im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
+}
+async function pbPhotoAdd(inp, side) {
+  const files = [...inp.files]; inp.value = ''; if (!files.length || !PB.cur) return;
+  if (!PB.cur.id) { if (!(await pbSave(true))) return; }                                         // un point enregistré d'abord : les photos y sont rangées
+  let n = 0, err = '';
+  for (let i = 0; i < files.length; i++) {
+    PB.busy = 'Envoi de la photo ' + (i + 1) + ' / ' + files.length + '…'; renderPB();
+    try { const data = await pbShrink(files[i]), j = await pbCall({ action: 'pb_photo', id: PB.cur.id, side, data, name: files[i].name }); if (j.ok) { PB.cur[side].photos.push({ fid: j.fid, lg: '', by: side, at: pbToday() }); n++; } else err = j.error || 'refusé'; } catch (e) { err = 'photo illisible'; }
+  }
+  PB.busy = ''; if (n) await pbSave(true); PB.flash = err ? ['err', 'Photo(s) non envoyée(s) : ' + err] : ['ok', n + ' photo' + (n > 1 ? 's' : '') + ' ajoutée' + (n > 1 ? 's' : '') + '.']; renderPB();
+}
+async function pbPhotoDel(side, i) {
+  const ph = PB.cur[side].photos[i]; if (!ph || !confirm('Retirer cette photo ?')) return;
+  await pbCall({ action: 'pb_photo_del', id: PB.cur.id, fid: ph.fid }); PB.cur[side].photos.splice(i, 1); await pbSave(true); PB.flash = ['ok', 'Photo retirée.']; renderPB();
+}
+// ── Écran ──
+function pbFootHtml() {
+  const d = pbDirtyNow(), p = PB.cur; if (!p) return '';
+  return `<div class="bd-sh ${d ? 'warn' : ''}" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? '⏳ Enregistrement…' : `${d ? '<b>● Modifications non enregistrées</b>' : (p.id ? 'Tout est enregistré.' : 'Point pas encore enregistré.')} <button class="btn-save" onclick="pbSave()" ${(PB.can || pbEditDir()) ? '' : 'disabled'}>Enregistrer</button><button class="step" onclick="pbPrintNow()" ${p.id ? '' : 'disabled'} title="Une page A4 comme le modèle, avec les photos">Imprimer / PDF</button><button class="step" onclick="pbBack()">← Liste des points</button>${PB.can && p.id ? '<button class="step" onclick="pbDelete()" style="margin-left:auto">Supprimer</button>' : ''}`}</div>`;
+}
+function pbCritHtml(c, i) {
+  const nt = (PB.cur.sup.notes[c.id] || {}), dn = PB.cur.dir.notes[c.id] || '', E = pbEditSup(), D = pbEditDir();
+  const head = E ? `<div class="pb-lbl"><input value="${escH(c.label)}" maxlength="120" onchange="PB.cur.sup.crit[${i}].label=this.value;pbDirty()" aria-label="Critère"><button type="button" title="Retirer ce critère" onclick="pbDelCrit(${i})">×</button></div>` : `<div class="pb-lbl">${escH(c.label)}</div>`;
+  const stars = E ? `<span class="pb-stars" role="group" aria-label="Note de ${escH(c.label)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="pb-star${n <= (nt.n || 0) ? ' on' : ''}" onclick="pbStar('${c.id}',${n})" aria-label="${n} sur 5">★</button>`).join('')}</span>` : `<span class="pb-ro">${pbpStars(nt.n)}</span>`;
+  const sup = E ? `<textarea rows="2" maxlength="600" placeholder="Commentaire" oninput="pbNote('${c.id}').c=this.value;pbDirty()">${escH(nt.c || '')}</textarea>` : `<div class="pb-sup" style="flex:1;white-space:pre-wrap">${escH(nt.c || '')}</div>`;
+  const dir = D ? `<textarea class="pb-dirin" rows="1" maxlength="600" placeholder="Ta réponse sur ce critère (optionnel)" oninput="PB.cur.dir.notes['${c.id}']=this.value;pbDirty()">${escH(dn)}</textarea>` : (dn ? `<div class="pb-note"><b>Directeur :</b> ${escH(dn)}</div>` : '');
+  return `<div class="pb-crit">${head}<div class="pb-line">${stars}<div style="flex:1 1 240px;min-width:0">${sup}${dir}</div></div></div>`;
+}
+function pbPlanHtml() {
+  const E = pbEditSup(), D = pbEditDir(), plan = PB.cur.sup.plan, dp = PB.cur.dir.plan;
+  const rows = plan.map((a, i) => { const d = dp[a.id] || {}, S = PBP_ST[d.s || 'afaire'] || PBP_ST.afaire;
+    return `<div class="pb-act"><span class="n">${i + 1}</span><div style="flex:1 1 220px;min-width:0">${E ? `<input class="pb-in" value="${escH(a.t)}" maxlength="300" onchange="PB.cur.sup.plan[${i}].t=this.value;pbDirty()" aria-label="Action ${i + 1}">` : `<b class="pb-sup">${escH(a.t)}</b>`}${!D && d.c ? `<div class="pb-note">${escH(d.c)}</div>` : ''}</div>
+      ${D ? `<select onchange="pbDirAct('${a.id}','s',this.value)" aria-label="Avancement de l'action ${i + 1}">${Object.keys(PBP_ST).map(k => `<option value="${k}" ${(d.s || 'afaire') === k ? 'selected' : ''}>${PBP_ST[k][0]}</option>`).join('')}</select><input class="pb-in pb-dirin" style="flex:1 1 200px" value="${escH(d.c || '')}" maxlength="300" placeholder="Commentaire (optionnel)" onchange="pbDirAct('${a.id}','c',this.value)" aria-label="Commentaire de l'action ${i + 1}">` : `<span class="pb-st" style="background:${S[1]}">${S[0]}</span>`}
+      ${E ? `<button type="button" class="step" onclick="pbDelAct(${i})" title="Retirer l'action">×</button>` : ''}</div>`; }).join('');
+  return `<div class="pb-sect"><h4>Plan d'action</h4>${rows || '<div class="hint">Aucune action pour le moment.</div>'}${E ? `<div class="pb-cfgrow" style="margin-top:8px"><input id="pbNA" maxlength="300" placeholder="+ Ajouter une action (Entrée)" onkeydown="if(event.key==='Enter')pbAddAct()"><button type="button" class="step" style="width:auto;padding:0 12px" onclick="pbAddAct()">Ajouter</button></div>` : ''}</div>`;
+}
+function pbPhotosHtml() {
+  const E = pbEditSup(), D = pbEditDir(), fig = (side, i, x) => { const own = (side === 'sup' && E) || (side === 'dir' && D);
+    return `<figure><img src="${pbpImg(x.fid, 400)}" alt="${escH(x.lg || 'Photo')}" loading="lazy">${side === 'dir' ? '<span class="who">Directeur</span>' : ''}${own ? `<button type="button" class="x" title="Retirer la photo" aria-label="Retirer la photo" onclick="pbPhotoDel('${side}',${i})">×</button>` : ''}<figcaption>${own ? `<input value="${escH(x.lg || '')}" maxlength="80" placeholder="Légende (ex. Nettoyer le toit)" onchange="PB.cur.${side}.photos[${i}].lg=this.value;pbDirty()">` : `<small>${escH(x.lg || '')}</small>`}</figcaption></figure>`; };
+  const all = PB.cur.sup.photos.map((x, i) => fig('sup', i, x)).join('') + PB.cur.dir.photos.map((x, i) => fig('dir', i, x)).join('');
+  const side = E ? 'sup' : (D ? 'dir' : '');
+  return `<div class="pb-sect"><h4>Photographies</h4>${all ? `<div class="pb-ph">${all}</div>` : '<div class="hint">Aucune photo.</div>'}${side ? `<div style="margin-top:8px"><label class="pb-add">📷 Ajouter des photos<input type="file" accept="image/*" multiple onchange="pbPhotoAdd(this,'${side}')"></label>${PB.cur.id ? '' : ' <small class="loc">Le point est enregistré automatiquement à la première photo.</small>'}</div>` : ''}</div>`;
+}
+function pbPointHtml() {
+  const p = PB.cur, E = pbEditSup(), D = pbEditDir(), types = pbCfgOf().types;
+  const meta = E ? `<div class="pb-meta"><label>Date<input type="date" value="${escH(p.date)}" onchange="pbSet('date',this.value)"></label><label>Type de visite${p.id ? `<input value="${escH(p.type)}" disabled>` : `<select onchange="pbType_(this.value)">${types.map(t => `<option value="${escH(t.id)}" ${t.id === p.typeId ? 'selected' : ''}>${escH(t.nom)}</option>`).join('')}</select>`}</label><label style="flex:1 1 200px">Réalisé avec<input value="${escH(p.avec)}" maxlength="200" placeholder="ex. Madlen (optionnel)" oninput="pbSet('avec',this.value)"></label><label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:9px"><input type="checkbox" ${p.brouillon ? 'checked' : ''} onchange="pbSet('brouillon',this.checked)"> Brouillon (invisible du directeur)</label></div>`
+    : `<div class="pb-meta"><div><b style="font-size:1rem">${escH(pbpDateLong(p.date))}</b><div class="hint">${escH(p.type)} · ${escH(pbName(p.restaurant))}${p.avec ? ' · avec ' + escH(p.avec) : ''}${p.par ? ' · par ' + escH(p.par) : ''}</div></div></div>`;
+  const crit = p.sup.crit.map((c, i) => pbCritHtml(c, i)).join('');
+  const addCrit = E ? `<div class="pb-cfgrow"><input id="pbNC" maxlength="120" placeholder="+ Ajouter un critère à ce point (Entrée)" onkeydown="if(event.key==='Enter')pbAddCrit()"><button type="button" class="step" style="width:auto;padding:0 12px" onclick="pbAddCrit()">Ajouter</button></div>` : '';
+  const blocs = p.sup.bl.map(b => `<div class="pb-sect"><h4>${escH(b.titre)}</h4>${E ? `<textarea rows="4" maxlength="3000" oninput="PB.cur.sup.blocs['${b.id}']=this.value;pbDirty()">${escH(p.sup.blocs[b.id] || '')}</textarea>` : `<div class="pb-ro-t">${escH(p.sup.blocs[b.id] || '')}</div>`}</div>`).join('');
+  const rep = D ? `<div class="pb-sect"><h4>Ta réponse au point</h4><textarea class="pb-dirin" rows="4" maxlength="3000" placeholder="Ce que tu retiens, ce qui est déjà fait, ce qui te bloque…" oninput="PB.cur.dir.rep=this.value;pbDirty()">${escH(p.dir.rep || '')}</textarea></div>` : (p.dir.rep ? `<div class="pb-sect"><h4>Réponse du directeur</h4><div class="pb-ro-t pb-dir" style="background:rgba(21,128,61,.06)">${escH(p.dir.rep)}</div></div>` : '');
+  const next = E ? `<div class="pb-sect"><h4>Date du prochain point</h4><input type="date" class="pb-in" style="max-width:220px" value="${escH(p.prochain)}" onchange="pbSet('prochain',this.value)"></div>` : (p.prochain ? `<div class="pb-sect"><h4>Date du prochain point : ${escH(pbpDate(p.prochain))}</h4></div>` : '');
+  return `<div class="pb-card">${meta}${crit}${addCrit}</div><div class="pb-card">${blocs}${pbPlanHtml()}${rep}${pbPhotosHtml()}${next}</div><div class="pb-foot" id="pbFoot">${pbFootHtml()}</div>`;
+}
+function pbListHtml() {
+  const rs = pbRestos(), r = PB.resto || curResto, sel = rs.length > 1 ? `<select onchange="PB.resto=this.value;pbRefreshList()" aria-label="Restaurant">${rs.map(x => `<option value="${escH(x[0])}" ${x[0] === r ? 'selected' : ''}>${escH(x[1])}</option>`).join('')}</select>` : `<b>${escH(pbName(r))}</b>`;
+  const bar = `<div class="pb-bar">${sel}${PB.can ? '<button class="btn-save" onclick="pbNew()">+ Nouveau point</button>' : ''}${PB.cfgEdit ? '<button class="step" onclick="pbCfgOpen()">Types de visite et critères</button>' : ''}</div>`;
+  const last = PB.list.find(x => x.prochain && x.prochain >= pbToday()), nextH = last ? `<div class="hint" style="margin:0 0 10px">Prochain point prévu le <b>${escH(pbpDate(last.prochain))}</b>.</div>` : '';
+  const items = PB.list.map(x => `<button type="button" class="pb-item" onclick="pbOpen('${escH(x.id)}')"><div class="pb-date">${escH(pbpDate(x.date))}<small>${escH(pbpDateLong(x.date).split(' ')[0])}</small></div><div class="pb-grow"><b>${escH(x.type)}</b><small class="loc">par ${escH(x.par)}</small><div>${x.brouillon ? '<span class="pb-badge w">Brouillon</span>' : ''}${x.reponse ? '<span class="pb-badge g">Réponse du directeur</span>' : (PB.role === 'directeur' && !x.brouillon ? '<span class="pb-badge b">À commenter</span>' : '')}${x.actOuvertes ? `<span class="pb-badge w">${x.actOuvertes} action${x.actOuvertes > 1 ? 's' : ''} ouverte${x.actOuvertes > 1 ? 's' : ''}</span>` : (x.actFaites ? '<span class="pb-badge g">Actions soldées</span>' : '')}${x.photos ? `<span class="pb-badge">${x.photos} photo${x.photos > 1 ? 's' : ''}</span>` : ''}</div></div><div class="pb-avg">${x.moy == null ? '' : '★ ' + String(x.moy).replace('.', ',') + ' / 5'}</div></button>`).join('');
+  return bar + nextH + (items ? `<div class="pb-list">${items}</div>` : `<div class="wf-box">Aucun point pour ${escH(pbName(r))}${PB.can ? ' : clique sur « + Nouveau point » pour démarrer.' : ' pour le moment.'}</div>`);
+}
+// ── Configuration : types de visite, critères, blocs de texte (liste commune ou propre à un restaurant) ──
+function pbCfgOpen() { if (!PB.cfgEdit) return; PB.cfgDraft = pbClone(pbCfgOf()); PB.cfgDraft.restos = PB.cfgDraft.restos || {}; PB.cfgR = ''; PB.view = 'cfg'; PB.flash = null; renderPB(); window.scrollTo(0, 0); }
+const pbCfgArr = (ti, kind) => { const t = PB.cfgDraft.types[ti]; if (!PB.cfgR) return t[kind]; const ov = (PB.cfgDraft.restos[PB.cfgR] || {})[t.id]; return ov ? ov[kind] : null; };
+const pbCfgKey = kind => kind === 'criteres' ? 'label' : 'titre';
+function pbCfgSet(ti, kind, li, v) { pbCfgArr(ti, kind)[li][pbCfgKey(kind)] = String(v).trim().slice(0, 120) || pbCfgArr(ti, kind)[li][pbCfgKey(kind)]; }
+function pbCfgAdd(ti, kind) { const e = document.getElementById('pbCA_' + ti + '_' + kind), v = e ? e.value.trim() : ''; if (!v) return; pbCfgArr(ti, kind).push({ id: pbUid(kind === 'criteres' ? 'c' : 'b'), [pbCfgKey(kind)]: v.slice(0, 120) }); renderPB(); }
+function pbCfgDel(ti, kind, li) { const a = pbCfgArr(ti, kind); if (!confirm('Retirer « ' + a[li][pbCfgKey(kind)] + ' » de la liste ? Les points déjà saisis la gardent.')) return; a.splice(li, 1); renderPB(); }
+function pbCfgMove(ti, kind, li, d) { const a = pbCfgArr(ti, kind), j = li + d; if (j < 0 || j >= a.length) return; [a[li], a[j]] = [a[j], a[li]]; renderPB(); }
+function pbCfgType(ti, v) { const t = PB.cfgDraft.types[ti], n = String(v).trim().slice(0, 60); if (n) t.nom = n; renderPB(); }
+function pbCfgAddType() { const e = document.getElementById('pbNT'), v = e ? e.value.trim() : ''; if (!v) return; const b = PB.cfgDraft.types[0] || { criteres: [], bl: [] }; PB.cfgDraft.types.push({ id: pbUid('t'), nom: v.slice(0, 60), criteres: pbClone(b.criteres), bl: pbClone(b.bl) }); renderPB(); }
+function pbCfgDelType(ti) { const t = PB.cfgDraft.types[ti]; if (PB.cfgDraft.types.length < 2) { PB.flash = ['err', 'Il faut garder au moins un type de visite.']; return renderPB(); } if (!confirm('Supprimer le type « ' + t.nom + ' » ? Les points déjà saisis restent consultables.')) return; PB.cfgDraft.types.splice(ti, 1); Object.keys(PB.cfgDraft.restos).forEach(r => { delete (PB.cfgDraft.restos[r] || {})[t.id]; }); renderPB(); }
+function pbCfgOverride(ti, on) { const t = PB.cfgDraft.types[ti], r = PB.cfgR; if (!r) return; const o = PB.cfgDraft.restos[r] = PB.cfgDraft.restos[r] || {}; if (on) o[t.id] = { criteres: pbClone(t.criteres), bl: pbClone(t.bl) }; else { if (!confirm('Revenir à la liste commune pour ' + pbName(r) + ' ?')) return; delete o[t.id]; } renderPB(); }
+async function pbCfgSave() {
+  PB.saving = true; renderPB(); const j = await pbCall({ action: 'pb_cfg_save', cfg: PB.cfgDraft, base_version: PB.cfgV }); PB.saving = false;
+  if (j.conflict) PB.flash = ['err', 'Une version plus récente de la configuration existe (par ' + (j.by || '?') + '). Recharge la page puis refais tes changements.'];
+  else if (!j.ok) PB.flash = ['err', 'Enregistrement impossible : ' + (j.error || 'refusé')];
+  else { PB.cfg = pbClone(PB.cfgDraft); PB.cfgV = j.version; PB.view = 'list'; PB.flash = ['ok', 'Configuration enregistrée (version ' + j.version + ') : elle s\'applique aux prochains points.']; }
+  renderPB();
+}
+function pbCfgHtml() {
+  const D = PB.cfgDraft, rs = pbRestos(), listH = (ti, kind, title) => {
+    const a = pbCfgArr(ti, kind); if (!a) return '';
+    return `<div style="margin:10px 0 4px"><b>${title}</b></div>${a.map((x, li) => `<div class="pb-cfgrow"><button type="button" onclick="pbCfgMove(${ti},'${kind}',${li},-1)" aria-label="Monter" title="Monter">↑</button><button type="button" onclick="pbCfgMove(${ti},'${kind}',${li},1)" aria-label="Descendre" title="Descendre">↓</button><input value="${escH(x[pbCfgKey(kind)])}" maxlength="120" onchange="pbCfgSet(${ti},'${kind}',${li},this.value)" aria-label="${title}"><button type="button" onclick="pbCfgDel(${ti},'${kind}',${li})" aria-label="Retirer" title="Retirer">×</button></div>`).join('')}<div class="pb-cfgrow"><input id="pbCA_${ti}_${kind}" maxlength="120" placeholder="+ Ajouter (Entrée)" onkeydown="if(event.key==='Enter')pbCfgAdd(${ti},'${kind}')"><button type="button" style="width:auto;padding:0 12px" onclick="pbCfgAdd(${ti},'${kind}')">Ajouter</button></div>`;
+  };
+  const scope = `<div class="pb-bar"><label style="font-size:.8rem;font-weight:700">Critères pour : <select onchange="PB.cfgR=this.value;renderPB()"><option value="">Tous les restaurants (liste commune)</option>${rs.map(x => `<option value="${escH(x[0])}" ${PB.cfgR === x[0] ? 'selected' : ''}>${escH(x[1])} (liste propre)</option>`).join('')}</select></label></div>`;
+  const types = D.types.map((t, ti) => {
+    const ov = PB.cfgR ? (D.restos[PB.cfgR] || {})[t.id] : null;
+    const body = !PB.cfgR || ov ? listH(ti, 'criteres', 'Critères (notés de 1 à 5 avec un commentaire)') + listH(ti, 'bl', 'Blocs de texte libre') + (PB.cfgR ? `<div style="margin-top:8px"><button class="step" onclick="pbCfgOverride(${ti},false)">Revenir à la liste commune pour ${escH(pbName(PB.cfgR))}</button></div>` : '') : `<div class="hint" style="margin:8px 0">${escH(pbName(PB.cfgR))} utilise la liste commune de ce type. <button class="step" onclick="pbCfgOverride(${ti},true)">Créer une liste propre à ${escH(pbName(PB.cfgR))}</button></div>`;
+    return `<div class="pb-card"><div class="pb-cfgrow"><input value="${escH(t.nom)}" maxlength="60" style="font-weight:800" onchange="pbCfgType(${ti},this.value)" aria-label="Nom du type de visite"><button type="button" onclick="pbCfgDelType(${ti})" aria-label="Supprimer ce type" title="Supprimer ce type">×</button></div>${body}</div>`; }).join('');
+  return `<div class="pb-cfg"><div class="hint" style="margin:0 0 10px">Les types de visite, leurs critères et leurs blocs de texte se modifient ici. Un point déjà saisi garde les critères du jour où il a été créé. Le plan d'action et les photos sont toujours présents.${PB.cfg ? '' : ' <b>Modèle par défaut (non encore enregistré).</b>'}</div>${scope}${types}<div class="pb-card"><div class="pb-cfgrow"><input id="pbNT" maxlength="60" placeholder="+ Nouveau type de visite (ex. Audit propreté) (Entrée)" onkeydown="if(event.key==='Enter')pbCfgAddType()"><button type="button" style="width:auto;padding:0 12px" onclick="pbCfgAddType()">Ajouter</button></div></div><div class="pb-foot"><div class="bd-sh" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? '⏳ Enregistrement…' : `<button class="btn-save" onclick="pbCfgSave()">Enregistrer la configuration</button><button class="step" onclick="PB.view='list';PB.flash=null;renderPB()">Annuler</button>`}</div></div></div>`;
+}
+function renderPB() {
+  const p = document.getElementById('panel');
+  if (PB._cur !== curResto) { PB._cur = curResto; PB.resto = null; if (PB.view === 'list') PB.loaded = false; }                      // le restaurant choisi en haut de page change : on relit ses points
+  const head = `<div class="panel-head"><div><div class="panel-title">Point Business</div><div class="last-saisie">${PB.can ? 'Diagnostic régulier avec le directeur : note par critère, commentaires, plan d\'action et photos. Le directeur du restaurant le voit aussitôt (sauf brouillon) et y répond ; chaque directeur ne voit que SON restaurant.' : 'Les points de ton restaurant avec ton superviseur : tu peux commenter chaque critère, répondre, mettre à jour l\'avancement des actions et ajouter des photos.'}</div></div></div>`;
+  if (!pwdHash()) { p.innerHTML = head + '<div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec ton compte.</div>'; return; }
+  if (PB.err) { p.innerHTML = head + `<div class="entry-banner err" style="display:block">${escH(PB.err)}</div><div class="foot"><button class="step" onclick="PB.err='';PB.loaded=false;renderPB()">Réessayer</button></div>`; return; }
+  if (!PB.loaded || PB.listFor !== (PB.resto || curResto)) { if (PB.view === 'list' && PB.state !== 'loading') { if (!PB.resto || !pbRestos().some(x => x[0] === PB.resto)) PB.resto = curResto; pbLoad(); } p.innerHTML = head + '<div class="hint">⏳ Chargement…</div>'; return; }
+  const flash = PB.flash ? `<div class="bd-sh ${PB.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PB.flash[1])}</div>` : '', busy = PB.busy ? `<div class="bd-sh warn">⏳ ${escH(PB.busy)}</div>` : '';
+  const conflict = PB.conflict ? `<div class="bd-sh warn">🔔 <b>Une version plus récente de ce point a été enregistrée</b>${PB.conflict.par ? ' par ' + escH(PB.conflict.par) : ''}. Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="pbOpen(PB.cur.id)">Recharger le point</button></div>` : '';
+  const body = PB.view === 'point' && PB.cur ? pbPointHtml() : (PB.view === 'cfg' ? pbCfgHtml() : pbListHtml());
+  p.innerHTML = head + conflict + flash + busy + body;
 }
 
 // ── Plan de communication : bandeau « Prochains rendez-vous » au-dessus des onglets pour le restaurant choisi (14 jours : ses événements + ceux de toute la franchise) ──
