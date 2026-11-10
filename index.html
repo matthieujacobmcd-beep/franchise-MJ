@@ -9278,11 +9278,18 @@ function igGo() {
 #espace-planning .plg-pal{position:absolute;top:1px;right:3px;width:13px;height:13px;padding:0;border-radius:50%;border:1.5px solid var(--border);background:conic-gradient(#ff8787,#ffd43b,#69dB7c,#4dabf7,#9775fa,#ff8787);opacity:0;cursor:pointer;transition:opacity .12s}
 #espace-planning td.plg-cell:hover .plg-pal,#espace-planning td.plg-cell:focus-within .plg-pal,#espace-planning .plg-pal.on{opacity:.95}
 @media (hover:none){#espace-planning .plg-pal{opacity:.55}}
+#espace-planning .plg-pz{position:absolute;top:1px;left:3px;min-width:13px;height:13px;padding:0 3px;border-radius:7px;border:1.5px solid var(--border);background:var(--card);color:var(--muted);font-family:inherit;font-size:.55rem;font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center;opacity:0;cursor:pointer;transition:opacity .12s}
+#espace-planning td.plg-cell:hover .plg-pz,#espace-planning td.plg-cell:focus-within .plg-pz,#espace-planning .plg-pz.on{opacity:.95}
+#espace-planning .plg-pz.on{background:#fff7e0;color:#b45309;border-color:#e0b04a} #espace-planning .plg-pz:disabled{cursor:default}
+@media (hover:none){#espace-planning .plg-pz{opacity:.55}}
 .plg-palbox{position:fixed;z-index:9999;display:grid;grid-template-columns:repeat(6,26px);gap:6px;padding:10px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.22)}
 .plg-palbox button{width:26px;height:26px;border-radius:8px;border:1.5px solid rgba(0,0,0,.12);cursor:pointer;padding:0}
 .plg-palbox .plg-pc{grid-column:1/4;display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--muted)}
 .plg-palbox .plg-pc input{width:30px;height:24px;padding:0;border:0;background:none}
 .plg-palbox .plg-p0{grid-column:4/7;width:auto;height:26px;font-size:.7rem;font-weight:700;color:var(--text);background:var(--card2)}
+.plg-palbox.plg-pzbox{grid-template-columns:repeat(3,1fr);width:214px;box-sizing:border-box} .plg-pzbox .plg-pt{grid-column:1/4;font-size:.74rem;font-weight:800;color:var(--text)}
+.plg-pzbox button.plg-pzb{width:auto;height:28px;font-size:.74rem;font-weight:700;color:var(--text);background:var(--card2)} .plg-pzbox button.plg-pzb.on{background:var(--gold);color:#fff;border-color:var(--gold)}
+.plg-pzbox .plg-pc{grid-column:1/4} .plg-pzbox .plg-pc input{width:64px;height:26px;padding:0 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)} .plg-pzbox button.plg-p0{grid-column:1/4}
 #espace-planning .plg-sec{box-shadow:0 1px 3px rgba(0,0,0,.04)}
 #espace-planning .plg-sec>summary:hover{color:var(--gold)}
 #espace-planning .plg-ov{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:14px}
@@ -9560,13 +9567,15 @@ function plgCodes() {
   const m = new Map(), put = (r, ov) => {
     const t = x => x ? String(x).slice(0, 5) : null, k = String(r.code).toUpperCase(); let h = +r.heures || 0, d = t(r.debut), f = t(r.fin);
     const o = PLG_H55[k]; if (o && (h === o[0] && d === o[1] && f === o[2]) && (!ov || k === 'CP')) { h = 5.5; d = null; f = null; }     // CP et CSS : 5 h 30 par jour (anciennes valeurs de la base remplacées ; une valeur choisie à la main pour un restaurant est respectée)
-    m.set(k, { code: r.code, libelle: r.libelle, heures: h, debut: d, fin: f, fond: r.fond || null, texte: r.texte || null, shift: r.shift || null, ordre: r.ordre || 0, ov });
+    m.set(k, { code: r.code, libelle: r.libelle, heures: h, debut: d, fin: f, debut2: d ? t(r.debut2) : null, fin2: d ? t(r.fin2) : null, pause: d ? Math.max(0, Math.min(240, +r.pause || 0)) : 0, fond: r.fond || null, texte: r.texte || null, shift: r.shift || null, ordre: r.ordre || 0, ov });
   };
   (PLG.def || []).forEach(r => put(r, false)); (PLG.over || []).forEach(r => { if (+r.ordre < 0) m.delete(String(r.code).toUpperCase()); else put(r, true); }); return m;   // ordre < 0 = lettre supprimée pour ce restaurant
 }
 const plgMasquees = () => (PLG.over || []).filter(r => +r.ordre < 0).map(r => ({ code: r.code, libelle: ((PLG.def || []).find(d => String(d.code).toUpperCase() === String(r.code).toUpperCase()) || r).libelle }));
 const plgTm = s => { const a = String(s).split(':'); return +a[0] + (+a[1] || 0) / 60; };
-const plgDur = c => c.debut && c.fin ? (plgTm(c.fin) <= plgTm(c.debut) ? plgTm(c.fin) + 24 - plgTm(c.debut) : plgTm(c.fin) - plgTm(c.debut)) : c.heures;
+const plgSpan = (a, b) => plgTm(b) <= plgTm(a) ? plgTm(b) + 24 - plgTm(a) : plgTm(b) - plgTm(a);
+const plgBrut = c => c.debut && c.fin ? plgSpan(c.debut, c.fin) + (c.debut2 && c.fin2 ? plgSpan(c.debut2, c.fin2) : 0) : c.heures;      // durée des plages (1 ou 2), avant pause
+const plgDur = c => c.debut && c.fin ? Math.max(0, plgBrut(c) - (+c.pause || 0) / 60) : c.heures;                                       // heures comptées : pause déduite
 const plgH = h => { const m = Math.round(h * 60), H = Math.floor(m / 60), M = m % 60; return H + ' h' + (M ? ' ' + String(M).padStart(2, '0') : ''); };
 const PLG_ABS = /^(CP|AM|CSS|NT|OFF)$/i;
 const PLG_AV = { directeur: '#7030A0', directeur_adjoint: '#203864', assistant_direction: '#385724', manager: '#D08E39', responsable_zone: '#0e7490' };
@@ -9595,30 +9604,36 @@ const plgFmtH = h => { const m = Math.round((h % 24) * 60), H = Math.floor(m / 6
 const PLG_SEP = '§';                                                          // séparateur des cases à texte libre ou colorées : « lettre § horaires § #couleur » (les formes d'avant : « O », « 08:00-16:00 », « O 08:30-17:00 » restent lues)
 const PLG_ABSW = /^(OFF|CP|AM|CSS|NT|RTT|REPOS|CONG[ÉE]S?|ABSENT[E]?|ABS)(?![A-Za-zÀ-ÿ0-9])/i;   // texte libre compté comme une absence : ni heures, ni jour travaillé
 const plgInk = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); if (!m) return null; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150 ? '#1a1d2e' : '#ffffff'; };
-function plgParts(v) {                                                        // une case → { l : lettre (texte libre), h : horaires (texte libre), c : couleur #rrggbb ou '' }
+function plgParts(v) {                                                        // une case → { l : lettre (texte libre), h : horaires (texte libre), c : couleur #rrggbb ou '', p : pause en minutes ou null (= celle de la lettre) }
   v = String(v == null ? '' : v);
-  if (v.indexOf(PLG_SEP) >= 0) { const a = v.split(PLG_SEP); return { l: (a[0] || '').trim(), h: (a[1] || '').trim(), c: /^#[0-9a-f]{6}$/i.test((a[2] || '').trim()) ? a[2].trim() : '' }; }
-  const sp = plgSplit(v); return { l: sp.code, h: sp.range, c: '' };
+  if (v.indexOf(PLG_SEP) >= 0) { const a = v.split(PLG_SEP), q = (a[3] || '').trim(); return { l: (a[0] || '').trim(), h: (a[1] || '').trim(), c: /^#[0-9a-f]{6}$/i.test((a[2] || '').trim()) ? a[2].trim() : '', p: /^\d{1,3}$/.test(q) ? Math.min(240, +q) : null }; }
+  const sp = plgSplit(v); return { l: sp.code, h: sp.range, c: '', p: null };
 }
-function plgJoin(l, h, c) {                                                   // l'inverse : forme simple si possible (lisible par l'ancien format et l'export), sinon « lettre § horaires § couleur »
+function plgJoin(l, h, c, p) {                                                // l'inverse : forme simple si possible (lisible par l'ancien format et l'export), sinon « lettre § horaires § couleur [§ pause] »
   l = String(l || '').split(PLG_SEP).join('').trim().slice(0, 30); h = String(h || '').split(PLG_SEP).join('').trim().slice(0, 56); c = /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
+  p = p == null || p === '' || !isFinite(+p) ? null : Math.max(0, Math.min(240, Math.round(+p)));
   const g = h ? plgRng(h) : null;
-  if (!c && (!h || g) && !/\s/.test(l)) return l + (g ? (l ? ' ' : '') + g.norm : '');
-  return l + PLG_SEP + (g ? g.norm : h) + PLG_SEP + c;
+  if (!l && !h) return '';
+  if (!c && p == null && (!h || g) && !/\s/.test(l)) return l + (g ? (l ? ' ' : '') + g.norm : '');
+  return l + PLG_SEP + (g ? g.norm : h) + PLG_SEP + c + (p == null ? '' : PLG_SEP + p);
 }
 function plgInfo(v, codes) {
   const P = plgParts(v), l = P.l, hr = P.h, g = hr ? plgRng(hr) : null, paint = o => { if (P.c) { o.bg = P.c; o.fg = plgInk(P.c); } return o; };
-  if (!l && !hr) return paint({ t: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
+  const pzOf = (brut, def) => Math.max(0, Math.min(P.p != null ? P.p : (def || 0), Math.floor(brut * 60)));      // pause en minutes : celle de la case si elle est saisie, sinon celle de la lettre ; jamais plus longue que la journée
+  const net = (brut, pz) => Math.max(0, brut - pz / 60);
+  if (!l && !hr) return paint({ t: '', h: 0, d: null, f: null, shift: null, abs: false, work: false, pz: 0 });
   const c = l ? codes.get(l.toUpperCase()) : null;
   if (c) {                                                                    // lettre préprogrammée du restaurant : couleurs, horaires et type de shift de la lettre
     const ab = PLG_ABS.test(c.code);
-    if (g && !ab) return paint({ t: 'code', code: c.code, custom: g.norm, h: g.h, d: g.d, f: g.f, iv: g.parts, shift: c.shift, abs: false, work: g.h > 0, bg: c.fond, fg: c.texte, norm: c.code + ' ' + g.norm });
-    const d = c.debut ? plgTm(c.debut) : null, f = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null, h = plgDur(c);
-    return paint({ t: 'code', code: c.code, h, d: ab ? null : d, f: ab ? null : f, shift: c.shift, abs: ab, work: !ab && h > 0, bg: c.fond, fg: c.texte });
+    if (g && !ab) { const pz = pzOf(g.h, c.pause); return paint({ t: 'code', code: c.code, custom: g.norm, h: net(g.h, pz), pz, d: g.d, f: g.f, iv: g.parts, shift: c.shift, abs: false, work: g.h > 0, bg: c.fond, fg: c.texte, norm: c.code + ' ' + g.norm }); }
+    const d = c.debut ? plgTm(c.debut) : null, f1 = c.debut && c.fin ? (plgTm(c.fin) <= d ? plgTm(c.fin) + 24 : plgTm(c.fin)) : null;
+    let f = f1, iv; if (f1 != null && c.debut2 && c.fin2) { let d2 = plgTm(c.debut2); if (d2 < f1 - .001) d2 += 24; const f2r = plgTm(c.fin2), f2 = f2r <= d2 ? f2r + 24 : f2r; iv = [[d, f1], [d2, f2]]; f = f2; }      // 2 plages : les deux intervalles comptent pour les repos
+    const brut = plgBrut(c), pz = ab ? 0 : pzOf(brut, c.pause), h = ab ? plgDur(c) : net(brut, pz);
+    return paint({ t: 'code', code: c.code, h, pz, d: ab ? null : d, f: ab ? null : f, iv: ab ? undefined : iv, shift: c.shift, abs: ab, work: !ab && brut > 0, bg: c.fond, fg: c.texte });
   }
-  if (!l) return g ? paint({ t: 'range', h: g.h, d: g.d, f: g.f, iv: g.parts, shift: plgShiftOf(g.d, g.f, codes), abs: false, work: g.h > 0, norm: g.norm }) : paint({ t: 'free', label: '', h: 0, d: null, f: null, shift: null, abs: false, work: false });
-  const ab = PLG_ABSW.test(l);                                                // texte libre : compté comme jour travaillé (sauf absence), les heures ne comptent que si les horaires sont lisibles (8h-17h)
-  return paint({ t: 'free', label: l, h: g && !ab ? g.h : 0, d: g && !ab ? g.d : null, f: g && !ab ? g.f : null, iv: g && !ab ? g.parts : undefined, shift: g && !ab ? plgShiftOf(g.d, g.f, codes) : null, abs: ab, work: !ab, norm: g ? g.norm : '' });
+  if (!l) { if (g) { const pz = pzOf(g.h, 0); return paint({ t: 'range', h: net(g.h, pz), pz, d: g.d, f: g.f, iv: g.parts, shift: plgShiftOf(g.d, g.f, codes), abs: false, work: g.h > 0, norm: g.norm }); } return paint({ t: 'free', label: '', h: 0, d: null, f: null, shift: null, abs: false, work: false, pz: 0 }); }
+  const ab = PLG_ABSW.test(l), pz = g && !ab ? pzOf(g.h, 0) : 0;            // texte libre : compté comme jour travaillé (sauf absence), les heures ne comptent que si les horaires sont lisibles (8h-17h)
+  return paint({ t: 'free', label: l, h: g && !ab ? net(g.h, pz) : 0, pz, d: g && !ab ? g.d : null, f: g && !ab ? g.f : null, iv: g && !ab ? g.parts : undefined, shift: g && !ab ? plgShiftOf(g.d, g.f, codes) : null, abs: ab, work: !ab, norm: g ? g.norm : '' });
 }
 function plgView(ws, pid) {                                                  // semaine affichée commençant un lundi : les 7 jours viennent de deux semaines enregistrées (dimanche → samedi)
   const at = j => { const d = plgAdd(ws, j); return [plgSun(d), plgD(d).getUTCDay()]; };
@@ -9762,10 +9777,11 @@ function plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod) {         // g
       rows += '<tr><td class="n"><div class="plg-pn">' + plgAv(p) + '<div><b style="font-size:.8rem">' + plgE(p.prenom) + '</b><br><span class="plg-tag">' + plgE(PLG_FN[p.fonction] || p.fonction) + (fj ? ' · 218 j' : '') + '</span>' + (bd ? '<div style="margin-top:3px;line-height:1.7">' + bd + '</div>' : '') + '</div></div></td>';
       a.inf.forEach((x, j) => {
         const off = 7 * k + j, day = plgAdd(ws, j), v = plgDay(p.id, day), P = plgParts(v), st = x.bg ? 'background:' + x.bg + ';color:' + x.fg + ';' : '', gh = P.h ? plgRng(P.h) : null, own = P.h ? (gh ? plgDisp(gh) : P.h) : '', jn = PLG_JL[plgD(day).getUTCDay()];
-        const def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : '');
+        const two = x.t === 'code' && !x.custom && x.iv && x.iv.length > 1, def = x.t === 'code' && !x.custom && x.d != null && x.f != null ? (two ? plgDisp({ parts: x.iv }) : plgFmtH(x.d) + '-' + plgFmtH(x.f)) : (x.t === 'code' && !x.custom && x.h > 0 ? plgH(x.h) : '');
+        const pzBtn = (can && !x.abs && (P.l || P.h)) || x.pz > 0 ? '<button type="button" class="plg-pz' + (x.pz > 0 ? ' on' : '') + '" aria-label="Pause, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="' + (x.pz > 0 ? 'Pause de ' + x.pz + ' min (déduite des heures comptées)' : 'Ajouter un temps de pause') + '" ' + (can ? 'onclick="plgPzOpen(event,\'' + p.id + '\',' + off + ')"' : 'disabled') + '>' + (x.pz > 0 ? x.pz + '\'' : plgI('clock', 9)) + '</button>' : '';
         rows += '<td class="plg-cell"><input class="plg-c" list="plgCodes" style="' + st + '" value="' + plgE(P.l) + '" maxlength="30" ' + (can ? '' : 'readonly') + ' onchange="plgSet(\'' + p.id + '\',' + off + ',this)" aria-label="Lettre ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="Texte libre, ou une lettre du restaurant (O, F, OFF…) qui remplit couleur et horaires">'
           + (can ? '<button type="button" class="plg-pal' + (P.c ? ' on' : '') + '" style="' + (P.c ? 'background:' + P.c : '') + '" aria-label="Couleur de la case" title="Choisir une couleur" onclick="plgPal(event,\'' + p.id + '\',' + off + ')"></button>' : '')
-          + '<input class="plg-h' + (own ? ' cu' : '') + (gh && gh.parts ? ' cp' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" maxlength="56" ' + (can ? '' : 'readonly tabindex="-1"') + ' onchange="plgSetH(\'' + p.id + '\',' + off + ',this)" aria-label="Horaires ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : (gh && gh.parts ? 'Coupure : ' + gh.norm + ' (' + plgH(gh.h) + ' comptées)' : 'Horaires libres : 8h-17h est compté en heures ; coupure : 11h30-14h / 18h-21h (plages séparées par « / ») ; un autre texte est seulement affiché')) + '"></td>'; });
+          + pzBtn + '<input class="plg-h' + (own ? ' cu' : '') + ((gh && gh.parts) || two ? ' cp' : '') + '" value="' + plgE(own) + '" placeholder="' + plgE(def) + '" maxlength="56" ' + (can ? '' : 'readonly tabindex="-1"') + ' onchange="plgSetH(\'' + p.id + '\',' + off + ',this)" aria-label="Horaires ou texte libre, ' + plgE(p.prenom) + ', ' + jn + ' ' + plgFr(day) + '" title="' + (x.custom ? 'Horaires modifiés pour ce jour (vider pour revenir à ceux de la lettre)' : (gh && gh.parts ? 'Coupure : ' + gh.norm + ' (' + plgH(gh.h) + ' comptées)' : 'Horaires libres : 8h-17h est compté en heures ; coupure : 11h30-14h / 18h-21h (plages séparées par « / ») ; un autre texte est seulement affiché')) + (x.pz > 0 ? ' — pause de ' + x.pz + ' min déduite' : '') + '"></td>'; });
       rows += '<td><b style="color:' + cl + '">' + (fj ? a.jours + ' j' : plgH(a.tot)) + '</b>' + (fj ? '<br><span style="font-size:.62rem;color:var(--muted)">forfait 218 j</span>' : mod ? '' : '<br><span style="font-size:.62rem;color:' + cl + '">' + (diff < 0 ? '−' : (diff > 0 ? '+' : '')) + plgH(Math.abs(diff)) + '</span>') + '</td></tr>';
       a.al.forEach(t => alerts.push(t)); a.rem.forEach(t => rems.push(t));
     });
@@ -9992,21 +10008,30 @@ function plgRuleAdd() {
 function plgRuleDel(i) { const list = plgCfgA().regles.slice(); if (!list[i] || !confirm('Supprimer l\'alerte « ' + (list[i].nom || 'Alerte') + ' » ?')) return; list.splice(i, 1); return plgCfgPut({ regles: list.length ? list : undefined }, '✓ Alerte supprimée.'); }
 function plgRuleToggle(i) { const list = plgCfgA().regles.map(r => Object.assign({}, r)); if (!list[i]) return; list[i].on = list[i].on === false; return plgCfgPut({ regles: list }, list[i].on ? '✓ Alerte activée.' : '✓ Alerte désactivée.'); }
 // ── horaires des lettres, par restaurant ──
+const plgX = () => (PLG.def || []).some(r => 'pause' in r);                    // la base connaît la 2e plage et la pause des lettres (migration_planning_pause.sql) ; sinon ces colonnes restent masquées
+function plgPlageErr(e) {                                                       // contrôle d'une lettre : 2e plage après la 1re, 24 h maximum, pause plus courte que la journée
+  if (!(e.debut && e.fin)) return '';
+  if (e.debut2 && e.fin2) { const f1 = plgTm(e.fin) <= plgTm(e.debut) ? 99 : plgTm(e.fin); if (plgTm(e.debut2) < f1 - .001) return 'La 2e plage doit commencer après la fin de la 1re.'; }
+  const b = plgBrut(e); if (b > 24) return 'Plus de 24 h dans la journée.';
+  if ((+e.pause || 0) > 0 && (+e.pause || 0) >= b * 60) return 'La pause doit être plus courte que la journée.';
+  return '';
+}
 function plgCodesTable(list, can) {
+  const X = plgX(), tin = (c, champ, val) => '<input type="time" class="plg-in" style="width:80px" value="' + (val || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'' + champ + '\',this.value)">';
   const sel = (c, v) => '<select class="plg-in" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c) + '\',\'shift\',this.value)">' + [['', 'Pas un shift'], ['ouverture', 'Ouverture'], ['fermeture', 'Fermeture'], ['autre', 'Autre shift']].map(o => '<option value="' + o[0] + '" ' + (o[0] === (v || '') ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
-  let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">Chaque restaurant règle les horaires de ses lettres. Une lettre modifiée ici ne change rien pour les autres restaurants.</div><div class="plg-wrap"><table class="plg" style="min-width:640px"><colgroup><col style="width:92px"><col><col style="width:84px"><col style="width:84px"><col style="width:96px"><col style="width:120px"><col style="width:150px"></colgroup><thead><tr><th title="Cliquez sur la lettre pour lui choisir une couleur">Lettre · couleur</th><th style="text-align:left">Libellé</th><th>Début</th><th>Fin</th><th>Durée</th><th>Shift</th><th></th></tr></thead><tbody>';
+  let h = '<div style="font-size:.74rem;color:var(--muted);margin-bottom:8px">Chaque restaurant règle les horaires de ses lettres. Une lettre modifiée ici ne change rien pour les autres restaurants.' + (X ? ' Une lettre peut avoir deux plages (coupure, ex. 11h30-14h puis 18h-21h) et une pause en minutes, déduite des heures comptées.' : '') + '</div><div class="plg-wrap"><table class="plg" style="min-width:' + (X ? 900 : 640) + 'px"><colgroup><col style="width:92px"><col><col style="width:84px"><col style="width:84px">' + (X ? '<col style="width:84px"><col style="width:84px"><col style="width:84px">' : '') + '<col style="width:96px"><col style="width:120px"><col style="width:150px"></colgroup><thead><tr><th title="Cliquez sur la lettre pour lui choisir une couleur">Lettre · couleur</th><th style="text-align:left">Libellé</th><th>Début</th><th>Fin</th>' + (X ? '<th title="Deuxième plage de la journée (coupure) : facultatif">2e début</th><th title="Fin de la deuxième plage">2e fin</th><th title="Pause en minutes, déduite des heures comptées">Pause (min)</th>' : '') + '<th>Durée</th><th>Shift</th><th></th></tr></thead><tbody>';
   list.forEach(c => { const st = c.fond ? 'background:' + c.fond + ';color:' + c.texte + ';' : '', noT = !c.debut && !c.fin;
     h += '<tr><td><' + (can ? 'button type="button" title="Choisir la couleur de cette lettre" onclick="plgCodePal(event,\'' + plgE(c.code) + '\')"' : 'span') + ' class="plg-sw" style="' + st + '">' + plgE(c.code) + (can ? ' ' + plgI('pal', 11) : '') + '</' + (can ? 'button' : 'span') + '></td><td class="n">' + plgE(c.libelle) + (c.ov ? ' <span class="plg-tag" style="background:rgba(8,145,178,.14);color:#0e7490">propre à ce restaurant</span>' : '') + '</td>'
-      + (noT ? '<td colspan="2" style="font-size:.7rem;color:var(--muted)">sans horaire : durée comptée par jour →</td>' : '<td><input type="time" class="plg-in" style="width:80px" value="' + (c.debut || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'debut\',this.value)"></td><td><input type="time" class="plg-in" style="width:80px" value="' + (c.fin || '') + '" ' + (can ? '' : 'disabled') + ' onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'fin\',this.value)"></td>')
-      + '<td>' + (noT ? '<input type="number" class="plg-in" style="width:64px" min="0" max="24" step="0.25" value="' + c.heures + '" ' + (can ? '' : 'disabled') + ' title="Heures comptées pour un jour avec cette lettre (ex. 5,5 = 5 h 30)" aria-label="Durée en heures" onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'heures\',this.value)"> h' : plgH(plgDur(c))) + '</td><td>' + sel(c.code, c.shift) + '</td><td>' + (c.ov && can && (PLG.def || []).some(d => String(d.code).toUpperCase() === String(c.code).toUpperCase()) ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" onclick="plgCodeReset(\'' + plgE(c.code) + '\')">Défaut</button> ' : '') + (can ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" title="Supprimer cette lettre pour ce restaurant" onclick="plgCodeDel(\'' + plgE(c.code) + '\')">Supprimer</button>' : '') + '</td></tr>'; });
+      + (noT ? '<td colspan="' + (X ? 5 : 2) + '" style="font-size:.7rem;color:var(--muted)">sans horaire : durée comptée par jour →</td>' : '<td>' + tin(c, 'debut', c.debut) + '</td><td>' + tin(c, 'fin', c.fin) + '</td>' + (X ? '<td>' + tin(c, 'debut2', c.debut2) + '</td><td>' + tin(c, 'fin2', c.fin2) + '</td><td><input type="number" class="plg-in" style="width:64px" min="0" max="240" step="5" value="' + (c.pause || '') + '" placeholder="0" ' + (can ? '' : 'disabled') + ' aria-label="Pause en minutes" title="Pause en minutes, déduite des heures comptées" onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'pause\',this.value)"></td>' : ''))
+      + '<td>' + (noT ? '<input type="number" class="plg-in" style="width:64px" min="0" max="24" step="0.25" value="' + c.heures + '" ' + (can ? '' : 'disabled') + ' title="Heures comptées pour un jour avec cette lettre (ex. 5,5 = 5 h 30)" aria-label="Durée en heures" onchange="plgCodeSave(\'' + plgE(c.code) + '\',\'heures\',this.value)"> h' : plgH(plgDur(c)) + (X && c.pause ? '<div style="font-size:.6rem;color:var(--muted)">pause ' + c.pause + ' min déduite</div>' : '')) + '</td><td>' + sel(c.code, c.shift) + '</td><td>' + (c.ov && can && (PLG.def || []).some(d => String(d.code).toUpperCase() === String(c.code).toUpperCase()) ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" onclick="plgCodeReset(\'' + plgE(c.code) + '\')">Défaut</button> ' : '') + (can ? '<button class="plg-btn" style="padding:2px 8px;font-size:.68rem" title="Supprimer cette lettre pour ce restaurant" onclick="plgCodeDel(\'' + plgE(c.code) + '\')">Supprimer</button>' : '') + '</td></tr>'; });
   h += '</tbody></table></div>';
   const mq = plgMasquees(); if (mq.length) h += '<div style="font-size:.76rem;color:var(--muted);margin-top:8px">Lettres supprimées pour ce restaurant : ' + mq.map(x => '<span class="plg-tag" style="margin-right:4px">' + plgE(x.code) + ' · ' + plgE(x.libelle) + (can ? ' <a href="#" style="color:var(--gold);font-weight:800" onclick="plgCodeRestore(\'' + plgE(x.code) + '\');return false">remettre</a>' : '') + '</span>').join('') + '</div>';
-  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgNc" maxlength="12" placeholder="Lettre" style="width:80px"><input class="plg-in" id="plgNl" maxlength="40" placeholder="Libellé" style="width:170px"><input class="plg-in" id="plgNd" type="time"><input class="plg-in" id="plgNf" type="time"><button type="button" class="plg-sw" id="plgNcol" style="' + (PLG.newCol ? 'background:' + PLG.newCol + ';color:' + plgInk(PLG.newCol) : '') + '" onclick="plgPalOpen(event,plgNewColor)" title="Choisir la couleur de la nouvelle lettre (facultatif)">' + (PLG.newCol ? 'Couleur ✓' : 'Couleur') + '</button><button class="plg-btn" onclick="plgCodeAdd()">Ajouter une lettre à ce restaurant</button></div>';
+  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgNc" maxlength="12" placeholder="Lettre" style="width:80px"><input class="plg-in" id="plgNl" maxlength="40" placeholder="Libellé" style="width:170px"><input class="plg-in" id="plgNd" type="time" title="Début" aria-label="Début"><input class="plg-in" id="plgNf" type="time" title="Fin" aria-label="Fin">' + (X ? '<input class="plg-in" id="plgNd2" type="time" title="2e début (facultatif)" aria-label="2e début"><input class="plg-in" id="plgNf2" type="time" title="2e fin (facultatif)" aria-label="2e fin"><input class="plg-in" id="plgNp" type="number" min="0" max="240" step="5" placeholder="Pause (min)" style="width:100px" aria-label="Pause en minutes">' : '') + '<button type="button" class="plg-sw" id="plgNcol" style="' + (PLG.newCol ? 'background:' + PLG.newCol + ';color:' + plgInk(PLG.newCol) : '') + '" onclick="plgPalOpen(event,plgNewColor)" title="Choisir la couleur de la nouvelle lettre (facultatif)">' + (PLG.newCol ? 'Couleur ✓' : 'Couleur') + '</button><button class="plg-btn" onclick="plgCodeAdd()">Ajouter une lettre à ce restaurant</button></div>';
   return h;
 }
 async function plgCodePut(c, patch, okMsg) {                                  // enregistre la lettre pour ce restaurant (copie de la valeur par défaut au besoin) avec les champs modifiés
-  const row = { franchise: PLG.FR, restaurant: PLG.resto, code: c.code, libelle: c.libelle, heures: c.heures, debut: c.debut, fin: c.fin, ordre: c.ordre, fond: c.fond, texte: c.texte, shift: c.shift }; Object.assign(row, patch);
-  if (!('heures' in patch)) row.heures = plgDur({ debut: row.debut, fin: row.fin, heures: c.heures });
+  const row = { franchise: PLG.FR, restaurant: PLG.resto, code: c.code, libelle: c.libelle, heures: c.heures, debut: c.debut, fin: c.fin, ordre: c.ordre, fond: c.fond, texte: c.texte, shift: c.shift }; if (plgX()) { row.debut2 = c.debut2; row.fin2 = c.fin2; row.pause = c.pause || 0; } Object.assign(row, patch);
+  if (!('heures' in patch)) row.heures = plgDur({ debut: row.debut, fin: row.fin, debut2: row.debut2, fin2: row.fin2, pause: row.pause, heures: c.heures });
   const r = await plgApi('/rest/v1/planning_codes?on_conflict=franchise,restaurant,code', 'POST', row, { Prefer: 'resolution=merge-duplicates,return=representation' });
   if (!r.ok) { plgMsg('Enregistrement refusé : ' + ((r.j && r.j.message) || 'erreur'), 'err'); return false; }
   const rr = await plgApi('/rest/v1/planning_codes?' + plgQ({ franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto, order: 'ordre.asc' })); if (rr.ok) PLG.over = rr.j || []; plgRender(); plgMsg(okMsg, 'ok'); return true;
@@ -10014,8 +10039,11 @@ async function plgCodePut(c, patch, okMsg) {                                  //
 async function plgCodeSave(code, champ, val) {
   const c = plgCodes().get(String(code).toUpperCase()); if (!c) return; const patch = {};
   if (champ === 'heures') { const h = +String(val).replace(',', '.'); if (!isFinite(h) || h < 0 || h > 24) { plgMsg('Durée invalide : entre 0 et 24 heures.', 'err'); plgRender(); return; } patch.heures = h; }
+  else if (champ === 'pause') { const n = Math.round(+String(val).replace(',', '.') || 0); if (!isFinite(n) || n < 0 || n > 240) { plgMsg('Pause invalide : entre 0 et 240 minutes.', 'err'); plgRender(); return; } patch.pause = n; }
   else patch[champ] = val === '' ? null : val;
-  return plgCodePut(c, patch, champ === 'heures' ? '✓ Lettre ' + c.code + ' : ' + plgH(patch.heures) + ' comptées par jour pour ce restaurant.' : '✓ Horaire de la lettre ' + c.code + ' enregistré pour ce restaurant.');
+  if (['debut', 'fin', 'debut2', 'fin2', 'pause'].includes(champ)) { const er = plgPlageErr(Object.assign({}, c, patch)); if (er) { plgMsg(er, 'err'); plgRender(); return; } }
+  const e2 = Object.assign({}, c, patch), moitie = !!e2.debut2 !== !!e2.fin2;
+  return plgCodePut(c, patch, champ === 'heures' ? '✓ Lettre ' + c.code + ' : ' + plgH(patch.heures) + ' comptées par jour pour ce restaurant.' : champ === 'pause' ? '✓ Lettre ' + c.code + ' : pause de ' + patch.pause + ' min (déduite des heures comptées).' : moitie ? '✓ Enregistré : renseignez aussi ' + (e2.debut2 ? 'la 2e fin' : 'le 2e début') + ' pour que la 2e plage soit comptée.' : '✓ Horaire de la lettre ' + c.code + ' enregistré pour ce restaurant.');
 }
 function plgCodePal(ev, code) { plgPalOpen(ev, hex => plgCodeColor(code, hex)); }
 async function plgCodeColor(code, hex) {                                      // couleur de la lettre (fond choisi, texte noir ou blanc selon le contraste) : cases, impression et Excel
@@ -10036,8 +10064,10 @@ async function plgCodeDel(code) {
 async function plgCodeRestore(code) { const r = await plgApi('/rest/v1/planning_codes?' + plgQ({ franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + PLG.resto, code: 'eq.' + code }), 'DELETE'); if (!r.ok) { plgMsg('Remise refusée', 'err'); return; } PLG.over = PLG.over.filter(x => String(x.code) !== String(code)); plgRender(); plgMsg('✓ Lettre ' + code + ' remise (valeurs par défaut).', 'ok'); }
 async function plgCodeAdd() {
   const c = document.getElementById('plgNc').value.trim().toUpperCase(), l = document.getElementById('plgNl').value.trim(), d = document.getElementById('plgNd').value, f = document.getElementById('plgNf').value;
+  const X = plgX(), gv = id => ((document.getElementById(id) || {}).value || ''), d2 = X ? gv('plgNd2') : '', f2 = X ? gv('plgNf2') : '', pz = X ? Math.max(0, Math.round(+gv('plgNp') || 0)) : 0;
+  { const er = plgPlageErr({ debut: d, fin: f, debut2: d2, fin2: f2, pause: pz }); if (er) { plgMsg(er, 'err'); return; } }
   if (!c || !l) { plgMsg('Indiquez la lettre et son libellé.', 'err'); return; } if (plgCodes().has(c)) { plgMsg('Cette lettre existe déjà : modifiez ses horaires dans la liste.', 'err'); return; } if (plgMasquees().some(x => String(x.code).toUpperCase() === c)) { plgMsg('Cette lettre a été supprimée : utilisez « remettre » dans « Lettres supprimées ».', 'err'); return; }
-  const r = await plgApi('/rest/v1/planning_codes', 'POST', { franchise: PLG.FR, restaurant: PLG.resto, code: c, libelle: l, heures: d && f ? plgDur({ debut: d, fin: f }) : 0, debut: d || null, fin: f || null, ordre: 100 + PLG.over.length, fond: PLG.newCol || null, texte: PLG.newCol ? plgInk(PLG.newCol) : null }, { Prefer: 'return=representation' });
+  const r = await plgApi('/rest/v1/planning_codes', 'POST', { franchise: PLG.FR, restaurant: PLG.resto, code: c, libelle: l, heures: d && f ? plgDur({ debut: d, fin: f, debut2: d2, fin2: f2, pause: pz }) : 0, debut: d || null, fin: f || null, ordre: 100 + PLG.over.length, fond: PLG.newCol || null, texte: PLG.newCol ? plgInk(PLG.newCol) : null, ...(X ? { debut2: d && f && d2 && f2 ? d2 : null, fin2: d && f && d2 && f2 ? f2 : null, pause: d && f ? pz : 0 } : {}) }, { Prefer: 'return=representation' });
   if (!r.ok) { plgMsg('Ajout refusé : ' + ((r.j && r.j.message) || 'erreur'), 'err'); return; } PLG.over.push((r.j && r.j[0]) || { franchise: PLG.FR, restaurant: PLG.resto, code: c, libelle: l, heures: 0, debut: d, fin: f, ordre: 100, fond: PLG.newCol || null, texte: PLG.newCol ? plgInk(PLG.newCol) : null }); PLG.newCol = null; plgRender(); plgMsg('✓ Lettre ' + c + ' ajoutée à ce restaurant.', 'ok');
 }
 // ── équipe du restaurant (le directeur ajoute lui-même ses directeurs adjoints, assistants, managers, responsables de zone) ──
@@ -10090,13 +10120,38 @@ function plgSet(pid, j, el) {                                                // 
   else { const sp = plgSplit(v); if (sp.code && sp.range) { l = sp.code; h = sp.range; } }   // « O 8h30-17h » ou « Soir 18h-22h » : lettre + horaires
   const k = l && codes.get(l.toUpperCase());
   if (l && (PLG_ABS.test(l) || PLG_ABSW.test(l) || (k && PLG_ABS.test(k.code)))) h = '';     // une absence (OFF, CP, congé…) n'a pas d'horaires ; sinon la lettre ne change jamais les horaires saisis
-  plgCellSet(pid, j, plgJoin(l, h, P.c)); plgRender();
+  plgCellSet(pid, j, plgJoin(l, h, P.c, l && (PLG_ABS.test(l) || PLG_ABSW.test(l) || (k && PLG_ABS.test(k.code))) ? null : P.p)); plgRender();
 }
 function plgSetH(pid, j, el) {                                               // case « horaires » : 8h-17h est compté, tout autre texte est affiché tel quel ; vide = horaires de la lettre
   const P = plgParts(plgCellGet(pid, j)), t = String(el.value).trim().slice(0, 56), g = t ? plgRng(t) : null;
-  plgCellSet(pid, j, plgJoin(P.l, g ? g.norm : t, P.c)); plgRender();
+  plgCellSet(pid, j, plgJoin(P.l, g ? g.norm : t, P.c, P.p)); plgRender();
 }
-function plgSetC(pid, j, c) { plgPalClose(); const P = plgParts(plgCellGet(pid, j)); plgCellSet(pid, j, plgJoin(P.l, P.h, c)); plgRender(); }
+function plgSetC(pid, j, c) { plgPalClose(); const P = plgParts(plgCellGet(pid, j)); plgCellSet(pid, j, plgJoin(P.l, P.h, c, P.p)); plgRender(); }
+function plgPzOpen(ev, pid, j) {                                             // petite fenêtre : durée de la pause de ce jour (en minutes), déduite des heures comptées
+  ev.stopPropagation(); plgPalClose();
+  const v = plgCellGet(pid, j), P = plgParts(v), codes = plgCodes(), x = plgInfo(v, codes), k = P.l ? codes.get(P.l.toUpperCase()) : null, def = k && k.pause ? k.pause : 0;
+  const r = ev.currentTarget.getBoundingClientRect(), d = document.createElement('div'); d.id = 'plgPalBox'; d.className = 'plg-palbox plg-pzbox'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Pause de la journée');
+  const a = "'" + pid + "'," + j;
+  d.innerHTML = '<div class="plg-pt">Pause de la journée</div>' + [15, 20, 30, 45, 60, 90].map(m => '<button type="button" class="plg-pzb' + (x.pz === m ? ' on' : '') + '" onclick="plgPzPick(' + a + ',' + m + ')">' + m + ' min</button>').join('')
+    + '<label class="plg-pc">Autre <input type="number" id="plgPzIn" min="0" max="240" step="5" value="' + (x.pz || '') + '" onkeydown="if(event.key===\'Enter\')plgPzOk(' + a + ')"> min</label>'
+    + '<button type="button" class="plg-pzb" style="grid-column:1/4" onclick="plgPzOk(' + a + ')">Enregistrer</button>'
+    + (def ? '<button type="button" class="plg-pzb" style="grid-column:1/4" onclick="plgPzPick(' + a + ',0)">Aucune pause ce jour</button>' : '')
+    + '<button type="button" class="plg-p0" onclick="plgPzPick(' + a + ',null)">' + (def ? 'Pause de la lettre (' + def + ' min)' : 'Retirer la pause') + '</button>';
+  document.body.appendChild(d); const w = d.offsetWidth, hh = d.offsetHeight;
+  d.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; d.style.top = Math.max(8, Math.min(innerHeight - hh - 8, r.bottom + 4)) + 'px';
+  const inp = document.getElementById('plgPzIn'); if (inp) { inp.focus(); inp.select(); }
+}
+function plgPzPick(pid, j, m) {                                              // m = minutes ; null = pas de pause propre à ce jour (celle de la lettre s'applique) ; 0 = aucune pause ce jour
+  plgPalClose(); const P = plgParts(plgCellGet(pid, j)), k = P.l ? plgCodes().get(P.l.toUpperCase()) : null;
+  if (m === 0 && !(k && k.pause)) m = null;
+  plgCellSet(pid, j, plgJoin(P.l, P.h, P.c, m)); plgRender();
+}
+function plgPzOk(pid, j) {
+  const el = document.getElementById('plgPzIn'), s = String((el || {}).value == null ? '' : el.value).trim().replace(',', '.');
+  if (s === '') return plgPzPick(pid, j, null);
+  const n = Math.round(+s); if (!isFinite(n) || n < 0 || n > 240) { plgMsg('Pause invalide : entre 0 et 240 minutes.', 'err'); return; }
+  plgPzPick(pid, j, n);
+}
 const PLG_COLORS = ['#EBDEF8', '#DAE3F3', '#FFEB9C', '#FBE5D6', '#E2F0D9', '#FFF4E0', '#9FEAFC', '#FFDBDE', '#EDEDED', '#BAD897', '#FF8787', '#FFA94D', '#FFD43B', '#69DB7C', '#4DABF7', '#9775FA', '#F783AC', '#ADB5BD'];
 function plgPalClose() { const d = document.getElementById('plgPalBox'); if (d) d.remove(); }
 function plgPalOpen(ev, cb) {                                                // palette de couleurs ; cb(couleur) est appelé au choix ('' = sans couleur)
@@ -10206,7 +10261,8 @@ function plgWorkbook(base) {
   const thin = { style: 'thin', color: { rgb: 'BFBFBF' } }, bd = { top: thin, bottom: thin, left: thin, right: thin }, ctr = { horizontal: 'center', vertical: 'center' };
   const HEAD = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '44546A' } }, alignment: ctr, border: bd }, SUB = { font: { bold: true }, fill: { fgColor: { rgb: 'D9D9D9' } }, alignment: ctr, border: bd };
   const put = (ws, r, c, v, st, o) => { o = o || {}; const a = X.encode_cell({ r: r - 1, c: c - 1 }), x = { v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' }; if (st) x.s = JSON.parse(JSON.stringify(st)); if (o.f) x.f = o.f; if (o.z) x.z = o.z; ws[a] = x; const R = ws['!ref'] ? X.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }; R.e.r = Math.max(R.e.r, r - 1); R.e.c = Math.max(R.e.c, c - 1); ws['!ref'] = X.encode_range(R); };
-  const plgTxt = (v, x) => x.t === 'code' ? (x.custom ? x.norm : x.code) : (x.t === 'range' ? x.norm : (plgParts(v).l + (x.norm ? ' ' + x.norm : (plgParts(v).h ? ' ' + plgParts(v).h : ''))).trim());
+  const plgTxt0 = (v, x) => x.t === 'code' ? (x.custom ? x.norm : x.code) : (x.t === 'range' ? x.norm : (plgParts(v).l + (x.norm ? ' ' + x.norm : (plgParts(v).h ? ' ' + plgParts(v).h : ''))).trim());
+  const plgTxt = (v, x) => plgTxt0(v, x) + (x.pz > 0 && (x.custom || x.t === 'range' || (x.t === 'free' && x.norm)) ? ' (pause ' + x.pz + ' min)' : '');
   const cellStyle = x => x.bg ? { fill: { fgColor: { rgb: plgRgb(x.bg) } }, font: { bold: true, color: { rgb: plgRgb(x.fg) } }, alignment: ctr, border: bd } : { font: { bold: x.t !== '' }, alignment: ctr, border: bd };
   const tf = h => h / 24, frac = s => s ? plgTm(s) / 24 : '';
   const legRef = '$AC$5:$AD$' + (4 + list.length), nR = Math.max(T.length, 1), blockH = nR + 3;
@@ -10222,11 +10278,11 @@ function plgWorkbook(base) {
       put(ws, top + 1, c0, (k - 1) * 13 + i + 1, SUB); for (let j = 0; j < 7; j++) put(ws, top + 1, c0 + 1 + j, plgSerial(plgAdd(wsd, j)), SUB, { z: 'dd/mm' }); for (let j = 8; j <= 10; j++) put(ws, top + 1, c0 + j, '', SUB);
       for (let q = 0; q < nR; q++) {
         const p = T[q], r = top + 2 + q; put(ws, r, c0, p ? p.prenom : '', { font: { bold: true }, border: bd });
-        const row = p ? plgPeek(wsd, p.id) : null, refs = []; let hp = 0, hc = 0, dj = 0;
-        for (let j = 0; j < 7; j++) { const v = row ? row[j] : '', x = plgInfo(v, codes); put(ws, r, c0 + 1 + j, plgTxt(v, x), cellStyle(x)); refs.push(plgCol(c0 + 1 + j) + r); if (x.t === 'range' || x.custom || (x.t === 'free' && x.norm)) hp += x.h; else if (x.t === 'code') hc += x.h; dj += plgJ(x); }
+        const row = p ? plgPeek(wsd, p.id) : null, refs = []; let hp = 0, hc = 0, dj = 0, sp = false;
+        for (let j = 0; j < 7; j++) { const v = row ? row[j] : '', x = plgInfo(v, codes); put(ws, r, c0 + 1 + j, plgTxt(v, x), cellStyle(x)); refs.push(plgCol(c0 + 1 + j) + r); if (x.t === 'range' || x.custom || (x.t === 'free' && x.norm)) hp += x.h; else if (x.t === 'code') hc += x.h; dj += plgJ(x); if (x.pz > 0 || (x.iv && x.iv.length > 1)) sp = true; }
         if (p && plgFj(p)) { const rg = plgCol(c0 + 1) + r + ':' + plgCol(c0 + 7) + r; put(ws, r, c0 + 8, '', { alignment: ctr, border: bd }); put(ws, r, c0 + 9, '', { alignment: ctr, border: bd }); put(ws, r, c0 + 10, dj, { font: { bold: true }, alignment: ctr, border: bd }, { f: '7-COUNTBLANK(' + rg + ')-COUNTIF(' + rg + ',"OFF")-COUNTIF(' + rg + ',"CP")-COUNTIF(' + rg + ',"AM")-COUNTIF(' + rg + ',"CSS")-COUNTIF(' + rg + ',"NT")-COUNTIF(' + rg + ',"RTT")-COUNTIF(' + rg + ',"REPOS")-COUNTIF(' + rg + ',"CONGÉ")-COUNTIF(' + rg + ',"CONGE")-COUNTIF(' + rg + ',"ABSENT")', z: '0" j"' }); continue; }
-        put(ws, r, c0 + 8, tf(hp), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR(MOD((RIGHT(' + a + ',5)+0)-(MID(' + a + ',LEN(' + a + ')-10,5)+0),1),0)').join('+'), z: '[h]:mm' });
-        put(ws, r, c0 + 9, tf(hc), { alignment: ctr, border: bd }, { f: refs.map(a => 'IFERROR(VLOOKUP(' + a + ',' + legRef + ',2,FALSE),0)').join('+'), z: '[h]:mm' });
+        put(ws, r, c0 + 8, tf(hp), { alignment: ctr, border: bd }, { f: sp ? undefined : refs.map(a => 'IFERROR(MOD((RIGHT(' + a + ',5)+0)-(MID(' + a + ',LEN(' + a + ')-10,5)+0),1),0)').join('+'), z: '[h]:mm' });
+        put(ws, r, c0 + 9, tf(hc), { alignment: ctr, border: bd }, { f: sp ? undefined : refs.map(a => 'IFERROR(VLOOKUP(' + a + ',' + legRef + ',2,FALSE),0)').join('+'), z: '[h]:mm' });
         put(ws, r, c0 + 10, tf(hp + hc), { font: { bold: true }, alignment: ctr, border: bd }, { f: plgCol(c0 + 8) + r + '+' + plgCol(c0 + 9) + r, z: '[h]:mm' });
       }
     }
@@ -10262,7 +10318,7 @@ function plgBlocks(from, to, o) {                                             //
     const rows = PLG.team.map(p => {
       let tot = 0, jours = 0; const fj = plgFj(p);
       const cells = days.map(d => { const v = plgDay(p.id, d), x = plgInfo(v, codes), P = plgParts(v), g = P.h ? plgRng(P.h) : null; tot += x.h; jours += plgJ(x);
-        const h = P.h ? (g ? plgFmtH(g.d) + '-' + plgFmtH(g.f) : P.h) : (x.t === 'code' && x.d != null && x.f != null ? plgFmtH(x.d) + '-' + plgFmtH(x.f) : '');
+        const hb = P.h ? (g ? plgDisp(g) : P.h) : (x.t === 'code' && x.d != null && x.f != null ? (x.iv && x.iv.length > 1 ? plgDisp({ parts: x.iv }) : plgFmtH(x.d) + '-' + plgFmtH(x.f)) : ''), h = hb + (x.pz > 0 ? (hb ? ' · ' : '') + 'pause ' + x.pz + ' min' : '');
         return { l: P.l, h, bg: x.bg || '', fg: x.fg || '' }; });
       return { p, fj, cells, tot: fj ? jours + ' j' : (tot ? plgH(tot) : '') };
     });
@@ -11160,7 +11216,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261110-114104';
+const BUILD_VERSION = '20261110-153057';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
