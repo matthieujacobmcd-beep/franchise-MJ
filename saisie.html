@@ -4395,7 +4395,7 @@ const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
   ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
-const accMax = k => k === 'pb' ? 3 : 2;
+const accMax = k => k === 'pb' ? 3 : k === 'tps' ? 1 : 2;   // tps : accès oui/non (les droits d'écriture sont ceux de l'application forfait jours)
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
@@ -4451,7 +4451,7 @@ function sbTabOk(k) {
 function sbMarkRO() {                                                      // consultation seule : bandeau + boutons d'enregistrement grisés (le serveur refuse de toute façon l'écriture)
   const p = document.getElementById('panel'); if (p) p.classList.remove('ro');
   if (!SB_RIGHTS) return; const lv = accTabLvl(SB_RIGHTS, curTab);
-  if (lv !== 1 || ['prix', 'pb', 'documents', 'equipes', 'acces'].includes(curTab)) return;
+  if (lv !== 1 || ['prix', 'pb', 'documents', 'equipes', 'acces', 'tps'].includes(curTab)) return;
   if (!p || p.querySelector('.ro-note')) return; p.classList.add('ro');
   p.insertAdjacentHTML('afterbegin', '<div class="ro-note bd-sh warn" style="margin:0 0 10px">Consultation seule pour cet onglet : tu peux tout voir, mais pas enregistrer. Si tu as besoin de le modifier, demande l\'accès à ton responsable.</div>');
   p.querySelectorAll('.btn-save').forEach(b => { b.disabled = true; b.title = 'Consultation seule'; });
