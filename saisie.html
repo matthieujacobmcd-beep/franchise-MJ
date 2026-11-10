@@ -4578,6 +4578,31 @@ const eqLabel = k => (ACC_ROLE && ACC_ROLE[k]) || k;
 .ap-t.ov{box-shadow:0 0 0 2.5px var(--text)} .ap-dot{position:absolute;top:6px;right:6px;font-size:.6rem;font-weight:800;background:var(--text);color:var(--card);border-radius:999px;padding:1px 7px}
 .ap-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:.74rem;color:var(--muted);margin:6px 0} .ap-leg i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-2px;border:1.5px solid var(--border)}
 .eq-pills{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px} .eq-pills button{border:1.5px solid var(--border);background:var(--card);border-radius:999px;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer;color:var(--text)} .eq-pills button.on{background:var(--text);color:var(--card);border-color:var(--text)}`; document.head.appendChild(st); })();
+(function () { const st = document.createElement('style'); st.textContent = `
+.eq-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px} .eq-q{flex:1;min-width:210px;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font:inherit;font-size:.86rem;background:var(--card);color:var(--text)} .eq-sum{font-size:.78rem;color:var(--muted)}
+.eq-gh{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin:20px 0 8px;font-size:.76rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)} .eq-gh span{font-weight:600;letter-spacing:0;text-transform:none}
+.eq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.eq-card{border:1.5px solid var(--border);border-radius:16px;background:var(--card);padding:14px;display:flex;flex-direction:column;gap:9px;transition:box-shadow .15s,border-color .15s;min-width:0} .eq-card:hover{border-color:var(--gold);box-shadow:0 6px 18px rgba(0,0,0,.08)} .eq-card.off{opacity:.62}
+.eq-top{display:flex;gap:12px;align-items:center;min-width:0} .eq-id{min-width:0;flex:1} .eq-id b{font-size:.96rem} .eq-id small{color:var(--muted)}
+.eq-av{position:relative;flex:0 0 auto;width:46px;height:46px;border-radius:50%;background:var(--c,#64748b);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;letter-spacing:.02em} .eq-av.lg{width:74px;height:74px;font-size:1.45rem}
+.eq-dot{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;border:2.5px solid var(--card)} .eq-hero .eq-dot{border-color:var(--card2);width:16px;height:16px}
+.eq-mail{display:block;font-size:.76rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-badges{display:flex;gap:6px;flex-wrap:wrap} .eq-b{font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:999px;border:1.5px solid currentColor;line-height:1.5;white-space:nowrap} .eq-b.eq-poste{background:var(--c,#64748b);border-color:var(--c,#64748b);color:#fff}
+.eq-line{display:flex;gap:7px;align-items:flex-start;font-size:.8rem;color:var(--text);line-height:1.4} .eq-line svg{flex:0 0 auto;margin-top:2px;color:var(--muted)} .eq-line.mut{color:var(--muted);font-size:.76rem}
+.eq-chips{display:flex;gap:5px;flex-wrap:wrap} .eq-chips span{font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:7px;background:var(--card2);border:1px solid var(--border);color:var(--text)}
+.eq-sub{font-size:.76rem;line-height:1.4} .eq-sub.ok{color:#1e8449} .eq-sub.warn{color:#b9770e;font-weight:700} .eq-perso{font-size:.74rem;font-weight:800;color:var(--text)}
+.eq-foot{margin-top:auto;display:flex;justify-content:flex-end;padding-top:2px}
+.eq-back{border:0;background:none;color:var(--gold);font:inherit;font-weight:800;font-size:.86rem;cursor:pointer;padding:4px 0;margin:0 0 10px}
+.eq-fiche{border:1.5px solid var(--border);border-radius:18px;background:var(--card);overflow:hidden}
+.eq-hero{display:flex;gap:18px;align-items:center;padding:20px;background:var(--card2);border-bottom:1.5px solid var(--border);flex-wrap:wrap} .eq-hid{min-width:0;flex:1} .eq-hid h3{margin:0 0 7px;font-size:1.25rem}
+.eq-sec{padding:16px 20px;border-bottom:1px solid var(--border)} .eq-sec h4{margin:0 0 10px;font-size:.74rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.eq-actions{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px;background:var(--card2)}
+@media (max-width:520px){.eq-grid{grid-template-columns:1fr}.eq-hero{padding:16px}.eq-sec{padding:14px 16px}.eq-actions{padding:14px 16px}}`; document.head.appendChild(st); })();
+const EQ_PAL = ['#2563eb', '#0369a1', '#15803d', '#b45309', '#be185d', '#6d28d9', '#0f766e', '#9a3412'], EQ_COL_ECH = { owner: '#b8860b', franchise: '#7c3aed', superviseur: '#0e7490', collab: '#475569' };
+const eqHash = t => { let h = 0; String(t || '').split('').forEach(c => { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return h; };
+const eqColOf = (role, nom) => EQ_COL_ECH[role] || EQ_PAL[eqHash(nom) % EQ_PAL.length];
+const eqIni = n => { const w = String(n || '').trim().split(/\s+/).filter(Boolean); return ((w[0] || '?').charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase(); };
+const EQ_PIN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>', EQ_CAL = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
 const ACC_ICO = { 0: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>', 1: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>', 2: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>' };
 const eqTiles = () => ACC_CAT.map(([g, L]) => [g, L.filter(([k]) => k !== 'rev' || CFG.id === 'py')]);
 const eqPoste = id => (EQ.postes || []).find(x => x.id === id) || null;
@@ -4600,28 +4625,48 @@ const eqCanLine = r => {                                                      //
   const c = sbEffCan(r), lab = { sim: 'Prévision CA', budget: 'Budget & PNL', valid: 'Validation', edg: 'Salaires' }, have = ['sim', 'budget', 'valid', 'edg'].filter(k => c.includes(k));
   return have.length ? '<br><span style="color:#1e8449">Enregistre : ' + have.map(k => lab[k]).join(' · ') + '</span>' : '<br><span style="color:#b9770e;font-weight:700">Attention : ne peut enregistrer ni prévision, ni budget, ni validation</span>';
 };
+const eqPosteNom = r => (EQ.postes && eqPoste(r.poste_id) ? eqPoste(r.poste_id).nom : eqLabel(r.role));
+const eqMatch = (r, q) => { if (!q) return true; const t = (r.nom + ' ' + r.email + ' ' + eqPosteNom(r) + ' ' + eqResto(r)).toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every(x => t.includes(x)); };
+function eqCard(r) {
+  const st = eqState(r), me = SB_RIGHTS && String(r.email).toLowerCase() === String(SB_RIGHTS.email).toLowerCase(), low = EQ_RANK[r.role] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0) && !me, c218 = eq218(r), nom = eqPosteNom(r), col = eqColOf(eqRoleOf(r), nom), np = EQ.postes ? eqNPerso(r) : 0;
+  const pl = r.role === 'directeur' && (r.modules || []).includes('planning') ? (r.restos_planning || []) : null;
+  const cn = (r.modules || []).includes('saisie') ? (() => { const c = sbEffCan(r), lab = { sim: 'Prévision CA', budget: 'Budget & PNL', valid: 'Validation', edg: 'Salaires' }, have = ['sim', 'budget', 'valid', 'edg'].filter(k => c.includes(k)); return have.length ? '<div class="eq-sub ok">Enregistre : ' + have.map(k => lab[k]).join(' · ') + '</div>' : '<div class="eq-sub warn">Attention : ne peut enregistrer ni prévision, ni budget, ni validation</div>'; })() : '';
+  return `<article class="eq-card${r.actif ? '' : ' off'}" style="--c:${col}">
+    <div class="eq-top"><div class="eq-av">${escH(eqIni(r.nom))}<i class="eq-dot" style="background:${st[1]}" title="${escH(st[0])}"></i></div><div class="eq-id"><b>${escH(r.nom)}</b>${me ? ' <small>(vous)</small>' : ''}<span class="eq-mail" title="${escH(r.email)}">${escH(r.email)}</span></div></div>
+    <div class="eq-badges"><span class="eq-b eq-poste">${escH(nom)}</span><span class="eq-b" style="color:${st[1]}">${escH(st[0])}</span>${EQ.f218 ? `<span class="eq-b" style="color:${c218[1]}" title="Application 218 jours">218 j · ${escH(c218[0])}</span>` : ''}</div>
+    <div class="eq-line">${EQ_PIN}<span>${escH(eqResto(r))}</span></div>
+    ${pl ? `<div class="eq-line mut">${EQ_CAL}<span>Planning : ${pl.length ? pl.map(eqNomR).map(escH).join(', ') : '<span style="color:var(--gold)">à définir (tous pour le moment)</span>'}</span></div>` : ''}
+    <div class="eq-chips">${(r.modules || []).map(m => `<span>${escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])}</span>`).join('') || '<span>Aucun accès</span>'}</div>
+    ${cn}${np ? `<div class="eq-perso">${np} accès personnalisé${np > 1 ? 's' : ''}</div>` : ''}
+    <div class="eq-foot">${low ? `<button class="btn-save" style="padding:6px 14px;font-size:.8rem" onclick="eqOpen('${r.id}')">Ouvrir la fiche</button>` : '<span class="eq-sub" style="color:var(--muted)">Lecture seule</span>'}</div></article>`;
+}
+function eqListHtml() {
+  const rows = EQ.rows.filter(r => eqMatch(r, EQ.q || '')), groups = [], ids = new Set();
+  if (EQ.postes) EQ.postes.forEach(po => { ids.add(po.id); groups.push([po.nom, rows.filter(r => r.poste_id === po.id)]); });
+  Object.keys(EQ_RANK).sort((a, b) => EQ_RANK[b] - EQ_RANK[a]).forEach(k => { const L = rows.filter(r => !ids.has(r.poste_id) && r.role === k); if (L.length) groups.push([eqLabel(k), L]); });
+  const out = groups.filter(g => g[1].length).map(([n, L]) => `<div class="eq-gh">${escH(n)} <span>· ${L.length} personne${L.length > 1 ? 's' : ''}</span></div><div class="eq-grid">${L.map(eqCard).join('')}</div>`).join('');
+  return out || `<div class="hint">${EQ.q ? 'Aucune personne ne correspond à « ' + escH(EQ.q) + ' ».' : 'Aucune personne pour le moment.'}</div>`;
+}
+function eqSumTxt() {
+  const n = EQ.rows.length, a = EQ.rows.filter(r => r.actif && r.user_id).length, i = EQ.rows.filter(r => r.actif && !r.user_id).length, o = EQ.rows.filter(r => !r.actif).length;
+  return n + ' personne' + (n > 1 ? 's' : '') + ' · ' + a + ' active' + (a > 1 ? 's' : '') + (i ? ' · ' + i + ' invitation' + (i > 1 ? 's' : '') + ' en attente' : '') + (o ? ' · ' + o + ' désactivée' + (o > 1 ? 's' : '') : '');
+}
+function eqFilter(v) { EQ.q = String(v || ''); const l = document.getElementById('eqList'); if (l) l.innerHTML = eqListHtml(); }
+function eqBack() { EQ.edit = null; eqPaint(); window.scrollTo(0, EQ.y || 0); }
 function eqPaint() {
   const p = document.getElementById('panel'), can = eqRolesFor().length > 0, banner = SBA.mode() === 'both' ? '<div class="hint" style="margin-bottom:10px">ℹ️ Mode transition : les anciens mots de passe partagés fonctionnent encore. Ils seront supprimés quand chacun aura son compte.</div>' : '';
-  const th = 'padding:6px;text-align:left;font-size:.75rem;color:var(--muted)', td = 'padding:8px 6px;border-top:1px solid var(--border);vertical-align:top';
-  const rows = EQ.rows.map(r => {
-    const st = eqState(r), me = SB_RIGHTS && r.email.toLowerCase() === SB_RIGHTS.email.toLowerCase(), low = EQ_RANK[r.role] < (SB_RIGHTS.rang || 0) && !me;
-    return `<tr><td style="${td}"><b>${escH(r.nom)}</b>${me ? ' <small style="color:var(--muted)">(vous)</small>' : ''}<br><span style="font-size:.76rem;color:var(--muted)">${escH(r.email)}</span></td>
-      <td data-l="Poste · restaurants" style="${td};font-size:.82rem">${escH(EQ.postes && eqPoste(r.poste_id) ? eqPoste(r.poste_id).nom : eqLabel(r.role))}<br><span style="font-size:.76rem;color:var(--muted)">${escH(eqResto(r))}</span>${eqPlan(r)}</td>
-      <td data-l="Accès" style="${td};font-size:.76rem;color:var(--muted)">${(r.modules || []).map(m => escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])).join(' · ') || '—'}${eqCanLine(r)}${EQ.postes && eqNPerso(r) ? `<br><b style="color:var(--text)">${eqNPerso(r)} accès personnalisé${eqNPerso(r) > 1 ? 's' : ''}</b>` : ''}</td>
-      <td data-l="218 jours" style="${td};font-size:.78rem;font-weight:700;color:${eq218(r)[1]}">${escH(eq218(r)[0])}</td>
-      <td data-l="Statut" style="${td};font-size:.8rem;font-weight:700;color:${st[1]}">${st[0]}</td>
-      <td style="${td};text-align:right;white-space:nowrap">${low ? `<button class="btn-save" style="padding:5px 10px;font-size:.78rem" onclick="eqOpen('${r.id}')">Modifier</button>` : ''}</td></tr>`;
-  }).join('');
+  if (EQ.edit !== null) {                                                  // fiche d'une personne : plein écran, la liste revient avec « Retour »
+    p.innerHTML = `<button type="button" class="eq-back" onclick="eqBack()">← Retour aux équipes</button><div id="eqForm"></div><div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin-top:10px">${escH(EQ.msg[1])}</div>`;
+    eqForm(); return;
+  }
   const jr = EQ.journal.map(x => `<li>${escH(eqWhen(x.quand))} · ${escH(x.par || '')} · ${escH(x.cible || '')} : ${escH({ INSERT: 'ajouté', UPDATE: 'modifié', DELETE: 'supprimé' }[x.action] || x.action)}</li>`).join('');
-  p.innerHTML = `<style>@media (max-width:700px){.eq-t{min-width:0 !important}.eq-t thead{display:none}.eq-t,.eq-t tbody,.eq-t tr,.eq-t td{display:block;width:100%;box-sizing:border-box}.eq-t tr{border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;margin-bottom:10px;background:var(--card)}.eq-t td{border-top:0 !important;padding:4px 0 !important;text-align:left !important;white-space:normal !important}.eq-t td[data-l]::before{content:attr(data-l);display:block;font-size:.68rem;font-weight:600;color:var(--muted)}.eq-t td:last-child:not([data-l]){padding-top:8px !important}}</style><div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.</div>${banner}
-    ${can ? '<div style="margin:0 0 12px"><button class="btn-save" onclick="eqOpen(\'\')">+ Ajouter une personne</button></div>' : ''}
-    <div id="eqForm"></div>
+  p.innerHTML = `<div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.</div>${banner}
+    <div class="eq-bar">${can ? '<button class="btn-save" onclick="eqOpen(\'\')">+ Ajouter une personne</button>' : ''}<input id="eqQ" class="eq-q" type="search" placeholder="Rechercher : nom, e-mail, poste, restaurant" value="${escH(EQ.q || '')}" oninput="eqFilter(this.value)" aria-label="Rechercher une personne"><span class="eq-sum">${escH(eqSumTxt())}</span></div>
+    <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin:0 0 6px">${escH(EQ.msg[1])}</div>
+    <div id="eqList">${eqListHtml()}</div>
     ${eqPostesHtml()}
-    <div class="sim-wrap"><table class="eq-t" style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th style="${th}">Personne</th><th style="${th}">${EQ.postes ? 'Poste' : 'Fonction'} · restaurants</th><th style="${th}">Accès</th><th style="${th}">218 jours</th><th style="${th}">Statut</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="6" style="${td};color:var(--muted)">Aucune personne pour le moment.</td></tr>`}</tbody></table></div>
-    <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin-top:8px">${escH(EQ.msg[1])}</div>
     ${jr ? `<details class="sim-d" style="margin-top:12px"><summary>Journal des changements</summary><ul style="margin:8px 0 0 18px;font-size:.8rem;line-height:1.6">${jr}</ul></details>` : ''}
     ${SB_RIGHTS && SB_RIGHTS.role === 'owner' ? `<details class="sim-d" style="margin-top:12px" ontoggle="if(this.open)eqCxLoad()"><summary>Journal des connexions (visible de vous seul)</summary><div id="eqCx" style="margin-top:8px;font-size:.8rem;color:var(--muted)">Chargement…</div></details>` : ''}`;
-  if (EQ.edit !== null) eqForm();
 }
 // ── Journal des connexions : réservé au propriétaire (la base refuse tout autre compte) ──
 const eqUa = ua => { ua = String(ua || ''); const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '', nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''; return [nav, os].filter(Boolean).join(' · ') || (ua ? 'autre' : '—'); };
@@ -4645,7 +4690,7 @@ function eqCxPaint() {
 function eqOpen(id) {
   const dp = eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[eqPostesFor().length - 1] || null;
   EQ.edit = id === '' ? { id: '', role: dp ? dp.role : (eqRolesFor().slice(-1)[0] || 'directeur'), poste_id: dp ? dp.id : null, acces: {}, isNew: true } : (EQ.rows.find(r => r.id === id) ? Object.assign({}, EQ.rows.find(r => r.id === id), { acces: Object.assign({}, EQ.rows.find(r => r.id === id).acces || {}) }) : null);
-  eqSet(''); eqPaint(); const f = document.getElementById('eqForm'); if (f) f.scrollIntoView({ block: 'nearest' });
+  eqSet(''); EQ.y = window.scrollY; eqPaint(); window.scrollTo(0, 0);
 }
 function eqForm() {
   if (EQ.postes) return eqFormP();
@@ -4685,32 +4730,35 @@ function eqSync() {                                                         // r
   const pl = [...document.querySelectorAll('.eqP')]; if (pl.length) e.restos_planning = pl.filter(x => x.checked).map(x => x.value);
 }
 function eqFormP() {
-  const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
+  const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return; const y = window.scrollY;
   const po = eqPoste(e.poste_id), isNew = !!e.isNew, has = (a, k) => (a || []).includes(k), allR = CFG.restos.map(c => [c.key, c.label]);
   if (!e.restos) e.restos = po && EQ_DEF[po.role] && EQ_DEF[po.role].tous ? ['*'] : [];
-  const all = has(e.restos, '*'), inp = 'padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box';
+  const all = has(e.restos, '*'), inp = 'padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box;background:var(--card);color:var(--text)';
   const opts = eqPostesFor(); if (po && !opts.some(x => x.id === po.id)) opts.unshift(po);
   const eff = eqEff(po, e.acces), nPerso = Object.keys(e.acces || {}).length;
-  f.innerHTML = `<div style="border:1.5px solid var(--border);border-radius:12px;padding:14px;margin:0 0 14px;background:var(--card2)">
-    <div style="font-weight:800;margin-bottom:10px">${isNew ? 'Ajouter une personne' : 'Modifier ' + escH(e.nom)}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
-      <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
-      <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" placeholder="prenom@entreprise.fr"></label>
-      <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
-    ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin:-6px 0 12px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants <span style="font-weight:400">(propres à cette personne, pas au poste)</span></div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
-      ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
-    ${eqRoleOf(e) === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres postes ouvrent tous les plannings)</span></div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:.78rem;color:var(--muted)"><b style="color:var(--text)">Accès</b> · poste « ${escH(po ? po.nom : '')} » ${nPerso ? `· <b style="color:var(--text)">${nPerso} personnalisé${nPerso > 1 ? 's' : ''}</b>` : '· aucune personnalisation'} <span style="font-weight:400">— cliquez sur une tuile pour changer son niveau</span></div>${nPerso ? '<button type="button" class="btn-save" style="padding:4px 12px;font-size:.76rem;background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqReset()">Revenir au poste</button>' : ''}</div>
-    ${eqGrid(k => +eff[k] || 0, 'eqTile', k => po ? +po.acces[k] || 0 : 0)}
-    <div style="height:12px"></div>
-    ${eq218Block(e)}
-    ${isNew ? '<label style="font-size:.84rem;display:block;margin-bottom:12px"><input type="checkbox" id="eqInv" checked> Envoyer l\'invitation par e-mail (lien pour choisir son mot de passe)</label>' : ''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-save" id="eqGo" onclick="eqSave()">Enregistrer</button>
+  const col = po ? eqColOf(po.role, po.nom) : '#64748b', st = isNew ? null : eqState(e), c218 = isNew ? null : eq218(e);
+  const hero = `<div class="eq-hero" style="--c:${col}"><div class="eq-av lg">${escH(isNew && !e.nom ? '+' : eqIni(e.nom))}${st ? `<i class="eq-dot" style="background:${st[1]}" title="${escH(st[0])}"></i>` : ''}</div>
+      <div class="eq-hid"><h3>${isNew ? 'Nouvelle personne' : escH(e.nom)}</h3><div class="eq-badges">${po ? `<span class="eq-b eq-poste">${escH(po.nom)}</span>` : ''}${st ? `<span class="eq-b" style="color:${st[1]}">${escH(st[0])}</span>` : ''}${c218 && EQ.f218 ? `<span class="eq-b" style="color:${c218[1]}">218 j · ${escH(c218[0])}</span>` : ''}</div>${e.email ? `<span class="eq-mail" style="margin-top:6px">${escH(e.email)}</span>` : ''}</div></div>`;
+  f.innerHTML = `<div class="eq-fiche">${hero}
+    <section class="eq-sec"><h4>Informations</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+        <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
+        <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" placeholder="prenom@entreprise.fr"></label>
+        <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
+      ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}</section>
+    <section class="eq-sec"><h4>Restaurants <span style="text-transform:none;letter-spacing:0;font-weight:500">(propres à cette personne, pas au poste)</span></h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 14px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
+        ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+      ${eqRoleOf(e) === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin:14px 0 4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres postes ouvrent tous les plannings)</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}</section>
+    <section class="eq-sec"><h4>Accès</h4>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:.78rem;color:var(--muted)">Poste « ${escH(po ? po.nom : '')} » ${nPerso ? `· <b style="color:var(--text)">${nPerso} personnalisé${nPerso > 1 ? 's' : ''}</b>` : '· aucune personnalisation'} <span style="font-weight:400">— cliquez sur une tuile pour changer son niveau</span></div>${nPerso ? '<button type="button" class="btn-save" style="padding:4px 12px;font-size:.76rem;background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqReset()">Revenir au poste</button>' : ''}</div>
+      ${eqGrid(k => +eff[k] || 0, 'eqTile', k => po ? +po.acces[k] || 0 : 0)}</section>
+    <section class="eq-sec"><h4>Application 218 jours</h4>${eq218Block(e)}${isNew ? '<label style="font-size:.84rem;display:block;margin-top:4px"><input type="checkbox" id="eqInv" checked> Envoyer l\'invitation par e-mail (lien pour choisir son mot de passe)</label>' : ''}</section>
+    <div class="eq-actions"><button class="btn-save" id="eqGo" onclick="eqSave()">Enregistrer</button>
       ${isNew ? '' : `<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqResend()">Renvoyer l'invitation</button><button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red)" onclick="eqToggle()">${e.actif ? 'Désactiver (départ)' : 'Réactiver'}</button>`}
-      <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.edit=null;eqPaint()">Annuler</button></div></div>`;
+      <button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="eqBack()">Annuler</button></div></div>`;
+  window.scrollTo(0, y);
 }
 function eqTile(k) {
   eqSync(); const e = EQ.edit, po = eqPoste(e.poste_id), eff = eqEff(po, e.acces), nv = ((+eff[k] || 0) + 1) % (accMax(k) + 1), base = po ? +po.acces[k] || 0 : 0;
@@ -4743,7 +4791,7 @@ function eqPostesHtml() {
     ${mine ? '' : '<div class="hint">Ce poste est d\'un niveau égal ou supérieur au vôtre : vous le consultez sans pouvoir le modifier.</div>'}
     ${eqGrid(k => +draft[k] || 0, 'eqPTile', null)}
     ${mine ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn-save" onclick="eqPSave()">Enregistrer le poste${diff ? ' (' + diff + ' tuile' + (diff > 1 ? 's' : '') + ' modifiée' + (diff > 1 ? 's' : '') + ')' : ''}</button>${diff ? '<button class="btn-save" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="EQ.pd=null;eqPaint()">Annuler les changements</button>' : ''}<button class="btn-save" style="background:transparent;color:var(--red);border:1.5px solid var(--red);margin-left:auto" onclick="eqPDel()" ${users.length ? 'disabled title="Poste utilisé : changez d\'abord le poste des personnes concernées"' : ''}>Supprimer le poste</button></div>` : ''}`;
-  return `<details class="sim-d" style="margin:0 0 14px" open><summary>Postes et accès par défaut</summary><div style="margin-top:10px"><div class="hint" style="margin:0 0 10px">Un poste est un modèle d'accès : chaque personne qui l'occupe reçoit ses tuiles, et peut avoir des accès personnalisés (réglés dans sa fiche). Modifier un poste met à jour toutes les personnes qui n'ont pas personnalisé la tuile concernée.</div><div class="eq-pills">${pills}</div>${nw}${ed}</div></details>`;
+  return `<details class="sim-d" style="margin:22px 0 14px" ${EQ.pOpen ? 'open' : ''} ontoggle="EQ.pOpen=this.open"><summary>Postes et accès par défaut (modèles d'accès)</summary><div style="margin-top:10px"><div class="hint" style="margin:0 0 10px">Un poste est un modèle d'accès : chaque personne qui l'occupe reçoit ses tuiles, et peut avoir des accès personnalisés (réglés dans sa fiche). Modifier un poste met à jour toutes les personnes qui n'ont pas personnalisé la tuile concernée.</div><div class="eq-pills">${pills}</div>${nw}${ed}</div></details>`;
 }
 function eqPSel(id) { EQ.pid = id; EQ.pd = null; EQ.pnew = null; eqPPaint(); }
 function eqPTile(k) { const po = eqPoste(EQ.pid); if (!po || !eqPostesFor().some(x => x.id === po.id)) return; const d = EQ.pd || (EQ.pd = Object.assign({}, po.acces)); d[k] = ((+d[k] || 0) + 1) % (accMax(k) + 1); eqPPaint(); }
@@ -4823,7 +4871,7 @@ async function eqSave() {
     const r2 = await eqCall('/rest/v1/rpc/acces_218_set', 'POST', { f: CFG.auth.franchise, p_email: e.email, p_actif: c218.checked });
     note += r2.ok ? ' Accès 218 jours ' + (c218.checked ? 'activé.' : 'désactivé.') : ' Accès 218 jours inchangé (' + (((r2.j && r2.j.message) || 'refusé').replace(/^218 jours : /, '')) + ').';
   }
-  await renderEquipes(); eqSet('✓ Enregistré.' + note, 'ok');
+  await renderEquipes(); window.scrollTo(0, EQ.y || 0); eqSet('✓ Enregistré.' + note, 'ok');
 }
 async function eqToggle() {
   const e = EQ.edit; if (!e) return;
