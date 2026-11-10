@@ -437,7 +437,7 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
 const accMax = k => k === 'pb' ? 3 : 2;
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
@@ -449,6 +449,18 @@ function tileModules(a) {                                                       
   return [any(['pil', 'perf', 'itv', 'form', 'mkt', 'com', 'act', 'tps']) && 'dashboard', any(['q', 'h', 'm', 'p', 'pv', 'pca', 'bud', 'val', 'doc']) && 'saisie', n('rev') >= 1 && 'revue', n('plan') >= 1 && 'planning', n('eq') >= 1 && 'utilisateurs'].filter(Boolean);
 }
 function tileCan(a) { const n = k => +((a || {})[k]) || 0; return [n('pca') >= 2 && 'sim', (n('bud') >= 2 || n('pv') >= 2) && 'budget', n('val') >= 2 && 'valid', n('sal') >= 2 && 'edg'].filter(Boolean); }
+
+// ══ Application « Suivi du temps de travail (218 jours) » intégrée dans la page ══
+// L'application s'affiche dans un cadre (?embed=1) et reçoit le jeton d'accès de la page par postMessage (même origine) : plus de mot de passe à retaper.
+// Seule la page gère la session (renouvellement, déconnexion) : le cadre ne la renouvelle pas, pour ne jamais déconnecter la page par erreur.
+const FJ = { frame: null, org: '', timer: null };
+async function fjSend() { try { const t = await SBA.token(); if (t && FJ.frame && FJ.frame.contentWindow) FJ.frame.contentWindow.postMessage({ type: 'forfait-session', access_token: t }, FJ.org); } catch (e) {} }
+window.addEventListener('message', e => { if (!FJ.frame || e.origin !== FJ.org || e.source !== FJ.frame.contentWindow) return; const m = e.data || {}; if (m.type === 'forfait-ready' || m.type === 'forfait-need-token') fjSend(); });
+function fjMount(box, url) {
+  if (!box) return; const u = new URL(url); FJ.org = u.origin; u.searchParams.set('embed', '1');
+  box.innerHTML = '<iframe src="' + u.href + '" title="Suivi du temps de travail" style="width:100%;height:min(82vh,1100px);border:0;border-radius:12px;background:#fff" allow="clipboard-write"></iframe>';
+  FJ.frame = box.querySelector('iframe'); clearInterval(FJ.timer); FJ.timer = setInterval(fjSend, 8 * 60 * 1000);       // jeton renouvelé par la page, renvoyé au cadre toutes les 8 minutes
+}
 
 let SB_SCOPE = false, SB_DASH = null;
 function dashScope(r) {                                              // personne limitée à certains restaurants : onglets, adaptateur de données et vue de départ
@@ -11148,7 +11160,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261110-104157';
+const BUILD_VERSION = '20261110-113618';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
