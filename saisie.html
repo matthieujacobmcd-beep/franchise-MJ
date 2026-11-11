@@ -212,7 +212,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════
-/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "acces_dyn": null, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}, "links": null, "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
+/*CFG_START*/const CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "pwd_hash": "86080de18942f7ca2be7f0df433ae841b38e52e8366415ff049159934e54ee46", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "acces_dyn": null, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}, "links": [{"id": "pointage", "label": "Suivi Temps Travail", "url": "forfait/", "embed": true, "embed_only": true, "title": "Suivi du temps de travail (forfait jours)", "color": "#4f46e5"}], "access": [{"id": "franchise", "role": "franchise", "label": "Franchisé", "scope": "*", "can": ["sim", "budget", "edg", "valid"], "pwd_hash": "4a4e1f3cd74bb12cad0b00ce0f28d5e6d5e62194aaa3e41fd759928ff35c03ba"}, {"id": "dir:LOURDES", "role": "directeur", "label": "Directeur · Lourdes", "scope": ["LOURDES"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "f161eebf7df2c4f7f02863e609592397f143b8b19a3e7d168dd891c6c319f485"}, {"id": "dir:POUZAC", "role": "directeur", "label": "Directeur · Pouzac", "scope": ["POUZAC"], "can": ["sim", "budget", "valid", "edg"], "pwd_hash": "6d28c46ddc0306ee1af51503b4c04aa8e6173d5ec6c8d902e1c22043448f4bbf"}]};/*CFG_END*/
 const APPS_SCRIPT_URL = CFG.apps_script_url;   // …/exec
 const PWD_HASH = CFG.pwd_hash;
 // ── Accès par rôle (directeur de restaurant, superviseur de secteur, franchisé) : mots de passe distincts de celui de la saisie ──
@@ -4529,7 +4529,7 @@ const FJ = { frame: null, org: '', timer: null };
 async function fjSend() { try { const t = await SBA.token(); if (t && FJ.frame && FJ.frame.contentWindow) FJ.frame.contentWindow.postMessage({ type: 'forfait-session', access_token: t }, FJ.org); } catch (e) {} }
 window.addEventListener('message', e => { if (!FJ.frame || e.origin !== FJ.org || e.source !== FJ.frame.contentWindow) return; const m = e.data || {}; if (m.type === 'forfait-ready' || m.type === 'forfait-need-token') fjSend(); });
 function fjMount(box, url) {
-  if (!box) return; const u = new URL(url); FJ.org = u.origin; u.searchParams.set('embed', '1');
+  if (!box) return; const u = new URL(url, location.href); FJ.org = u.origin; u.searchParams.set('embed', '1');
   box.innerHTML = '<iframe src="' + u.href + '" title="Suivi du temps de travail" style="width:100%;height:min(82vh,1100px);border:0;border-radius:12px;background:#fff" allow="clipboard-write"></iframe>';
   FJ.frame = box.querySelector('iframe'); clearInterval(FJ.timer); FJ.timer = setInterval(fjSend, 8 * 60 * 1000);       // jeton renouvelé par la page, renvoyé au cadre toutes les 8 minutes
 }
@@ -4554,7 +4554,7 @@ function saisieMountLogin() {
 const sbEmbedLink = () => (CFG.links || []).find(l => l.embed) || null;
 function renderTps() {                                                     // application « Suivi du temps de travail » intégrée (connexion automatique)
   const p = document.getElementById('panel'), lk = sbEmbedLink(); if (!lk) { p.innerHTML = ''; return; }
-  p.innerHTML = `<div class="sim-note" style="margin-bottom:10px">${escH(lk.label)} : application de suivi du forfait jours, intégrée. Tu es connecté(e) automatiquement avec ton compte. <a href="${escH(lk.url)}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir dans un nouvel onglet</a></div><div id="fjBox"></div>`;
+  p.innerHTML = `<div class="sim-note" style="margin-bottom:10px">${escH(lk.label)} : application de suivi du forfait jours, intégrée. Tu es connecté(e) automatiquement avec ton compte.${lk.embed_only ? '' : ` <a href="${escH(lk.url)}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir dans un nouvel onglet</a>`}</div><div id="fjBox"></div>`;
   fjMount(document.getElementById('fjBox'), lk.url);
 }
 function sbTabOk(k) {
@@ -4590,6 +4590,7 @@ const eqMods = () => EQ_MODS.filter(([k]) => k !== 'revue' || CFG.id === 'py');
 function eqSet(t, k) { EQ.msg = [k || '', t || '']; const m = document.getElementById('eqMsg'); if (m) { m.className = 'save-msg ' + (k || ''); m.textContent = t || ''; } }
 async function eqCall(path, method, body, headers) {
   const tok = await SBA.token(); if (!tok) { eqSet('Session expirée : reconnectez-vous.', 'err'); return { ok: false, j: null }; }
+  if (CFG.id === 'mj' && /\/rpc\/acces_218_(liste|set)/.test(path)) headers = Object.assign({ 'Content-Profile': 'mj' }, headers || {});     // MJ : fiches du suivi du temps dans le schéma « mj »
   return SBA.api(path, { method: method || 'GET', tok, body, headers });
 }
 async function renderEquipes() {
@@ -4912,7 +4913,7 @@ async function eqPDel() {
   EQ.pid = ''; EQ.pd = null; await renderEquipes(); eqSet('✓ Poste supprimé.', 'ok');
 }
 function eq218Block(e) {                                                  // accès à l'application « Suivi du forfait 218 jours » (comptes et fiches gérés dans cette appli)
-  const lien = `<a href="${EQ_218_URL}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir l'application 218 jours</a>`, ttl = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Application 218 jours (suivi du forfait jours)</div>';
+  const lien = CFG.id === 'mj' ? 'onglet « Temps de travail »' : `<a href="${EQ_218_URL}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir l'application 218 jours</a>`, ttl = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Application 218 jours (suivi du forfait jours)</div>';
   if (e.isNew) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Si la personne est au forfait jours, sa fiche se crée dans l'application 218 jours (${lien}) ; elle apparaîtra ici ensuite.</div></div>`;
   if (!EQ.f218) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Lien avec le 218 jours pas encore activé.</div></div>`;
   const x = EQ.f218[String(e.email).toLowerCase()];
