@@ -473,8 +473,9 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', '']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
+{ const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => t[0] !== 'prim'); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
 const accMax = k => k === 'pb' ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
@@ -11256,7 +11257,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20260928-162550';
+const BUILD_VERSION = '20261113-103421';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
