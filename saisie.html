@@ -4739,7 +4739,7 @@ function eqListHtml() {
   Object.keys(EQ_RANK).sort((a, b) => EQ_RANK[b] - EQ_RANK[a]).forEach(k => { const L = rows.filter(r => !ids.has(r.poste_id) && r.role === k); if (L.length) groups.push([eqLabel(k), L]); });
   const out = groups.filter(g => g[1].length).map(([n, L]) => `<div class="eq-gh">${escH(n)} <span>· ${L.length} personne${L.length > 1 ? 's' : ''}</span></div><div class="eq-grid">${L.map(eqCard).join('')}</div>`).join('');
   const sans = eqPrimesSansAcces().filter(p => !EQ.q || (p.nom + ' ' + p.restaurant + ' ' + EQ_PPOSTE[p.poste]).toLowerCase().includes(String(EQ.q).toLowerCase()));
-  const outP = sans.length ? `<div class="eq-gh">Sans accès à l'application <span>· ${sans.length} personne${sans.length > 1 ? 's' : ''}, issues des primes (même principe : choisissez leur poste et leurs accès)</span></div><div class="eq-grid">${sans.map(eqCardPrimes).join('')}</div>` : '';
+  const outP = sans.length ? `<div class="eq-gh">Sans accès à l'application <span>· ${sans.length} personne${sans.length > 1 ? 's' : ''}, issues des primes : choisissez leur poste et leurs accès. Déjà un accès ? Liez d'abord la fiche depuis le Dashboard, onglet Primes › Personnes › « Rapprocher avec les accès existants »</span></div><div class="eq-grid">${sans.map(eqCardPrimes).join('')}</div>` : '';
   return (out + outP) || `<div class="hint">${EQ.q ? 'Aucune personne ne correspond à « ' + escH(EQ.q) + ' ».' : 'Aucune personne pour le moment.'}</div>`;
 }
 const EQ_PPOSTE = { directeur: 'Directeur', adjoint: 'Directeur adjoint', assistant: 'Assistant de direction', manager: 'Manager', rz: 'Responsable de zone', adm: 'Assistant administratif', hotesse: 'Hôtesse principale' };
