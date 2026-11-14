@@ -2767,6 +2767,15 @@ function calcSemester(kpiId, resto, year, sem) {
 }
 // Ce KPI est-il découpable au semestre ? (a un mensuel avec des données pour l'année)
 function kpiHasSemester(kpiId, year, sem) { return calcSemester(kpiId, 'FRANCHISE', year, sem) != null; }
+// Prévisionnel vs réel : le mois en cours n'est réel que jusqu'à son dernier jour saisi (propre à chaque restaurant). Les MONTANTS (€) du budget sont ramenés aux jours écoulés ; les ratios (%) ne changent pas.
+function prevPartialDay(m, r) { const p = ((DASHBOARD_DATA.meta || {}).partial_by_resto || {})[r]; return p && p.month === m ? p.day : 0; }
+function prevAtDate(prevSrc, kpi, m, r) {
+  const v = (prevSrc[m] || {})[r]; if (v == null) return null;
+  if (!(kpi.fmt === 'euros' || kpi.fmt === 'nb')) return v;
+  const nd = new Date(2026, MONTHS.indexOf(m) + 1, 0).getDate(), f = rr => { const d = prevPartialDay(m, rr); return d ? Math.min(1, d / nd) : 1; };
+  if (r === 'FRANCHISE') { let t = 0, n = 0; RESTOS.forEach(rr => { const x = (prevSrc[m] || {})[rr]; if (x != null) { t += x * f(rr); n++; } }); return n ? t : v; }
+  return v * f(r);
+}
 // Mois d'un semestre effectivement remplis pour une année (pour comparer « à date »)
 function semesterMonthsFilled(kpiId, year, sem) {
   const kpi = KPIs.find(k => k.id === kpiId);
@@ -3948,7 +3957,7 @@ function renderMain() {
         const months = MONTHS.filter(m => prevSrc[m]?.[r] != null && realSrc?.[m]?.[r] != null);
         let vPrev = 0, vReal = 0, count = 0;
         for (const m of months) {
-          vPrev += prevSrc[m][r];
+          vPrev += prevAtDate(prevSrc, kpi, m, r);
           vReal += realSrc[m][r];
           count++;
         }
@@ -4669,7 +4678,7 @@ function populateDetail() {
     for (const m of monthsP) {
       html += `<tr><td>${m}</td>`;
       for (const r of restosP) {
-        const vp = prevSrc[m]?.[r] ?? null;
+        const vp = prevAtDate(prevSrc, kpi, m, r);
         const vr = getData(YEAR_CUR)[kpi.hasMonthly||kpi.id]?.[m]?.[r] ?? null;
         const d  = calcDelta(vp, vr, kpi.fmt);
         html += `<td style="color:#b8860b">${fmt(vp,kpi.fmt)}</td><td>${fmt(vr,kpi.fmt)}</td><td>${fmtDelta(d,kpi.fmt,kpi.id,vp)}</td>`;
@@ -5188,7 +5197,7 @@ function initChart() {
     restos.forEach((r, i) => {
       datasets.push({
         label: `${restoDisplay(r)} Prévisionnel`,
-        data: months.map(m => prevSrc[m]?.[r] ?? null),
+        data: months.map(m => prevAtDate(prevSrc, kpi, m, r)),
         borderColor: '#d4a017',
         backgroundColor: 'transparent',
         borderDash: [5,3], tension: 0.3, pointRadius: 3, borderWidth: 2, spanGaps: true,
@@ -6225,6 +6234,10 @@ body.dark-mode .wk-label { color: #b794f4; }
 .wk-value { font-size: 1.22rem; font-weight: 800; color: var(--text); }
 .wk-delta { font-size: .72rem; font-weight: 700; margin-top: 3px; }
 .wk-delta span { color: var(--muted); font-weight: 400; }
+.wk-chute { font-size: .7rem; margin-top: 5px; padding-top: 4px; border-top: 1px dashed var(--border); color: var(--text); }
+.wk-chute b { font-weight: 800; }
+.wk-chute span { color: var(--muted); }
+.wk-chute .wk-up { color: #16a34a; } .wk-chute .wk-down { color: #dc2626; }
 .wk-up { color: #16a34a; } .wk-down { color: #dc2626; }
 .week-detail { margin-top: 12px; background: var(--card); border-radius: 12px; padding: 14px; border: 1px solid var(--border); }
 .week-detail-title { font-size: .8rem; font-weight: 800; margin-bottom: 10px; color: var(--text); }
@@ -6435,6 +6448,22 @@ function renderDayDetail(box, k) {
     <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Restaurant</th><th>${WEEK.days[0].slice(8, 10)}/${WEEK.days[0].slice(5, 7)}/${WEEK.yearCur}</th><th>${WEEK.label_n1} (jour équivalent)</th>
       <th class="delta">Δ</th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div></div>`;
 }
+
+// « Chute » du mois (vue Mois, mois en cours) : réalisé à date + prévision journalière des jours restants, comparée au mois complet N-1 (jours équivalents)
+function weekChuteHtml(r) {
+  if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis.ca_total) return '';
+  const rs = r === 'FRANCHISE' ? RESTOS : [r], K = WEEK.kpis.ca_total, ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {};
+  let real = 0, rest = 0, nRest = 0, nPrev = 0, n1 = 0;
+  for (const rr of rs) WEEK.days.forEach((d, i) => {
+    const v = K.cur[rr][i];
+    if (v != null) real += v;
+    else if (!ld[rr] || d > ld[rr]) { nRest++; const p = ((DASHBOARD_DATA.prevjour || {})[rr] || {})[d]; if (p && p.total != null) { rest += p.total; nPrev++; } }      // jour à venir : on prend la prévision journalière saisie
+    const e = _wkVal(WEEK.days_eq[i], rr, 'ca'); if (e != null) n1 += e;
+  });
+  if (!nPrev) return '';
+  const chute = real + rest, d = n1 ? (chute / n1 - 1) * 100 : null, manque = nRest - nPrev;
+  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)">Chute du mois <b>${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+}
 let weekOpenKpi = null;
 let weekResto = 'FRANCHISE';
 let weekChartInst = null;
@@ -6543,6 +6572,7 @@ function renderWeekStrip() {
       <div class="wk-value">${fmt(v, k.fmt)}</div>
       ${k.amt ? `<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin-top:-2px">${fmt(weekAgg(k.amt, 'cur', r), 'euros')}</div>` : ''}
       ${d == null ? '' : `<div class="wk-delta ${good ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%${dabsStr} <span>vs ${WEEK.yearN1}</span></div>`}
+      ${k.id === 'ca_total' ? weekChuteHtml(r) : ''}
     </div>`;
   }
   h += `</div>${renderWeekMissing(r)}${renderWeekComments(r)}<div id="weekDetail"></div></div>`;
@@ -11257,7 +11287,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261113-103716';
+const BUILD_VERSION = '20261114-123910';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

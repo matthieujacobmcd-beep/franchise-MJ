@@ -104,6 +104,7 @@
   .period .step:hover{ filter:brightness(1.06); }
   .pv-recap{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:6px 0 14px; }
   .pv-kpi{ background:var(--card2); border-radius:12px; padding:10px 12px; font-size:.72rem; color:var(--muted); } .pv-kpi b{ display:block; font-size:1.05rem; color:var(--text); margin:2px 0; } .pv-kpi i{ font-style:normal; font-size:.66rem; }
+  .pv-chute{ grid-column:1/-1; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; padding:10px; border:1.5px solid #c7d2fe; border-radius:14px; background:rgba(99,102,241,.06); } .pv-chute-t{ grid-column:1/-1; font-weight:800; font-size:.8rem; color:#4338ca; }
   .pv-obj{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; padding:14px; background:#fffaf0; border:1.5px solid #f0d58a; border-radius:12px; }
   .pcb{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; background:#ecfeff; border:1.5px solid #a5f3fc; border-left:4px solid #0891b2; border-radius:10px; padding:8px 12px; font-size:.78rem; margin:12px 0 0; color:var(--text); }
   .pcb-c{ font-weight:700; padding:3px 9px; border-radius:999px; border:1.5px solid var(--tc); background:#fff; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pcb-m{ font-family:inherit; font-size:inherit; font-weight:700; color:var(--muted); background:none; border:0; padding:1px 6px; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; } .pcb-m:hover{ color:#0891b2; }
@@ -1283,13 +1284,14 @@ function pvWeeks() {
   }
 }
 function pvSums() {
-  const days = pvDays(PV.ym); let prev = 0, prevOnN1 = 0, n1 = 0, n2 = 0, prevOnN2 = 0, real = 0, nPrev = 0;
+  const days = pvDays(PV.ym); let prev = 0, prevOnN1 = 0, n1 = 0, n2 = 0, prevOnN2 = 0, real = 0, nPrev = 0, realAll = 0, nReal = 0, prevElapsed = 0, prevRest = 0, nRest = 0, nRestPrev = 0;
   for (const iso of days) {
     const v = PV.vals[iso], a = pvN1(curResto, iso), b = pvN2(curResto, iso), r = pvCa(curResto, iso);
+    if (r != null) { realAll += r; nReal++; if (v != null) prevElapsed += v; } else if (!(OPEN_DATES[curResto] && iso < OPEN_DATES[curResto])) { nRest++; if (v != null) { prevRest += v; nRestPrev++; } }       // jours déjà réalisés / jours restants (avec ou sans prévision)
     if (v != null) { prev += v; nPrev++; if (a != null) { prevOnN1 += v; n1 += a; } if (b != null) { prevOnN2 += v; n2 += b; } }
     if (r != null && v != null) real += r;
   }
-  return { prev, nPrev, n1, prevOnN1, n2, prevOnN2, real, nDays: days.length,
+  return { prev, nPrev, n1, prevOnN1, n2, prevOnN2, real, realAll, nReal, prevElapsed, prevRest, nRest, nRestPrev, nDays: days.length,
            n1All: days.reduce((s, i) => s + (pvN1(curResto, i) || 0), 0), n2All: days.reduce((s, i) => s + (pvN2(curResto, i) || 0), 0) };
 }
 function pvRecap() {
@@ -1299,6 +1301,16 @@ function pvRecap() {
     + k('Prévision saisie', pvEur(s.prev), `${s.nPrev} jour${s.nPrev > 1 ? 's' : ''} sur ${s.nDays}`)
     + k('Prévision CA net total', pvEur(s.prev * PV.coef), `× ${String(PV.coef).replace('.', ',')}`)
     + k('vs N-1', s.n1 ? pvPct(s.prevOnN1 / s.n1 - 1) : '—', 'sur les jours saisis') + k('vs N-2', s.n2 ? pvPct(s.prevOnN2 / s.n2 - 1) : '—', 'sur les jours saisis');
+  // « Chute » du mois : ce que le mois donnera si les jours restants tombent comme prévu = réalisé à date + prévision journalière des jours restants
+  if (s.nReal || s.nRestPrev) {
+    const chute = s.realAll + s.prevRest, ecart = s.prevElapsed ? s.realAll / s.prevElapsed - 1 : null, manque = s.nRest - s.nRestPrev;
+    box.innerHTML += '<div class="pv-chute"><div class="pv-chute-t">Chute du mois</div>'
+      + k('Réalisé à date', pvEur(s.realAll), `${s.nReal} jour${s.nReal > 1 ? 's' : ''}${ecart != null ? ' · ' + pvPct(ecart) + ' vs prévu sur ces jours' : ''}`)
+      + k('Prévu jours restants', pvEur(s.prevRest), s.nRest ? `${s.nRestPrev} jour${s.nRestPrev > 1 ? 's' : ''} prévu${s.nRestPrev > 1 ? 's' : ''} sur ${s.nRest}` : 'mois terminé')
+      + k('Chute du mois', pvEur(chute), manque > 0 ? `⚠ ${manque} jour${manque > 1 ? 's' : ''} restant${manque > 1 ? 's' : ''} sans prévision` : 'réalisé + prévu restant')
+      + k('Chute vs N-1', s.n1All ? pvPct(chute / s.n1All - 1) : '—', 'mois complet, jours équivalents')
+      + k('Chute vs prévision', s.prev ? pvPct(chute / s.prev - 1) : '—', 'prévision saisie du mois') + '</div>';
+  }
   pvWeeks(); pvStash(); pvDraftBar();                       // les saisies sont mises à l'abri à chaque modification
 }
 function pvVentiler() {
@@ -1881,7 +1893,7 @@ function bdDetM(p) {
 // Équipe de gestion (EDG) saisie par poste (initiales, jamais de noms) : coût mensuel = brut + primes (prime annuelle répartie sur les mois travaillés) ; null = ligne « brut managers » saisie à la main
 const BD_POSTES = ['Directeur', 'Adjoint', 'Assistant', 'Manager'];
 function bdEdgM(p) {
-  if (typeof accCan === 'function' && !accCan('edg')) return null;      // salaires par poste : réservés aux accès qui ont le droit « edg »
+  if (typeof accCan === 'function' && !accCan('edg')) return (Array.isArray(p.edgMomg) && p.edgMomg.length === 12 && p.edgMomg.some(v => v > 0)) ? p.edgMomg.map(Number) : null;      // salaires par poste : réservés aux accès qui ont le droit « edg » ; les autres reprennent le coût mensuel déjà calculé par l'échelon qui les a saisis
   const e = p.edg; if (!e || !e.on || !(e.rows || []).some(x => (x.sal || []).some(v => v > 0))) return null;
   const out = Array(12).fill(0);
   for (const x of e.rows) { const act = x.sal.filter(v => v > 0).length || 1; for (let i = 0; i < 12; i++) if (x.sal[i] > 0) out[i] += x.sal[i] + (x.prime || 0) / act; }
@@ -2211,7 +2223,7 @@ function renderBudget() {
   const editable = BD_LINES.filter(x => x.t === 'pct' || x.t === 'pctn' || x.t === 'fix');
   const hypEdit = x => {
     if (detM[x.k]) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= détail par société (${(p.det || []).filter(d => d.k === x.k).length} ligne(s), ci-dessus)</td><td>${bdE(sum(L[x.k]))}</td><td class="p">${A ? bdP(sum(L[x.k]) / A) : ''}</td></tr>`;
-    if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de gestion, ci-dessous)</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
+    if (x.k === 'momg' && edgM) return `<tr><td>${x.l}</td><td colspan="2" style="text-align:center;color:var(--muted)">= salaires par poste (équipe de gestion${canEdg ? ', ci-dessous' : ', saisis par un échelon ayant ce droit'})</td><td>${bdE(sum(L.momg))}</td><td class="p">${A ? bdP(sum(L.momg) / A) : ''}</td></tr>`;
     const md = bdMode(p, x.k), base = x.t === 'pctn' ? 'CA net' : 'CA alim.';
     const varM = md === 'r' && p.pm && p.pm[x.k], wr = varM ? sum(L[x.k]) / (x.t === 'pctn' ? sum(L.net) : A) : null;
     const val = md === 'r' ? bdIn(varM ? (wr || 0) : p[x.k]) : String(Math.round(sum(p[x.k])));
@@ -2656,7 +2668,7 @@ function wfCollect(r, Y) {
     if (arr.some(v => v != null)) cal[ym] = arr;
   }
   const o = bdParams(r), bud = JSON.parse(JSON.stringify(o.p));
-  delete bud.edg; delete bud.detHist;                                                        // les salaires voyagent à part (saisie par échelon), jamais dans le contenu partagé
+  delete bud.edg; delete bud.edgMomg; delete bud.detHist;                                                        // les salaires voyagent à part (saisie par échelon), jamais dans le contenu partagé
   const refs = {}; for (const k of Object.keys(PV.refs || {})) { const [rr, iso] = k.split('|'); if (rr === r && iso.slice(0, 4) === String(Y) && (PV.refs[k] || []).length) refs[iso] = PV.refs[k].slice(); }
   const out = { v: 1, y: +Y, coef: PV.coef, cal, bud, sim: JSON.parse(JSON.stringify(simCfg(r))) }; if (Object.keys(refs).length) out.refs = refs; return out;
 }
@@ -2665,7 +2677,9 @@ function wfEdgSeg(r) {
   if (!accCan('edg', r)) return undefined; const e = bdParams(r).p.edg; if (!e) return undefined;
   const m = bdEdgM(bdParams(r).p); return { on: e.on !== false, rows: JSON.parse(JSON.stringify(e.rows || [])), momg: m ? m.map(v => Math.round(v)) : null };
 }
-const wfTopSeg = sal => (sal && (sal.franchise || sal.superviseur || sal.directeur)) || null;     // saisie la plus haute visible
+// Saisie de salaires à retenir : la plus haute qui CONTIENT des salaires (ou qui coupe explicitement le détail : « on » = faux). Un échelon qui a seulement ouvert l'écran envoie un segment vide : il ne doit pas écraser celui du dessous.
+const wfSegHas = s => !!s && (s.rows || []).some(x => (x.sal || []).some(v => v > 0));
+const wfTopSeg = sal => { if (!sal) return null; const L = [sal.franchise, sal.superviseur, sal.directeur].filter(Boolean); return L.find(s => s.on === false || wfSegHas(s)) || null; };
 const wfLocalRows = r => { const e = bdParams(r).p.edg; return JSON.stringify(e && e.rows ? e.rows : []); };
 function wfApply(r, P, sal) {                                                  // charge la version partagée dans les écrans (brouillons du calendrier, budget, simulation)
   pvStash(); PV.resto = null; PV.loadedYm = null;
@@ -2679,6 +2693,7 @@ function wfApply(r, P, sal) {                                                  /
   for (const iso of Object.keys(P.refs || {})) PV.refs[r + '|' + iso] = P.refs[iso]; pvRefsPersist();
   const o = bdParams(r), keep = o.p.edg, top = wfTopSeg(sal); o.p = P.bud;
   if (top && accCan('edg', r)) o.p.edg = { on: top.on !== false, rows: JSON.parse(JSON.stringify(top.rows || [])) }; else if (keep) o.p.edg = keep;
+  if (top && !accCan('edg', r) && top.on !== false && Array.isArray(top.momg)) o.p.edgMomg = top.momg.map(Number); else delete o.p.edgMomg;      // sans le droit « salaires par poste » : on reprend le coût mensuel des managers calculé par l'échelon qui les a saisis
   bdSave();
   if (P.sim) SIM.byResto[r] = P.sim; SIM.ty = P.y; simSave();
 }
@@ -2699,7 +2714,7 @@ function wfRows(r, P, seg) {                                                   /
 const wfAlim = P => MN.map((_, i) => { const a = (P.cal || {})[P.y + '-' + pad2(i + 1)]; return a ? a.reduce((s, v) => s + (v || 0), 0) : 0; });
 function wfSummary(P, r, sal) {
   try {
-    const top = wfTopSeg(sal); P = top ? Object.assign({}, P, { bud: Object.assign({}, P.bud, { edg: { on: top.on !== false, rows: top.rows || [] } }) }) : P;
+    const top = wfTopSeg(sal); P = top ? Object.assign({}, P, { bud: Object.assign({}, P.bud, { edg: { on: top.on !== false, rows: top.rows || [] } }, (!accCan('edg', r) && top.on !== false && Array.isArray(top.momg)) ? { edgMomg: top.momg.map(Number) } : {}) }) : P;
     const alim = wfAlim(P), full = MN.map((_, i) => { const a = (P.cal || {})[P.y + '-' + pad2(i + 1)]; return !!a && a.every(v => v != null); }), L = bdCompute(P.bud, alim);
     const A = alim.reduce((a, b) => a + b, 0), t = k => L[k].reduce((a, b) => a + b, 0), hN = simHist(r, P.y - 1);
     const ok = MN.map((_, i) => full[i] && hN[i].n === hN[i].nd), cmpA = alim.reduce((a, v, i) => a + (ok[i] ? v : 0), 0), cmpN = hN.reduce((a, x, i) => a + (ok[i] ? x.A : 0), 0);
