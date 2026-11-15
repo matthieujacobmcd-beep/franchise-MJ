@@ -2881,6 +2881,8 @@ async function wfPull() {                                                       
 // elle est signalée « modifiée par X » (valeur d'avant conservée) : la personne concernée (ou le franchisé / superviseur) la valide ou rétablit l'ancienne valeur.
 // Qui a saisi quoi : doc.m = { n:[{id,name}], c:{AAAA-MM:[indice…]}, b:{clé:indice}, d:{id:indice}, chg:{ligne:{by,prev,at,from,to}} } (indices dans n ; -1 = personne).
 const wfNDays = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
+// Ligne « vide » : rien de saisi (null, 0, texte vide, tableau ou objet entièrement vides). Sert à protéger le dossier partagé : un écran vide ne l'écrase jamais.
+const wfEmptyV = v => v == null || v === '' || v === 0 || v === false || (Array.isArray(v) ? v.every(wfEmptyV) : (typeof v === 'object' ? Object.keys(v).every(k => wfEmptyV(v[k])) : false));
 const wfJ = v => JSON.stringify(v === undefined ? null : v);
 const wfCl = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 function wfLines(doc) {
@@ -2916,13 +2918,13 @@ function wfAuthSet(meta, k, i) {
 function wfPerson(meta, me) { let i = meta.n.findIndex(x => x.id === me.id); if (i < 0) { meta.n.push({ id: me.id, name: me.name }); i = meta.n.length - 1; } else meta.n[i].name = me.name; return i; }
 function wfNormCal(doc) { if (doc.cal) for (const ym of Object.keys(doc.cal)) if (!(doc.cal[ym] || []).some(v => v != null)) delete doc.cal[ym]; return doc; }
 function wfMerge(base, mine, theirs, me, now, opts) {              // → { doc, meta, stats:{ mine, conflicts, theirs } }
-  const B = wfLines(base), M = wfLines(mine), T = wfLines(theirs), out = wfCl(theirs), meta = wfMetaOf(theirs), stats = { mine: 0, conflicts: 0, theirs: 0 }, track = !(opts && opts.noflag), mi = wfPerson(meta, me);
+  const B = wfLines(base), M = wfLines(mine), T = wfLines(theirs), out = wfCl(theirs), meta = wfMetaOf(theirs), stats = { mine: 0, conflicts: 0, theirs: 0, protectedN: 0 }, track = !(opts && opts.noflag), mi = wfPerson(meta, me);
   const keys = new Set([...Object.keys(B), ...Object.keys(M), ...Object.keys(T)]);
   for (const k of keys) {
     const b = wfJ(B[k]), m = wfJ(M[k]), t = wfJ(T[k]);
     if (m === b) { if (t !== b) stats.theirs++; continue; }          // ligne que je n'ai pas touchée : la version partagée est retenue
     if (m === t) continue;                                             // même valeur des deux côtés
-    if (t !== b) stats.conflicts++; else stats.mine++;
+    if (t !== b) { if (opts && opts.protect && wfEmptyV(M[k]) && !wfEmptyV(T[k])) { stats.protectedN++; continue; } stats.conflicts++; } else stats.mine++;   // protect (partage automatique) : en cas de modification des deux côtés, une ligne vide de cet écran ne remplace pas une valeur du dossier
     wfSetLine(out, k, M[k]);
     if (!wfTracked(k)) continue;
     const pa = wfAuthGet(meta, k), had = T[k] !== undefined && T[k] !== null;
@@ -2963,8 +2965,12 @@ function wfTargets() {                                                          
   for (const k of Object.keys(PV.drafts)) { const [r, ym] = k.split('|'); add(r, +ym.slice(0, 4)); }
   return [...out.values()].filter(([r, Y]) => wfInCircuit(r, Y));
 }
+let WF_UT = 0; const WF_T0 = Date.now();
+['input', 'change', 'keydown'].forEach(ev => document.addEventListener(ev, e => { if (e.isTrusted) WF_UT = Date.now(); }, true));      // dernière vraie saisie de la personne (jamais un simple clic ni l'ouverture de la page)
+const wfQuiet = () => !WF_UT;                                                                       // AUCUN enregistrement automatique tant que la personne n'a rien saisi sur cette page (consulter n'écrit jamais)
 function wfAutoSchedule(delay) {
   if (WFA.applying || !PREVJ) return;
+  if (wfQuiet()) return;                                                                          // consulter n'écrit pas
   let any = false;
   for (const [r, Y] of wfTargets()) {                                                          // seulement ce qui a vraiment changé depuis le dernier partage / la dernière réception
     const key = wfKey(r, Y); if (WF.sig[key] === wfSig(r, Y)) continue;
@@ -2983,6 +2989,8 @@ async function wfShareOne(r, Y, manual) {                                       
   const D = WF.byKey[key] || null;
   if (D && D.etape === 'final') return { ok: false, msg: 'le dossier est finalisé : seul le franchisé peut le déverrouiller', skip: true };
   if (D && !wfMayEdit(r, D.etape)) return { ok: false, msg: 'la saisie est validée : seuls le superviseur et le franchisé peuvent encore modifier le dossier', skip: true };
+  if (D && !WF.base[key]) { await wfFirstContact(r, Y); return { ok: true, msg: 'dossier partagé chargé (premier accès sur cet appareil : rien n\'a été écrasé)', same: true, firstContact: true }; }      // appareil jamais calé sur ce dossier : on REÇOIT, on n'écrit pas
+  if (!D && !manual && r !== curResto) return { ok: true, msg: 'rien à partager', same: true };      // un brouillon d'un autre restaurant n'ouvre jamais un dossier tout seul
   const mine = wfCollect(r, Y), sig = wfSig(r, Y);
   if (D && WF.sync[key] === D.version && WF.sig[key] === sig) { WFA.dirty[key] = false; return { ok: true, msg: 'déjà partagé (v' + D.version + ')', same: true, version: D.version }; }
   if (D && WF.sig[key] === sig && WF.sync[key] !== D.version) { WFA.dirty[key] = false; return { ok: true, msg: 'rien de nouveau à partager (une version plus récente est chargée automatiquement)', same: true }; }   // écran inchangé : c'est à lui de recevoir, pas d'envoyer
@@ -2993,7 +3001,7 @@ async function wfShareOne(r, Y, manual) {                                       
     for (let attempt = 0; attempt < 3; attempt++) {
       let T = null, ver = 0;
       if (D || attempt > 0) { const jl = await wfCall('load', r, Y); if (!jl.ok) return { ok: false, msg: jl.error || 'lecture du dossier impossible' }; if (jl.dossier) { T = wfParse(jl.dossier.donnees); ver = jl.dossier.version; if (!T) return { ok: false, msg: 'version partagée illisible' }; } }
-      const now = wfNowIso(), M = T ? wfMerge(baseDoc || {}, mine, T, me, now, { noflag: !baseDoc }) : wfMergeNew(mine, me, now);
+      const now = wfNowIso(), M = T ? wfMerge(baseDoc || {}, mine, T, me, now, { noflag: !baseDoc, protect: !manual }) : wfMergeNew(mine, me, now);
       const adopts = !wfSameLines(M.doc, mine);                                                // des lignes des autres vont s'ajouter à l'écran
       if (adopts && !manual && wfBusyTyping()) { clearTimeout(WFA.t); WFA.t = setTimeout(wfAutoRun, 2500); return { ok: true, msg: 'en attente de la fin de ta saisie', same: true, defer: true }; }
       const donnees = JSON.stringify(M.doc); if (donnees.length > 45000) return { ok: false, msg: 'dossier trop volumineux (' + donnees.length + ' caractères)' };
@@ -3005,7 +3013,7 @@ async function wfShareOne(r, Y, manual) {                                       
       if (adopts) { const ty = SIM.ty; WFA.applying++; try { wfApply(r, M.doc, undefined); if (ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; } }
       WF.sig[key] = wfSig(r, Y); WFA.dirty[key] = false; if (adopts) wfRefreshScreens();
       WF.byKey[key] = { restaurant: r, year: String(Y), etape: j.etape || etape, statut: j.statut || 'en_cours', version: j.version, at: wfNowIso(), by: me.name };
-      WFA.flash[key] = adopts ? 'les saisies des autres ont été intégrées' + (M.stats.conflicts ? ' ; ' + M.stats.conflicts + ' ligne(s) modifiée(s) des deux côtés : la tienne est retenue et signalée' : '') : '';
+      WFA.flash[key] = adopts ? 'les saisies des autres ont été intégrées' + (M.stats.conflicts ? ' ; ' + M.stats.conflicts + ' ligne(s) modifiée(s) des deux côtés : la tienne est retenue et signalée' : '') + (M.stats.protectedN ? ' ; ' + M.stats.protectedN + ' ligne(s) vide(s) de cet écran n\'ont pas remplacé celles du dossier partagé' : '') : '';
       if (!WFA.flash[key]) delete WFA.flash[key];
       return { ok: true, msg: 'partagé avec tous (v' + j.version + ')', version: j.version, opened: !D, merged: adopts };
     }
@@ -3063,6 +3071,46 @@ async function wfLoadApply(r, Y, keepTy) {                                      
   if (WF.cur && WF.cur.r === r && WF.cur.y === Y) WF.cur = null;
   wfRefreshScreens(); return { ok: true, dossier: j.dossier };
 }
+// ── Premier contact avec un dossier (appareil jamais calé dessus) : le dossier partagé fait FOI. La saisie locale de l'appareil n'est jamais envoyée ; elle est gardée de côté (« sauvegarde de sécurité »)
+//    et peut être reprise, dans les cases vides ou en totalité. Consulter n'écrit jamais dans le dossier.
+let WFSAFE = {}; try { WFSAFE = JSON.parse(localStorage.getItem('py_wfsafe') || '{}') || {}; } catch (e) { WFSAFE = {}; }
+const wfSafePersist = () => { try { localStorage.setItem('py_wfsafe', JSON.stringify(WFSAFE)); } catch (e) {} };
+let WF_DEFLINES = null;
+const wfDefLines = () => { if (!WF_DEFLINES) WF_DEFLINES = wfLines({ bud: JSON.parse(wfDefBud()) }); return WF_DEFLINES; };
+const wfRealDiff = (A, B) => { const D0 = wfDefLines(), out = []; for (const k of Object.keys(A)) { if (wfEmptyV(A[k]) || wfJ(A[k]) === wfJ(D0[k]) || wfJ(A[k]) === wfJ(B[k])) continue; out.push(k); } return out; };   // lignes réellement saisies sur l'écran A et différentes de B (valeurs par défaut exclues)
+function wfSafeSave(r, Y, mine, T) {
+  const n = wfRealDiff(wfLines(mine), wfLines(T)).length; if (!n) return 0;
+  const key = wfKey(r, Y), L = WFSAFE[key] = WFSAFE[key] || []; L.push({ at: wfNowIso(), n, doc: wfCl(mine) }); while (L.length > 3) L.shift();
+  const all = Object.keys(WFSAFE); while (all.length > 24) delete WFSAFE[all.shift()];
+  wfSafePersist(); return n;
+}
+async function wfFirstContact(r, Y) {
+  const key = wfKey(r, Y); if (WFA.fc && WFA.fc[key]) return; (WFA.fc = WFA.fc || {})[key] = true;
+  try {
+    const j = await wfCall('load', r, Y); if (!j.ok || !j.dossier) return;
+    const T = wfParse(j.dossier.donnees); if (!T) return;
+    const kept = wfHasContent(wfCollect(r, Y)) ? wfSafeSave(r, Y, wfCollect(r, Y), T) : 0;
+    const res = await wfLoadApply(r, Y, true);
+    if (res.ok && kept) WFA.flash[key] = 'premier accès à ce dossier sur cet appareil : la version partagée a été chargée, rien n\'a été écrasé';
+  } catch (e) {} finally { WFA.fc[key] = false; }
+}
+function wfSafeHtml(r, Y) {
+  const L = WFSAFE[wfKey(r, Y)] || []; if (!L.length) return '';
+  const i = L.length - 1, S = L[i], a = `'${String(r).replace(/'/g, '')}', ${+Y}, ${i}`;
+  return `<span class="wf-safe">📌 <b>Ta saisie d'avant sur cet appareil est gardée de côté</b> (${wfDate(S.at)} · ${S.n} ligne(s) différente(s) du dossier partagé) : le dossier partagé a été chargé à la place, rien n'a été écrasé. <button class="step" onclick="wfSafeResume(${a}, false)">Reprendre dans les cases vides</button> <button class="step" onclick="wfSafeResume(${a}, true)">Tout reprendre…</button> <button class="step" onclick="wfSafeDrop(${a})">Ignorer</button></span><br>`;
+}
+function wfSafeDrop(r, Y, i) { const L = WFSAFE[wfKey(r, Y)] || []; if (!L[i]) return; L.splice(i, 1); if (!L.length) delete WFSAFE[wfKey(r, Y)]; wfSafePersist(); wfBarPaint(); }
+function wfSafeResume(r, Y, i, all) {
+  const key = wfKey(r, Y), L = WFSAFE[key] || [], S = L[i]; if (!S) return;
+  const cur = wfCollect(r, Y), CL = wfLines(cur), SL = wfLines(S.doc), sel = wfRealDiff(SL, CL).filter(k => all || wfEmptyV(CL[k]));
+  if (!sel.length) { WFA.flash[key] = all ? 'rien à reprendre : tout est déjà dans le dossier' : 'aucune case vide à remplir : tout est déjà renseigné dans le dossier partagé'; wfBarPaint(); return; }
+  if (all && !confirm('Reprendre ' + sel.length + " ligne(s) de ta saisie d'avant ?\nElles remplaceront celles du dossier partagé et seront partagées avec tous (ancienne valeur conservée dans l'historique)." )) return;
+  WF_UT = Date.now();
+  const D2 = wfCl(cur); sel.forEach(k => wfSetLine(D2, k, SL[k]));
+  const ty = SIM.ty; WFA.applying++; try { wfApply(r, D2, undefined); if (ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; }
+  L.splice(i, 1); if (!L.length) delete WFSAFE[key]; wfSafePersist();
+  WFA.flash[key] = sel.length + ' ligne(s) reprise(s) de ta saisie d\'avant'; wfRefreshScreens(); wfAutoSchedule(300);
+}
 async function wfAutoPull(force) {
   if (WFA.pulling || !curResto || !PREVJ || !ALIMM || WF.backend === false || !accProfiles().length) return;
   WFA.pulling = true;
@@ -3076,6 +3124,8 @@ async function wfAutoPull(force) {
       if (wfBusyTyping()) continue;                                                              // jamais pendant une saisie
       const sig = wfSig(r, Y), known = WF.sync[key] !== undefined && WF.sig[key] !== undefined, unchanged = known && sig === WF.sig[key];
       if (unchanged || !wfHasContent(wfCollect(r, Y))) { await wfLoadApply(r, Y, true); continue; }
+      if (!WF.base[key]) { await wfFirstContact(r, Y); continue; }                              // jamais calé sur ce dossier : on reçoit, on n'écrit pas
+      if (wfQuiet()) continue;                                                                    // ouverture de la page : pas de fusion automatique avant une vraie saisie
       WFA.dirty[key] = true; clearTimeout(WFA.t); WFA.t = setTimeout(wfAutoRun, 300);          // l'écran a des modifications non partagées : fusion automatique avec la version partagée
     }
   } catch (e) {} finally { WFA.pulling = false; wfBarPaint(); }
@@ -3143,7 +3193,7 @@ function wfBarCore(r, Y) {
   if (!r || !wfInCircuit(r, Y)) return '';
   if (Date.now() - WF_KICK > 6000) { WF_KICK = Date.now(); setTimeout(() => wfAutoPull(), 60); }      // première lecture à l'ouverture de l'écran
   const key = wfKey(r, Y), D = WF.byKey[key] || null, box = (c, h) => `<div class="bd-sh ${c}">${h}</div>`, nm = (RESTOS.find(x => x[0] === r) || [0, r])[1];
-  const loc = BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '';
+  const loc = (BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '') + wfSafeHtml(r, Y);
   const when = D ? `v${D.version} · ${wfDate(D.at)} par ${escH(D.by || '?')}` : '';
   if (WF.backend === false) return box('err', loc + "Le partage de la saisie demande une mise à jour de l'Apps Script du Sheet (circuit de validation).");
   if (D && D.etape === 'final') return box('', loc + `🔒 Dossier ${Y} <b>finalisé</b> et publié dans le Sheet (${when}) : seul le franchisé peut le déverrouiller.`);
@@ -3155,7 +3205,7 @@ function wfBarCore(r, Y) {
   const fl = WFA.flash[key] ? ` <span class="save-msg ok">${escH(WFA.flash[key])}</span>` : '';
   if (D) {
     const inSync = WF.sync[key] === D.version && WF.sig[key] !== undefined && WF.sig[key] === wfSig(r, Y);
-    if (!inSync) return box('', loc + `Version partagée : ${when}, étape ${WF_STEP[D.etape]}. Mise à jour de cet écran en cours… <button class="step" onclick="wfAutoPull(true)">Actualiser</button>`);
+    if (!inSync) return box('', loc + `Version partagée : ${when}, étape ${WF_STEP[D.etape]}. Mise à jour de cet écran en cours… <button class="step" onclick="wfAutoPull(true)">Actualiser</button>${wfQuiet() ? ' <button class="step" onclick="wfShareClick()">Partager mes modifications</button>' : ''}`);
     return box('ok', loc + `✓ <b>Partagé avec tous</b> · ${when} · ${WF_STEP[D.etape]}.${fl}<br><span class="loc">Directeurs, superviseurs et franchisé voient ta saisie aussitôt ; les saisies de chacun se fusionnent ligne par ligne ; la validation vient après la réunion budget.</span>`);
   }
   return box('', loc + `Aucune saisie partagée pour ${escH(nm)} ${Y} : elle sera partagée automatiquement dès ton premier enregistrement.`);
