@@ -3270,7 +3270,7 @@ function bdSharePaint() { wfBarPaint(); }
 .lv-ro #panel .lv-bar input, .lv-ro #panel .lv-bar textarea{ pointer-events:auto; }`;
   document.head.appendChild(st);
 })();
-const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, busy: null, at: 0, backend: null, busyAct: false };
+const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
 const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
 const lvK = (r, Y) => r + '|' + Y;
 const lvRow = (r, Y, n) => LV.rows[r + '|' + Y + '|' + n] || null;
@@ -3314,8 +3314,10 @@ function wfEnsureList(force) { return lvRefresh(force === 'now' || force === tru
 function lvEditable(r, Y) {
   const my = lvMy(r); if (!my || !wfRightsOk(r)) return false;
   const ch = lvChain(r), i = ch.indexOf(my); if (i < 0) return false;
-  if (i > 0 && !lvIsOwner(r)) { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }
-  const m = lvRow(r, Y, my); return !m || m.statut === 'en_cours';
+  const m = lvRow(r, Y, my);
+  if (lvIsOwner(r)) return !!LV.edit[lvK(r, Y)] && (!m || m.statut === 'en_cours');      // le propriétaire CONSULTE par défaut : modifier = « correction exceptionnelle » (confirmation + motif)
+  if (i > 0) { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }
+  return !m || m.statut === 'en_cours';
 }
 const lvView = (r, Y) => LV.view && LV.view[lvK(r, Y)] || 'mine';
 LV.view = {};
@@ -3385,6 +3387,7 @@ const lvCnt = d => { try { return Object.values(wfLines(d)).filter(v => !wfEmpty
 async function lvSave(silent) {
   const r = curResto, Y = lvYearOf(), key = lvK(r, Y), my = lvMy(r), m = lvRow(r, Y, my);
   if (LV.busyAct) return false; if (lvView(r, Y) !== 'mine' || !lvEditable(r, Y)) { lvMsg(r, Y, 'err', "Ta saisie n'est pas modifiable pour le moment."); return false; }
+  if (lvIsOwner(r) && !confirm("Enregistrer ta correction exceptionnelle ?\nElle sera visible des autres niveaux.")) return false;
   const mine = wfCollect(r, Y); if (!wfHasContent(mine)) { lvMsg(r, Y, 'err', "Rien à enregistrer : saisis d'abord une prévision journalière ou des montants de budget."); return false; }
   const donnees = JSON.stringify(mine); if (donnees.length > 45000) { lvMsg(r, Y, 'err', 'Dossier trop volumineux (' + donnees.length + ' caractères).'); return false; }
   LV.busyAct = true; lvMsg(r, Y, '', 'Enregistrement…');
@@ -3401,14 +3404,22 @@ async function lvSave(silent) {
 }
 async function lvValidate() {
   const r = curResto, Y = lvYearOf(), nm = (RESTOS.find(x => x[0] === r) || [0, r])[1], my = lvMy(r), ch = lvChain(r), next = ch[ch.indexOf(my) + 1];
-  if (LV.busyAct || lvView(r, Y) !== 'mine' || !lvEditable(r, Y)) return;
-  const mine = wfCollect(r, Y); if (!wfHasContent(mine)) return lvMsg(r, Y, 'err', 'Rien à valider.');
+  const key = lvK(r, Y), safe = lvIsOwner(r) && !LV.edit[key];                            // propriétaire sans correction : il valide la saisie existante TELLE QUELLE
+  if (LV.busyAct || lvView(r, Y) !== 'mine') return; if (!safe && !lvEditable(r, Y)) return;
+  const m0 = lvRow(r, Y, my), i0 = ch.indexOf(my), pv0 = i0 > 0 ? lvRow(r, Y, ch[i0 - 1]) : null;
+  let mine, mineSal;
+  if (safe) {
+    if (!m0 || m0.statut !== 'en_cours' || (i0 > 0 && !(pv0 && (pv0.statut === 'valide' || pv0.statut === 'publie')))) return lvMsg(r, Y, 'err', "Rien à valider pour le moment : attends la validation du niveau précédent (ou passe en correction exceptionnelle).");
+    const jm = await lvCall('load', r, Y, { niveau: my }); mine = jm.ok && jm.record ? wfParse(jm.record.donnees) : null; mineSal = jm.ok && jm.record ? jm.record.salaires : undefined;
+    if (!mine) return lvMsg(r, Y, 'err', 'Impossible de lire la saisie à valider.');
+  } else mine = wfCollect(r, Y);
+  if (!wfHasContent(mine)) return lvMsg(r, Y, 'err', 'Rien à valider.');
   let extra = {}, txt;
   if (next) txt = `Valider ta saisie ${Y} de ${nm} et l'envoyer au ${LV_NAME[next]} ?\nTu passeras en consultation ; pour modifier, tu devras demander le déblocage.`;
   else {
     if (!mine.cal || !Object.keys(mine.cal).length) return lvMsg(r, Y, 'err', 'Aucune prévision journalière à publier.');
     const sal = {}; for (const n of ch.filter(x => x !== my)) { const jj = await lvCall('load', r, Y, { niveau: n }); if (jj.ok && jj.record) sal[n] = jj.record.salaires; }
-    const my_ = wfEdgSeg(r); if (my_) sal[my] = my_;
+    const my_ = safe ? mineSal : wfEdgSeg(r); if (my_) sal[my] = my_;
     const seg = accCan('edg', r) ? wfTopSeg(sal) : undefined, R = wfRows(r, mine, seg && { on: seg.on, rows: seg.rows });
     extra = { rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel, _R: R };
     txt = `Valider et PUBLIER le prévisionnel ${Y} de ${nm} dans le Sheet ?\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ces jours seront remplacées.`;
@@ -3417,7 +3428,8 @@ async function lvValidate() {
   LV.busyAct = true; lvMsg(r, Y, '', 'Validation…');
   try {
     const m = lvRow(r, Y, my), R = extra._R; delete extra._R;
-    const j = await lvCall('validate', r, Y, Object.assign({ donnees: JSON.stringify(mine), salaires: wfEdgSeg(r), base_version: m ? m.version : undefined }, extra));
+    const base = safe ? { base_version: m ? m.version : undefined, comment: 'validée telle quelle par le propriétaire' } : { donnees: JSON.stringify(mine), salaires: wfEdgSeg(r), base_version: m ? m.version : undefined, comment: LV.reason[key] || '' };
+    const j = await lvCall('validate', r, Y, Object.assign(base, extra));
     if (!j.ok) return lvMsg(r, Y, 'err', j.conflict ? "Une version plus récente de ta saisie existe (autre appareil) : charge-la avant de valider." : 'Erreur : ' + j.error);
     if (R) {                                                                                 // publication : le Sheet est à jour, l'écran aussi
       PREVJ[r] = PREVJ[r] || {}; PREVT = PREVT || {}; PREVT[r] = PREVT[r] || {};
@@ -3425,9 +3437,23 @@ async function lvValidate() {
       for (let mth = 1; mth <= 12; mth++) delete PV.drafts[pvKey(r, Y + '-' + pad2(mth))];
       pvDraftPersist(); PV.resto = null; PV.loadedYm = null;
     }
-    LV.sig[lvK(r, Y)] = wfSig(r, Y); LV.view[lvK(r, Y)] = 'mine'; delete LV.shown[lvK(r, Y)]; delete LV.stash[lvK(r, Y)];
+    LV.sig[lvK(r, Y)] = wfSig(r, Y); LV.view[lvK(r, Y)] = 'mine'; delete LV.shown[lvK(r, Y)]; delete LV.stash[lvK(r, Y)]; delete LV.edit[key]; delete LV.reason[key];
     await lvRefresh(true); lvMsg(r, Y, 'ok', next ? 'Saisie validée et envoyée au ' + LV_NAME[next] + '. Tu es en consultation.' : 'Prévisionnel ' + Y + ' publié dans le Sheet.'); await lvEnter(r, Y);
   } finally { LV.busyAct = false; }
+}
+async function lvOwnerEdit() {                                                               // propriétaire : consultation par défaut ; modifier = correction exceptionnelle (confirmation + motif obligatoire)
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y); if (!lvIsOwner(r)) return;
+  const m = lvRow(r, Y, lvMy(r)); if (m && m.statut !== 'en_cours') return lvMsg(r, Y, 'err', "Ta saisie est validée : clique d'abord sur « Me débloquer pour modifier ».");
+  if (!confirm("Modifier en correction exceptionnelle ?\n\nPar défaut tu consultes : modifier ne se fait qu'en cas de grosse erreur. Ta correction sera enregistrée à ton niveau, visible des autres niveaux, et tu devras la valider.")) return;
+  const why = (prompt("Motif de la correction (obligatoire, gardé dans l'historique) :", '') || '').trim();
+  if (why.length < 5) return lvMsg(r, Y, 'err', 'Correction annulée : il faut indiquer un motif.');
+  LV.edit[key] = true; LV.reason[key] = why; LV.view[key] = 'mine'; delete LV.stash[key]; delete LV.shown[key];
+  LV.sig[key] = wfSig(r, Y);                                                                 // l'écran affiche déjà la saisie de départ
+  wfBarPaint(); try { wfRefreshScreens(); } catch (e) {}
+}
+async function lvOwnerCancel() {
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y); if (!confirm("Annuler la correction ?\nCe qui n'est pas enregistré est abandonné (une copie reste gardée de côté sur cet appareil).")) return;
+  delete LV.edit[key]; delete LV.reason[key]; delete LV.shown[key]; delete LV.stash[key]; await lvEnter(r, Y); wfBarPaint();
 }
 async function lvRequest() {
   const r = curResto, Y = lvYearOf(), c = prompt('Pourquoi veux-tu modifier ta saisie ? (facultatif, visible du niveau au-dessus)', ''); if (c === null) return;
@@ -3438,7 +3464,7 @@ async function lvUnlock(level) {
   const r = curResto, Y = lvYearOf(), my = lvMy(r), self = level === my;
   if (!confirm(self ? `Te débloquer pour modifier ta saisie ${Y} ?` : `Débloquer la saisie ${Y} du ${LV_NAME[level]} ? Elle redeviendra modifiable par lui.`)) return;
   const j = await lvCall('unlock', r, Y, { niveau: level }); if (!j.ok) return lvMsg(r, Y, 'err', 'Erreur : ' + j.error);
-  await lvRefresh(true); if (self) { LV.view[lvK(r, Y)] = 'mine'; await lvLoadMine(r, Y); } lvMsg(r, Y, 'ok', 'Saisie débloquée.'); await lvEnter(r, Y);
+  await lvRefresh(true); if (self) { LV.view[lvK(r, Y)] = 'mine'; if (lvIsOwner(r)) { LV.edit[lvK(r, Y)] = true; LV.reason[lvK(r, Y)] = 'déblocage par le propriétaire'; } await lvLoadMine(r, Y); } lvMsg(r, Y, 'ok', 'Saisie débloquée.'); await lvEnter(r, Y);
 }
 const lvLoadClick = async () => { const r = curResto, Y = lvYearOf(); if (!confirm('Charger ta version enregistrée ? Ce qui est à l\'écran et non enregistré sera remplacé.')) return; await lvLoadMine(r, Y); lvMsg(r, Y, 'ok', 'Ta version enregistrée est à l\'écran.'); };
 // ── Bandeau (Prévision CA, Budget & PNL, Validation) ──
@@ -3464,15 +3490,21 @@ function lvBarHtml(r, Y) {
   else if (ed) {
     const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
     const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, bypass = lvIsOwner(r) && i > 0 && !(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie'));
-    head = `<b>Ta saisie (${LV_NAME[my]})</b>${bypass ? ' <span class="hint" style="margin:0">· passe-droit propriétaire : tu saisis sans attendre la validation du ' + LV_NAME[ch[i - 1]] + '</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
+    head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
     let lowK = null; if (bypass && !mrow) for (let k = i - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { lowK = ch[k]; break; }
     act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button><button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>`;
     if (lowK) act += `<button class="lv-btn" onclick="lvCopyClick('${lowK}')">Partir de la saisie du ${LV_NAME[lowK]}</button>`;
+    if (lvIsOwner(r)) act += `<button class="lv-btn" onclick="lvOwnerCancel()">Annuler la correction</button>`;
     if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
   } else if (mrow && (mrow.statut === 'valide' || mrow.statut === 'publie')) {
     let dem = ''; try { if (mrow.demande) dem = JSON.parse(mrow.demande); } catch (e) {}
     head = `<b>Ta saisie est validée</b> (${wfDate(mrow.at)}) : tu es en consultation.`;
     act = my === 'franchise' ? `<button class="lv-btn p" onclick="lvUnlock('${my}')">Me débloquer pour modifier</button>` : (dem ? `<span class="hint" style="margin:8px 0 0">Déblocage demandé le ${wfDate(dem.at)} : en attente du ${LV_NAME[ch[i + 1]] || 'niveau supérieur'}.</span>` : `<button class="lv-btn p" onclick="lvRequest()">Demander le déblocage</button>`);
+  } else if (lvIsOwner(r)) {                                                                  // propriétaire : consultation par défaut
+    const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, prevOk = i === 0 || !!(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie')), pn = LV_NAME[ch[i - 1]] || 'niveau précédent';
+    head = prevOk ? `<b>Consultation</b> — la saisie du ${pn} est validée : tu peux valider${next ? '' : ' et publier'} la saisie affichée telle quelle, sans rien modifier.` : `<b>Consultation</b> — le ${pn} n'a pas encore validé sa saisie.`;
+    act = (prevOk && mrow && mrow.statut === 'en_cours') ? `<button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>` : '';
+    act += `<button class="lv-btn" onclick="lvOwnerEdit()">Modifier (correction exceptionnelle)</button>`;
   } else head = `<b>En attente de la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}</b> : tu consultes sa saisie ; la tienne démarrera d'une copie dès sa validation.`;
   const msg = fl ? `<span class="save-msg ${fl[0]}">${escH(fl[1])}</span>` : '';
   return box('', `${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
