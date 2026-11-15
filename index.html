@@ -4171,7 +4171,7 @@ function resetInterventionForm() {
   const d = document.getElementById('iDate'); if (d) d.valueAsDate = new Date();
   const rSel = document.getElementById('iResto');
   if (rSel) rSel.value = (currentResto && currentResto !== 'FRANCHISE') ? currentResto : '';
-  intervSelectedTechs.clear(); intervPhotos = []; intervUrgence = '';
+  intervSelectedTechs.clear(); intervPhotos = []; intervUrgence = ''; intervReqId = '';
   document.querySelectorAll('.interv-tech-card.selected').forEach(c => c.classList.remove('selected'));
   ['low','medium','high'].forEach(l => { const b = document.getElementById('urg-'+l); if (b) b.className = 'interv-urgence-btn'; });
   const pv = document.getElementById('iPhotosPreview'); if (pv) pv.innerHTML = '';
@@ -4194,15 +4194,81 @@ function toggleIntervTech(id, card) {
     intervSelectedTechs.add(id); card.classList.add('selected');
   }
 }
-function addIntervPhotos(files) {
-  for (const f of files) {
-    if (intervPhotos.length >= 5) break;
-    if (!f.type.startsWith('image/')) continue;
-    const r = new FileReader();
-    r.onload = e => { intervPhotos.push({name:f.name,data:e.target.result}); renderIntervPhotos(); };
-    r.readAsDataURL(f);
+// ══ Interventions : photos réduites dans le navigateur, envoyées UNE PAR UNE et vérifiées (nouvel essai automatique) ══
+// Avant : photos en pleine taille dans une seule requête « sans réponse » (no-cors) ; si elle échouait, rien ne le signalait et le lien « photos » restait vide.
+// Maintenant : réduction à 1600 px (≈ 0,3 Mo), envoi d'une photo par requête avec lecture de la réponse du script, 3 essais, et le lien « photos » n'est écrit
+// que pour les photos réellement enregistrées. Une photo déjà enregistrée n'est jamais renvoyée ni dupliquée (identifiant « pid » connu du script).
+var intervReqId = '';                                   // identifiant de la demande en cours d'envoi : le même d'un essai à l'autre (le script ignore les doublons)
+var intervBusy = 0;                                     // photos en cours de préparation
+const INTERV_PHOTO_MAX = 5, INTERV_PHOTO_PX = 1600, INTERV_PHOTO_Q = 0.82, INTERV_RAW_MAX = 3.5 * 1024 * 1024;
+const intervKey = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const intervIsImg = f => /^image\//.test(f.type || '') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(f.name || '');
+const intervRead = f => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(f); });
+// Réduit une photo en JPEG (orientation respectée). Si le navigateur ne sait pas la lire (HEIC hors Safari), on garde l'original seulement s'il est léger.
+async function intervCompress(file) {
+  const base = String(file.name || 'photo').replace(/\.[^.]+$/, '') || 'photo';
+  try {
+    let src = null, w, h, bmp = null, url = null;
+    if (window.createImageBitmap) { try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { try { bmp = await createImageBitmap(file); } catch (e2) {} } }
+    if (bmp) { src = bmp; w = bmp.width; h = bmp.height; }
+    else {
+      url = URL.createObjectURL(file);
+      src = await new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ko(new Error('illisible')); im.src = url; });
+      w = src.naturalWidth; h = src.naturalHeight;
+    }
+    if (!(w > 0 && h > 0)) throw new Error('illisible');
+    const k = Math.min(1, INTERV_PHOTO_PX / Math.max(w, h)), cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+    const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(src, 0, 0, cv.width, cv.height);
+    if (bmp && bmp.close) bmp.close(); if (url) URL.revokeObjectURL(url);
+    return { name: base + '.jpg', data: cv.toDataURL('image/jpeg', INTERV_PHOTO_Q) };
+  } catch (e) {
+    if (file.size <= INTERV_RAW_MAX) return { name: file.name || (base + '.jpg'), data: await intervRead(file) };
+    throw e;
   }
 }
+async function addIntervPhotos(files) {
+  const bad = [];
+  for (const f of Array.from(files || [])) {
+    if (!intervIsImg(f)) continue;
+    if (intervPhotos.length + intervBusy >= INTERV_PHOTO_MAX) { bad.push('maximum ' + INTERV_PHOTO_MAX + ' photos'); break; }
+    intervBusy++; intervPhotoState();
+    try { const p = await intervCompress(f); p.key = intervKey(); intervPhotos.push(p); renderIntervPhotos(); }
+    catch (e) { bad.push((f.name || 'photo') + ' (format non lisible : prenez-la en JPEG)'); }
+    finally { intervBusy--; intervPhotoState(); }
+  }
+  if (bad.length) alert('Photo non ajoutée : ' + bad.join(' ; '));
+}
+function intervPhotoState() { const pv = document.getElementById('iPhotosPreview'); if (pv) pv.dataset.busy = intervBusy ? '1' : ''; }
+// Une requête vers le script avec réponse lue ; good(j) dit si la réponse est satisfaisante. Renvoie la réponse, ou { ok:false, error }.
+async function intervPost(body, tries, good, ms) {
+  let last = 'réponse inattendue';
+  for (let a = 0; a < tries; a++) {
+    if (a) await new Promise(r => setTimeout(r, 1500 * a));
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms || 45000);
+    try {
+      const j = await (await fetch(SUIVI_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), signal: ac.signal })).json();
+      if (good(j)) return j;
+      last = (j && (j.error || (j.errors && j.errors[0]))) || 'réponse inattendue';
+    } catch (e) { last = e && e.name === 'AbortError' ? 'délai dépassé' : (e instanceof TypeError ? 'connexion interrompue' : String((e && e.message) || e)); }
+    finally { clearTimeout(t); }
+  }
+  return { ok: false, error: last };
+}
+// Envoie les photos une par une ; une photo déjà enregistrée lors d'un essai précédent (p.sent === reqId) n'est pas renvoyée.
+async function intervUploadPhotos(reqId, btn) {
+  const n = intervPhotos.length; let ok = 0, err = '';
+  for (let i = 0; i < n; i++) {
+    const p = intervPhotos[i];
+    if (p.sent === reqId) { ok++; continue; }
+    if (btn) btn.textContent = 'Envoi des photos ' + (i + 1) + '/' + n + '…';
+    const j = await intervPost({ action: 'photos', id: reqId, photos: [{ name: p.name, data: p.data, pid: reqId + '_' + p.key }] }, 3,
+      j => j && j.ok && ((+j.saved || 0) + (+j.dup || 0)) >= 1);
+    if (j.ok) { p.sent = reqId; ok++; } else err = j.error || err;
+  }
+  return { ok, ko: n - ok, err };
+}
+
 function removeIntervPhoto(i) { intervPhotos.splice(i,1); renderIntervPhotos(); }
 function renderIntervPhotos() {
   document.getElementById('iPhotosPreview').innerHTML = intervPhotos.map((p,i) =>
@@ -4220,9 +4286,18 @@ async function sendInterventionEmail() {
   const btn = document.querySelector('.interv-btn-send');
   btn.disabled = true; btn.textContent = 'Envoi...';
   const urgLabels = {low:'Pas urgent', medium:'A traiter rapidement', high:'URGENT'};
-  const reqId = String(Date.now());
+  const reqId = intervReqId || (intervReqId = String(Date.now()));      // le même identifiant à chaque essai : photos et demande ne sont jamais dupliquées
   const sup = SUPERVISEURS[resto] || null;
   const techNames  = [...intervSelectedTechs].map(id => TECHS_INTERV[id].name).join(' & ');
+  if (intervBusy) { alert('Les photos sont en cours de préparation, patientez une seconde.'); btn.disabled = false; btn.textContent = 'Envoyer'; return; }
+  // Photos d'abord (réduites, une par une, vérifiées) : le lien « photos » n'est écrit que pour celles qui sont bien enregistrées
+  window.onbeforeunload = () => 'Envoi en cours : ne fermez pas la page.';
+  const up = await intervUploadPhotos(reqId, btn);
+  if (up.ko > 0 && !confirm((up.ko === intervPhotos.length ? (up.ko === 1 ? "La photo n'a pas pu être enregistrée" : 'Les ' + up.ko + " photos n'ont pas pu être enregistrées") : up.ko + ' photo' + (up.ko > 1 ? 's' : '') + ' sur ' + intervPhotos.length + (up.ko > 1 ? " n'ont pas pu être enregistrées" : " n'a pas pu être enregistrée")) + (up.err ? ' (' + up.err + ')' : '') + ".\n\nOK = envoyer la demande quand même" + (up.ok ? ' avec les photos déjà enregistrées' : ' sans photo') + ".\nAnnuler = rester sur le formulaire pour réessayer (les photos déjà enregistrées ne sont pas renvoyées).")) {
+    window.onbeforeunload = null; btn.disabled = false; btn.textContent = 'Envoyer'; return;
+  }
+  const photoNote = up.ko > 0 ? '\n\n[' + up.ko + ' photo' + (up.ko > 1 ? 's' : '') + ' sur ' + intervPhotos.length + ' non transmise' + (up.ko > 1 ? 's' : '') + ' : merci de les redemander au demandeur]' : '';
+  btn.textContent = 'Envoi...';
   // Destination unique = équipe maintenance ; superviseur du restaurant + gérant EN COPIE.
   // (Map = déduplication par email, au cas où une adresse se répète.)
   const recipMap = new Map();
@@ -4235,12 +4310,12 @@ async function sendInterventionEmail() {
     from_email:'matthieu.jacob.mcd@gmail.com',
     restaurant: resto,
     date_demande: document.getElementById('iDate').value,
-    description: desc,
+    description: desc + photoNote,
     urgence: urgLabels[intervUrgence] || 'Non defini',
     techniciens: techNames,
     superviseur: sup ? sup.name : '',
-    nb_photos: intervPhotos.length,
-    photos_url: intervPhotos.length ? (SUIVI_URL + '?action=photos&id=' + reqId) : '',
+    nb_photos: up.ok,
+    photos_url: up.ok ? (SUIVI_URL + '?action=photos&id=' + reqId) : '',
     validation_url: SUIVI_URL + '?action=validate&id=' + reqId,
     reply_to:'matthieu.jacob.mcd@gmail.com',
   };
@@ -4248,29 +4323,22 @@ async function sendInterventionEmail() {
     await Promise.all(recipients.map(r =>
       emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...params, to_email:r.email, to_name:r.name})
     ));
-    // Enregistrement dans le suivi partagé (Google Sheet) — sans bloquer
-    try {
-      fetch(SUIVI_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify({ id:reqId, date:params.date_demande, restaurant:resto,
-          demandeur:prenom+' '+nom, description:desc, urgence:params.urgence,
-          techniciens:techNames, superviseur: sup ? sup.name : '', photos: params.photos_url }) });
-    } catch(e) {}
-    // Envoi des photos vers le Drive (via Apps Script) — sans bloquer
-    if (intervPhotos.length) {
-      try {
-        fetch(SUIVI_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
-          body: JSON.stringify({ action:'photos', id:reqId,
-            photos: intervPhotos.map(p => ({ name:p.name, data:p.data })) }) });
-      } catch(e) {}
-    }
+    // Enregistrement dans le suivi partagé (Google Sheet) : réponse lue, 3 essais (le script ignore un doublon du même identifiant)
+    const rowRes = await intervPost({ id:reqId, date:params.date_demande, restaurant:resto,
+      demandeur:prenom+' '+nom, description:params.description, urgence:params.urgence,
+      techniciens:techNames, superviseur: sup ? sup.name : '', photos: params.photos_url }, 3, j => j && j.ok, 30000);
+    window.onbeforeunload = null;
     document.getElementById('intervForm').style.display='none';
     document.getElementById('intervFooter').style.display='none';
     document.getElementById('intervSuccess').classList.add('show');
     document.getElementById('intervSuccessMsg').textContent =
-      `Demande transmise à l'équipe maintenance${sup ? ' (copie : ' + sup.name + ' + gérant)' : ' (copie : gérant)'} — intervenant noté : ${techNames} · ${resto}.`;
+      `Demande transmise à l'équipe maintenance${sup ? ' (copie : ' + sup.name + ' + gérant)' : ' (copie : gérant)'} — intervenant noté : ${techNames} · ${resto}.`
+      + (up.ok ? ` ${up.ok} photo${up.ok > 1 ? 's' : ''} enregistrée${up.ok > 1 ? 's' : ''}.` : '')
+      + (rowRes.ok ? '' : " Attention : la demande est partie par e-mail mais n'a pas pu être ajoutée au suivi (réseau) : prévenez l'équipe.");
     setTimeout(() => { loadSuivi(); }, 1500);   // la demande apparaît dans le suivi
     setTimeout(resetInterventionForm, 3500);     // formulaire prêt pour la suivante
   } catch(err) {
+    window.onbeforeunload = null;
     alert('Erreur envoi : ' + (err.text || JSON.stringify(err)));
     btn.disabled=false; btn.textContent='Envoyer';
   }
@@ -11327,7 +11395,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-102708';
+const BUILD_VERSION = '20261115-134311';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
