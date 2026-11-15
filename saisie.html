@@ -2969,7 +2969,7 @@ let WF_UT = 0; const WF_T0 = Date.now();
 ['input', 'change', 'keydown'].forEach(ev => document.addEventListener(ev, e => { if (e.isTrusted) WF_UT = Date.now(); }, true));      // dernière vraie saisie de la personne (jamais un simple clic ni l'ouverture de la page)
 const wfQuiet = () => !WF_UT;                                                                       // AUCUN enregistrement automatique tant que la personne n'a rien saisi sur cette page (consulter n'écrit jamais)
 function wfAutoSchedule(delay) {
-  if (WFA.applying || !PREVJ) return;
+  if (WFA.applying || !PREVJ || wfConsult()) return;
   if (wfQuiet()) return;                                                                          // consulter n'écrit pas
   let any = false;
   for (const [r, Y] of wfTargets()) {                                                          // seulement ce qui a vraiment changé depuis le dernier partage / la dernière réception
@@ -2981,7 +2981,8 @@ function wfAutoSchedule(delay) {
   clearTimeout(WFA.t); WFA.t = setTimeout(wfAutoRun, delay || 3500); wfBarPaint();
 }
 const wfMeSelf = r => { const ps = accProfiles().filter(p => accCovers(p, r)), rk = { franchise: 3, superviseur: 2, owner: 2, directeur: 1 }, p = ps.sort((a, b) => (rk[b.role] || 0) - (rk[a.role] || 0))[0]; return { id: p ? String(p.id) : 'anonyme', name: p ? String(p.label || p.id) : '?' }; };
-async function wfShareOne(r, Y, manual) {                                                      // partage la saisie de l'écran dans le dossier (l'ouvre au besoin) en la FUSIONNANT avec celle des autres ; { ok, msg, same, skip }
+async function wfShareOne(r, Y, manual) {
+  if (wfConsult()) return { ok: !manual, msg: WF_CONSULT_MSG, skip: true };                                                      // partage la saisie de l'écran dans le dossier (l'ouvre au besoin) en la FUSIONNANT avec celle des autres ; { ok, msg, same, skip }
   const key = wfKey(r, Y), noRight = "tu n'as pas le droit d'enregistrer ici (« Prévision CA et simulation » ou « Budget & PNL ») : demande au franchisé de l'activer pour toi (Équipes → Modifier → « Ce qu'elle peut enregistrer »)";
   if (!PREVJ || !ALIMM) return { ok: false, msg: 'les données de référence ne sont pas encore chargées', skip: true };
   if (!wfRightsOk(r)) return { ok: false, msg: noRight, skip: true };
@@ -3073,6 +3074,18 @@ async function wfLoadApply(r, Y, keepTy) {                                      
 }
 // ── Premier contact avec un dossier (appareil jamais calé dessus) : le dossier partagé fait FOI. La saisie locale de l'appareil n'est jamais envoyée ; elle est gardée de côté (« sauvegarde de sécurité »)
 //    et peut être reprise, dans les cases vides ou en totalité. Consulter n'écrit jamais dans le dossier.
+// ── MODE CONSULTATION : l'écran affiche la saisie partagée mais rien n'est enregistré, partagé ni validé depuis cet appareil. Par défaut pour le propriétaire ; choix retenu sur l'appareil (py_consult).
+const wfConsult = () => { let v = null; try { v = localStorage.getItem('py_consult'); } catch (e) {} if (v === '1') return true; if (v === '0') return false; const ps = accProfiles(); return ps.length > 0 && ps.every(p => p.role === 'owner'); };
+function wfConsultSet(on) { if (!on && !confirm("Passer en modification ?\nTes saisies seront de nouveau partagées avec les directeurs, superviseurs et le franchisé.")) return; try { localStorage.setItem('py_consult', on ? '1' : '0'); } catch (e) {} if (!on && curResto) Object.values(WF.byKey).filter(D => D.restaurant === curResto).forEach(D => wfFirstContact(curResto, +D.year));   // en quittant la consultation, l'écran repart de la version partagée (ce qui a été tapé pendant la consultation est gardé de côté, jamais envoyé)
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
+  wfRefreshScreens(); wfBarPaint(); try { buildTabs(); } catch (e) {} }
+const WF_CONSULT_MSG = "Mode consultation : rien n'est enregistré depuis cet appareil (bouton « Passer en modification » dans le bandeau du budget).";
+(function () {                                                                                  // point de passage unique : aucune écriture partagée en mode consultation
+  const pj = postJson; postJson = async function (b) {
+    if (b && wfConsult() && (/^wf_(save|open|validate|finalize|unlock|reset|restore|comment)$/.test(b.action) || (b.action === 'bulk_save' && /^(prevjour|previsionnel)$/.test(b.frequence)))) return { ok: false, error: WF_CONSULT_MSG };
+    return pj.apply(this, arguments);
+  };
+})();
 let WFSAFE = {}; try { WFSAFE = JSON.parse(localStorage.getItem('py_wfsafe') || '{}') || {}; } catch (e) { WFSAFE = {}; }
 const wfSafePersist = () => { try { localStorage.setItem('py_wfsafe', JSON.stringify(WFSAFE)); } catch (e) {} };
 let WF_DEFLINES = null;
@@ -3123,6 +3136,7 @@ async function wfAutoPull(force) {
       if (WF.sync[key] === D.version) continue;                                                  // à jour
       if (wfBusyTyping()) continue;                                                              // jamais pendant une saisie
       const sig = wfSig(r, Y), known = WF.sync[key] !== undefined && WF.sig[key] !== undefined, unchanged = known && sig === WF.sig[key];
+      if (wfConsult()) { await wfFirstContact(r, Y); continue; }                              // consultation : on reçoit toujours la version partagée, on n'écrit jamais
       if (unchanged || !wfHasContent(wfCollect(r, Y))) { await wfLoadApply(r, Y, true); continue; }
       if (!WF.base[key]) { await wfFirstContact(r, Y); continue; }                              // jamais calé sur ce dossier : on reçoit, on n'écrit pas
       if (wfQuiet()) continue;                                                                    // ouverture de la page : pas de fusion automatique avant une vraie saisie
@@ -3192,6 +3206,7 @@ function wfBarHtml(r, Y) { return wfBarCore(r, Y) + wfChgHtml(r, Y); }
 function wfBarCore(r, Y) {
   if (!r || !wfInCircuit(r, Y)) return '';
   if (Date.now() - WF_KICK > 6000) { WF_KICK = Date.now(); setTimeout(() => wfAutoPull(), 60); }      // première lecture à l'ouverture de l'écran
+  if (wfConsult()) { const Dc = WF.byKey[wfKey(r, Y)]; return `<div class="bd-sh">👁 <b>Mode consultation</b> : tu vois la saisie partagée ; rien n'est enregistré, partagé ni validé depuis cet appareil.${Dc ? ' Version partagée : v' + Dc.version + ' · ' + wfDate(Dc.at) + ' par ' + escH(Dc.by || '?') + '.' : ''} <button class="step" onclick="wfConsultSet(false)">Passer en modification</button></div>`; }
   const key = wfKey(r, Y), D = WF.byKey[key] || null, box = (c, h) => `<div class="bd-sh ${c}">${h}</div>`, nm = (RESTOS.find(x => x[0] === r) || [0, r])[1];
   const loc = (BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '') + wfSafeHtml(r, Y);
   const when = D ? `v${D.version} · ${wfDate(D.at)} par ${escH(D.by || '?')}` : '';
