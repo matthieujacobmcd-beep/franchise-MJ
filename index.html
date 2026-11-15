@@ -6555,19 +6555,20 @@ function renderDayDetail(box, k) {
 }
 
 // « Chute » du mois (vue Mois, mois en cours) : réalisé à date + prévision journalière des jours restants, comparée au mois complet N-1 (jours équivalents)
-function weekChuteHtml(r) {
-  if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis.ca_total) return '';
-  const rs = r === 'FRANCHISE' ? RESTOS : [r], K = WEEK.kpis.ca_total, ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {};
+function weekChuteHtml(r, id) {
+  id = id === 'ca_alim' ? 'ca_alim' : 'ca_total';                           // tuile CA net total ou CA net alimentaire
+  if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis[id]) return '';
+  const rs = r === 'FRANCHISE' ? RESTOS : [r], K = WEEK.kpis[id], lib = id === 'ca_alim' ? 'CA net alimentaire' : 'CA net total', ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {};
   let real = 0, rest = 0, nRest = 0, nPrev = 0, n1 = 0; const estR = new Set();
   for (const rr of rs) WEEK.days.forEach((d, i) => {
     const v = K.cur[rr][i];
     if (v != null) real += v;
-    else if (!ld[rr] || d > ld[rr]) { nRest++; const q = weekPrevDay('ca_total', rr, d); if (q) { rest += q.v; nPrev++; if (q.est) estR.add(rr); } }      // jour à venir : prévision journalière saisie, à défaut prévisionnel mensuel réparti (estimation)
-    const e = _wkVal(WEEK.days_eq[i], rr, 'ca'); if (e != null) n1 += e;
+    else if (!ld[rr] || d > ld[rr]) { nRest++; const q = weekPrevDay(id, rr, d); if (q) { rest += q.v; nPrev++; if (q.est) estR.add(rr); } }      // jour à venir : prévision journalière saisie, à défaut prévisionnel mensuel réparti (estimation)
+    const e = _wkVal(WEEK.days_eq[i], rr, id === 'ca_alim' ? 'alim' : 'ca'); if (e != null) n1 += e;
   });
   if (!nPrev) return '';
   const chute = real + rest, d = n1 ? (chute / n1 - 1) * 100 : null, manque = nRest - nPrev;
-  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois (CA net total) <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (${lib})${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois (${lib}) <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
 }
 let weekOpenKpi = null;
 let weekResto = 'FRANCHISE';
@@ -6677,7 +6678,7 @@ function renderWeekStrip() {
       <div class="wk-value">${fmt(v, k.fmt)}</div>
       ${k.amt ? `<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin-top:-2px">${fmt(weekAgg(k.amt, 'cur', r), 'euros')}</div>` : ''}
       ${d == null ? '' : `<div class="wk-delta ${good ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%${dabsStr} <span>vs ${WEEK.yearN1}</span></div>`}
-      ${k.id === 'ca_total' ? weekChuteHtml(r) : ''}
+      ${k.id === 'ca_total' || k.id === 'ca_alim' ? weekChuteHtml(r, k.id) : ''}
     </div>`;
   }
   h += `</div>${renderWeekMissing(r)}${renderWeekComments(r)}<div id="weekDetail"></div></div>`;
@@ -11395,7 +11396,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-134723';
+const BUILD_VERSION = '20261115-135437';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
