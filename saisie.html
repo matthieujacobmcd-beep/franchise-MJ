@@ -3349,7 +3349,13 @@ async function lvLoadMine(r, Y) {                                               
 }
 async function lvCopyAsMine(r, Y, level) {                                                    // le propriétaire qui passe devant démarre d'une copie de la dernière saisie existante
   const key = lvK(r, Y), j = await lvCall('load', r, Y, { niveau: level }); if (!j.ok || !j.record) return false;
-  const P = wfParse(j.record.donnees); if (!P) return false; lvApply(r, P, j.record.salaires, level); LV.sig[key] = wfSig(r, Y); return true;
+  const P = wfParse(j.record.donnees); if (!P) return false;
+  const now = wfCollect(r, Y); if (wfHasContent(now)) wfSafeSave(r, Y, now, P);                 // ce qui était à l'écran est gardé de côté sur l'appareil
+  lvApply(r, P, j.record.salaires, level); LV.sig[key] = wfSig(r, Y); return true;
+}
+async function lvCopyClick(level) {
+  const r = curResto, Y = lvYearOf(); if (!confirm(`Partir de la saisie du ${LV_NAME[level]} ?\nCe qui est à l'écran et non enregistré est remplacé (une copie reste gardée de côté sur cet appareil).`)) return;
+  const ok = await lvCopyAsMine(r, Y, level); lvMsg(r, Y, ok ? 'ok' : 'err', ok ? 'La saisie du ' + LV_NAME[level] + ' est à l\'écran : modifie-la puis enregistre.' : 'Impossible de charger cette saisie.');
 }
 async function lvEnter(r, Y) {                                                               // à l'ouverture d'un écran : l'écran suit l'état ; AUCUNE écriture
   if (!r || !Y || LV.entering) return; LV.entering = true;
@@ -3459,7 +3465,9 @@ function lvBarHtml(r, Y) {
     const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
     const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, bypass = lvIsOwner(r) && i > 0 && !(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie'));
     head = `<b>Ta saisie (${LV_NAME[my]})</b>${bypass ? ' <span class="hint" style="margin:0">· passe-droit propriétaire : tu saisis sans attendre la validation du ' + LV_NAME[ch[i - 1]] + '</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
+    let lowK = null; if (bypass && !mrow) for (let k = i - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { lowK = ch[k]; break; }
     act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button><button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>`;
+    if (lowK) act += `<button class="lv-btn" onclick="lvCopyClick('${lowK}')">Partir de la saisie du ${LV_NAME[lowK]}</button>`;
     if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
   } else if (mrow && (mrow.statut === 'valide' || mrow.statut === 'publie')) {
     let dem = ''; try { if (mrow.demande) dem = JSON.parse(mrow.demande); } catch (e) {}
