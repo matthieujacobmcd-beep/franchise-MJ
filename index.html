@@ -473,10 +473,10 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['pia', 'Prédiction IA (bannière du Pilotage)', ''], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
 { const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => !['prim', 'ffoc', 'fcfv', 'fcer'].includes(t[0])); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
-const accMax = k => (k === 'pb' || k === 'ffoc' || k === 'fcfv' || k === 'fcer') ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
+const accMax = k => k === 'pia' ? 1 : (k === 'pb' || k === 'ffoc' || k === 'fcfv' || k === 'fcer') ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? ['', 'Consultation', 'Réalisation', 'Réalisation et critères'][v] : 'Modification')));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
@@ -514,6 +514,7 @@ function dashPills(r) {                                             // espaces m
 function dashEnter(r) {
   SB_DASH = r; try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
   if (typeof plgOnLogin === 'function') plgOnLogin(r);
+  if (typeof piaOnLogin === 'function') piaOnLogin(r);
   if (typeof rvOnLogin === 'function') rvOnLogin(r);
   try { SBA.note(); } catch (e) {}
   document.getElementById('app').style.display = 'block';
@@ -6296,7 +6297,16 @@ body.dark-mode .week-strip-title { color: #b794f4; }
   border: 1.5px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,.06); transition: transform .15s, border-color .15s, box-shadow .15s; }
 .week-card:hover { transform: translateY(-1px); border-color: rgba(139,92,246,.45); }
 .week-card.wk-active { border-color: #8b5cf6; box-shadow: 0 4px 14px rgba(139,92,246,.28); }
-.week-card.wk-same { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,.45); }   /* même KPI que le détail ouvert plus bas */
+.week-card.wk-same { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,.45); }
+.week-card.wk-pia { cursor: default; grid-column: span 2; background: linear-gradient(135deg, rgba(124,58,237,.10), rgba(8,145,178,.08)); border-color: rgba(124,58,237,.38); }
+.week-card.wk-pia:hover { transform: none; border-color: rgba(124,58,237,.38); }
+.wk-pia .pia-sub { display: block; font-size: .58rem; font-weight: 600; letter-spacing: .01em; text-transform: none; color: var(--muted); margin-top: 1px; }
+.wk-pia .pia-sub2 { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+.wk-pia .pia-line { font-size: .7rem; margin-top: 5px; color: var(--text); }
+.wk-pia .pia-line span, .wk-pia .pia-prec span { color: var(--muted); }
+.wk-pia .pia-prec { font-size: .64rem; color: var(--muted); margin-top: 6px; padding-top: 4px; border-top: 1px dashed var(--border); line-height: 1.35; }
+.wk-pia .pia-prec b { color: var(--text); }
+.wk-pia .wk-up { color: #16a34a; } .wk-pia .wk-down { color: #dc2626; }   /* même KPI que le détail ouvert plus bas */
 .wk-label { font-size: .66rem; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: #7c3aed; margin-bottom: 4px; }
 body.dark-mode .wk-label { color: #b794f4; }
 .wk-value { font-size: 1.22rem; font-weight: 800; color: var(--text); }
@@ -6555,9 +6565,9 @@ function renderDayDetail(box, k) {
 }
 
 // « Chute » du mois (vue Mois, mois en cours) : réalisé à date + prévision journalière des jours restants, comparée au mois complet N-1 (jours équivalents)
-function weekChuteHtml(r, id) {
+function weekChuteVals(r, id) {
   id = id === 'ca_alim' ? 'ca_alim' : 'ca_total';                           // tuile CA net total ou CA net alimentaire
-  if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis[id]) return '';
+  if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis[id]) return null;
   const rs = r === 'FRANCHISE' ? RESTOS : [r], K = WEEK.kpis[id], lib = id === 'ca_alim' ? 'CA net alimentaire' : 'CA net total', ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {};
   let real = 0, rest = 0, nRest = 0, nPrev = 0, n1 = 0; const estR = new Set();
   for (const rr of rs) WEEK.days.forEach((d, i) => {
@@ -6566,9 +6576,191 @@ function weekChuteHtml(r, id) {
     else if (!ld[rr] || d > ld[rr]) { nRest++; const q = weekPrevDay(id, rr, d); if (q) { rest += q.v; nPrev++; if (q.est) estR.add(rr); } }      // jour à venir : prévision journalière saisie, à défaut prévisionnel mensuel réparti (estimation)
     const e = _wkVal(WEEK.days_eq[i], rr, id === 'ca_alim' ? 'alim' : 'ca'); if (e != null) n1 += e;
   });
-  if (!nPrev) return '';
+  if (!nPrev) return null;
   const chute = real + rest, d = n1 ? (chute / n1 - 1) * 100 : null, manque = nRest - nPrev;
+  return { chute, d, manque, estR, lib, nPrev, nRest, real, rest, n1 };
+}
+function weekChuteHtml(r, id) {
+  const v = weekChuteVals(r, id); if (!v) return '';
+  const { chute, d, manque, estR, lib } = v;
   return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (${lib})${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois (${lib}) <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+}
+// ══ Prédiction IA : chute du mois prédite (CA net total et CA net alimentaire) ══
+// Modèle statistique appris sur l'historique du restaurant (aucune donnée ne sort de la page) :
+//   CA prédit d'un jour = CA du jour équivalent N-1 (même jour de la semaine, −364 j) × exp(régression) ; la régression (ridge, en log) utilise la tendance des 28 et 84 derniers jours
+//   par rapport à N-1, la tendance des 4 derniers mêmes jours de la semaine, et les écarts de calendrier avec N-1 (jour férié, vacances scolaires, pont).
+//   Chute du mois prédite = réalisé à date + prédiction des jours restants.
+// La fourchette et la précision affichées sont MESURÉES : on refait la même prédiction sur les mois passés, à la même date du mois, avec un modèle appris uniquement sur ce qui était connu alors.
+// Test sur le passé (PY, sept. 2025 → août 2026) : erreur moyenne de la chute du mois au 15 = 1,4 % (Franchise), 2,2 % (par restaurant), contre 2,1 % et 3,0 % pour « N-1 brut ».
+const PIA = (() => {
+  const LAG = 364, H = 31, DAY = 86400000, D0 = Date.UTC(YEAR_P2, 0, 1), LAMBDA = 5, NF = 6, STEP = 3;
+  // vacances scolaires : [dernier jour de cours, dernier jour de vacances] — source : calendrier officiel de l'Éducation nationale (zone A : académie de Grenoble ; zone C : académie de Toulouse)
+  const VAC = { A: [['2023-10-20','2023-11-05'],['2023-12-22','2024-01-07'],['2024-02-16','2024-03-03'],['2024-04-12','2024-04-28'],['2024-05-08','2024-05-12'],['2024-07-05','2024-08-29'],['2024-10-18','2024-11-03'],['2024-12-20','2025-01-05'],['2025-02-21','2025-03-09'],['2025-04-18','2025-05-04'],['2025-05-28','2025-06-01'],['2025-07-04','2025-08-28'],['2025-10-17','2025-11-02'],['2025-12-19','2026-01-04'],['2026-02-06','2026-02-22'],['2026-04-03','2026-04-19'],['2026-05-13','2026-05-17'],['2026-07-03','2026-08-30'],['2026-10-16','2026-11-01'],['2026-12-18','2027-01-03'],['2027-02-12','2027-02-28'],['2027-04-09','2027-04-25'],['2027-05-06','2027-05-06'],['2027-07-02','2027-08-31'],['2027-10-22','2027-11-07'],['2027-12-17','2028-01-02'],['2028-02-18','2028-03-05'],['2028-04-21','2028-05-08'],['2028-05-24','2028-05-28'],['2028-07-03','2028-07-03']], C: [['2023-10-20','2023-11-05'],['2023-12-22','2024-01-07'],['2024-02-09','2024-02-25'],['2024-04-05','2024-04-21'],['2024-05-08','2024-05-12'],['2024-07-05','2024-08-29'],['2024-10-18','2024-11-03'],['2024-12-20','2025-01-05'],['2025-02-14','2025-03-02'],['2025-04-11','2025-04-27'],['2025-05-28','2025-06-01'],['2025-07-04','2025-08-28'],['2025-10-17','2025-11-02'],['2025-12-19','2026-01-04'],['2026-02-20','2026-03-08'],['2026-04-17','2026-05-03'],['2026-05-13','2026-05-17'],['2026-07-03','2026-08-30'],['2026-10-16','2026-11-01'],['2026-12-18','2027-01-03'],['2027-02-05','2027-02-21'],['2027-04-02','2027-04-18'],['2027-05-06','2027-05-06'],['2027-07-02','2027-08-31'],['2027-10-22','2027-11-07'],['2027-12-17','2028-01-02'],['2028-02-11','2028-02-27'],['2028-04-14','2028-05-01'],['2028-05-24','2028-05-28'],['2028-07-03','2028-07-03']] };
+  const zone = () => { const c = (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG) || {}; return c.zone_vacances || ({ mj: 'C' }[String(c.id || '').toLowerCase()]) || 'A'; };
+  const isoOf = i => new Date(D0 + i * DAY).toISOString().slice(0, 10);
+  const idxOf = iso => Math.round((Date.parse(iso + 'T00:00:00Z') - D0) / DAY);
+  function easter(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return Date.UTC(y, mo - 1, da); }
+  const _fer = new Map();
+  function feries(y) {
+    if (_fer.has(y)) return _fer.get(y);
+    const E = easter(y), s = new Set([Date.UTC(y, 0, 1), Date.UTC(y, 4, 1), Date.UTC(y, 4, 8), Date.UTC(y, 6, 14), Date.UTC(y, 7, 15), Date.UTC(y, 10, 1), Date.UTC(y, 10, 11), Date.UTC(y, 11, 25), E + DAY, E + 39 * DAY, E + 50 * DAY]);
+    _fer.set(y, s); return s;
+  }
+  const isFer = t => feries(new Date(t).getUTCFullYear()).has(t);
+  let _vacZ = null, _vac = null;
+  function vacSet() { const z = zone(); if (_vacZ === z) return _vac; const s = new Set(); for (const [a, b] of (VAC[z] || VAC.A)) for (let t = Date.parse(a + 'T00:00:00Z') + DAY; t <= Date.parse(b + 'T00:00:00Z'); t += DAY) s.add(t); _vacZ = z; _vac = s; return s; }
+  // drapeaux calendrier d'un jour (indice depuis le 01/01/2024, négatif possible) : [férié, vacances scolaires, pont]
+  function calRaw(i) {
+    const t = D0 + i * DAY, wd = (new Date(t).getUTCDay() + 6) % 7;
+    return [isFer(t) ? 1 : 0, vacSet().has(t) ? 1 : 0, ((wd === 4 && isFer(t - DAY)) || (wd === 0 && isFer(t + DAY))) ? 1 : 0];
+  }
+  const CAL_LO = -460, CAL_HI = 2000; let _calZ = null, _calT = null;
+  function cal(i) {                                                   // table précalculée (une fois par zone de vacances)
+    if (_calZ !== zone()) { _calT = new Int8Array((CAL_HI - CAL_LO + 1) * 3); for (let j = CAL_LO; j <= CAL_HI; j++) { const c = calRaw(j), b = (j - CAL_LO) * 3; _calT[b] = c[0]; _calT[b + 1] = c[1]; _calT[b + 2] = c[2]; } _calZ = zone(); }
+    if (i < CAL_LO || i > CAL_HI) return calRaw(i);
+    const b = (i - CAL_LO) * 3; return [_calT[b], _calT[b + 1], _calT[b + 2]];
+  }
+  // séries journalières (NaN = non saisi / fermé) d'un champ ('ca' ou 'alim'), pour chaque restaurant de la vue
+  const _ser = new Map();
+  function series(field) {
+    const d = (typeof DASHBOARD_DATA !== 'undefined' && DASHBOARD_DATA.daily) || null; if (!d || !d['2024'] || !d['2025']) return null;
+    const yrs = Object.keys(d).map(Number).filter(y => y >= YEAR_P2).sort(), last = yrs[yrs.length - 1], N = idxOf(last + '-12-31') + 1;
+    const sig = field + '|' + RESTOS.join(',') + '|' + yrs.map(y => y + ':' + ((d[y][RESTOS[0]] || {})[field] || []).filter(v => v != null).length).join(',') + '|' + (((DASHBOARD_DATA.meta || {}).last_day_by_resto) ? Object.values(DASHBOARD_DATA.meta.last_day_by_resto).join(',') : '');
+    const hit = _ser.get(field); if (hit && hit.sig === sig) return hit;
+    const Y = {};
+    for (const r of RESTOS) { const a = new Float64Array(N).fill(NaN); for (const y of yrs) { const src = ((d[y] || {})[r] || {})[field]; if (!src) continue; const b = idxOf(y + '-01-01'); for (let i = 0; i < src.length; i++) if (src[i] != null && src[i] > 0) a[b + i] = src[i]; } Y[r] = a; }
+    const o = { sig, Y, N }; _ser.set(field, o); return o;
+  }
+  const clip = x => Math.min(2, Math.max(0.5, x));
+  function ratio(Yr, io, W) { let a = 0, b = 0, n = 0; for (let i = io - W; i < io; i++) { const x = Yr[i], y = Yr[i - LAG]; if (x === x && y === y) { a += x; b += y; n++; } } return (n >= Math.max(5, Math.floor(W / 3)) && b > 0) ? a / b : NaN; }
+  // caractéristiques du jour io+k vu depuis l'origine io (rien de connu après io-1) ; renvoie false si inutilisable
+  function feat(Yr, io, k, r28, r84, X) {
+    const it = io + k, n1 = Yr[it - LAG]; if (!(n1 > 0) || !(r28 === r28) || !(r84 === r84)) return false;
+    const m = Math.floor(k / 7) + 1; let a = 0, b = 0, n = 0;
+    for (let j = 0; j < 4; j++) { const d = it - 7 * (m + j), x = Yr[d], y = Yr[d - LAG]; if (x === x && y === y) { a += x; b += y; n++; } }
+    if (n < 2 || !(b > 0)) return false;
+    const c0 = cal(it), c1 = cal(it - LAG);
+    X[0] = Math.log(clip(r28)); X[1] = Math.log(clip(r84)); X[2] = Math.log(clip(a / b)); X[3] = c0[0] - c1[0]; X[4] = c0[1] - c1[1]; X[5] = c0[2] - c1[2];
+    return true;
+  }
+  // table d'apprentissage (origines tous les STEP jours) : une ligne = (jour cible, caractéristiques, z = ln(réel / N-1))
+  const _tab = new Map();
+  function table(field, S) {
+    const hit = _tab.get(field); if (hit && hit.sig === S.sig) return hit;
+    const it = [], z = [], X = [], x = new Float64Array(NF), first = LAG + 84;
+    for (const r of RESTOS) { const Yr = S.Y[r];
+      for (let io = first; io < S.N; io += STEP) {
+        const r28 = ratio(Yr, io, 28), r84 = ratio(Yr, io, 84); if (!(r28 === r28) || !(r84 === r84)) continue;
+        for (let k = 0; k < H; k++) { const t = io + k; if (t >= S.N) break; const y = Yr[t], n1 = Yr[t - LAG]; if (!(y > 0) || !(n1 > 0)) continue; if (!feat(Yr, io, k, r28, r84, x)) continue; it.push(t); z.push(Math.log(y / n1)); for (let j = 0; j < NF; j++) X.push(x[j]); }
+      }
+    }
+    const o = { sig: S.sig, it: Int32Array.from(it), z: Float64Array.from(z), X: Float64Array.from(X), n: it.length }; _tab.set(field, o); return o;
+  }
+  // régression ridge (variables centrées-réduites, constante non pénalisée) sur les lignes dont le jour cible est connu avant cutoff
+  function fit(T, cutoff) {
+    const n0 = T.n, mu = new Float64Array(NF), sd = new Float64Array(NF); let n = 0;
+    for (let i = 0; i < n0; i++) { if (T.it[i] >= cutoff) continue; n++; for (let j = 0; j < NF; j++) mu[j] += T.X[i * NF + j]; }
+    if (n < 1500) return null;
+    for (let j = 0; j < NF; j++) mu[j] /= n;
+    for (let i = 0; i < n0; i++) { if (T.it[i] >= cutoff) continue; for (let j = 0; j < NF; j++) { const d = T.X[i * NF + j] - mu[j]; sd[j] += d * d; } }
+    for (let j = 0; j < NF; j++) sd[j] = Math.sqrt(sd[j] / n) + 1e-9;
+    const M = NF + 1, A = new Float64Array(M * M), b = new Float64Array(M), v = new Float64Array(M);
+    for (let i = 0; i < n0; i++) { if (T.it[i] >= cutoff) continue; v[0] = 1; for (let j = 0; j < NF; j++) v[j + 1] = (T.X[i * NF + j] - mu[j]) / sd[j]; for (let p = 0; p < M; p++) { b[p] += v[p] * T.z[i]; for (let q = 0; q < M; q++) A[p * M + q] += v[p] * v[q]; } }
+    for (let p = 1; p < M; p++) A[p * M + p] += LAMBDA;
+    for (let c = 0; c < M; c++) { let piv = c; for (let r = c + 1; r < M; r++) if (Math.abs(A[r * M + c]) > Math.abs(A[piv * M + c])) piv = r; if (Math.abs(A[piv * M + c]) < 1e-12) return null;
+      if (piv !== c) { for (let q = 0; q < M; q++) { const t = A[c * M + q]; A[c * M + q] = A[piv * M + q]; A[piv * M + q] = t; } const t = b[c]; b[c] = b[piv]; b[piv] = t; }
+      for (let r = c + 1; r < M; r++) { const f = A[r * M + c] / A[c * M + c]; if (!f) continue; for (let q = c; q < M; q++) A[r * M + q] -= f * A[c * M + q]; b[r] -= f * b[c]; } }
+    const beta = new Float64Array(M); for (let c = M - 1; c >= 0; c--) { let s = b[c]; for (let q = c + 1; q < M; q++) s -= A[c * M + q] * beta[q]; beta[c] = s / A[c * M + c]; }
+    return { beta, mu, sd, n };
+  }
+  // jours io..fin (indices) d'un restaurant : { sum: CA prédit, sum0: N-1 brut, miss: jours sans référence N-1 }
+  function predict(mdl, Yr, io, fin) {
+    const r28 = ratio(Yr, io, 28), r84 = ratio(Yr, io, 84), x = new Float64Array(NF); let sum = 0, sum0 = 0, miss = 0;
+    for (let t = io; t <= fin; t++) {
+      const n1 = Yr[t - LAG]; if (!(n1 > 0)) { miss++; continue; }
+      sum0 += n1;
+      if (mdl && feat(Yr, io, t - io, r28, r84, x)) { let zz = mdl.beta[0]; for (let j = 0; j < NF; j++) zz += mdl.beta[j + 1] * (x[j] - mdl.mu[j]) / mdl.sd[j]; sum += n1 * Math.exp(zz); }
+      else sum += n1 * (r28 === r28 ? clip(r28) : 1);                    // repli : N-1 × tendance 28 j
+    }
+    return { sum, sum0, miss };
+  }
+  const known = (Yr, a, b) => { let s = 0, n = 0; for (let i = a; i <= b; i++) if (Yr[i] === Yr[i]) { s += Yr[i]; n++; } return { s, n }; };
+  const quant = (arr, p) => { if (!arr.length) return null; const s = arr.slice().sort((a, b) => a - b), i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
+  const _fitC = new Map();
+  const fitOnce = (field, S, T, cutoff) => { const k = field + '|' + cutoff + '|' + S.sig, h = _fitC.get(k); if (h !== undefined) return h; const m = fit(T, cutoff); _fitC.set(k, m); return m; };
+  // mesure : même prédiction, à la même date du mois (dom), sur les mois passés complets ; modèle appris sur les jours connus avant le début du mois testé
+  const _bt = new Map();
+  function backtest(field, S, T, dom, ym0) {
+    const key = field + '|' + dom + '|' + ym0 + '|' + S.sig, hit = _bt.get(key); if (hit) return hit;
+    const res = { fr: [], fr0: [], per: {}, per0: {}, nMois: 0, ymFr: [], ymPer: {} };
+    for (const r of RESTOS) { res.per[r] = []; res.per0[r] = []; res.ymPer[r] = []; }
+    let y = +ym0.slice(0, 4), m = +ym0.slice(5, 7), made = 0;
+    for (let back = 0; back < 14 && made < 12; back++) {
+      m--; if (m < 1) { m = 12; y--; }
+      const a = idxOf(y + '-' + String(m).padStart(2, '0') + '-01'), fin = idxOf(new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)), io = a + dom - 1;
+      if (io > fin || a - LAG - 84 < 0) continue;
+      const mdl = fitOnce(field, S, T, a); if (!mdl) continue;
+      let sp = 0, s0 = 0, sa = 0, any = 0;
+      for (const r of RESTOS) {
+        const Yr = S.Y[r], act = known(Yr, a, fin); if (act.n !== fin - a + 1) continue;      // mois complet seulement
+        const kn = known(Yr, a, io - 1).s, p = predict(mdl, Yr, io, fin); if (p.miss) continue;
+        const e = (kn + p.sum) / act.s - 1, e0 = (kn + p.sum0) / act.s - 1; res.per[r].push(e); res.per0[r].push(e0); res.ymPer[r].push(y + '-' + String(m).padStart(2, '0'));
+        sp += kn + p.sum; s0 += kn + p.sum0; sa += act.s; any++;
+      }
+      if (any >= Math.max(1, Math.ceil(RESTOS.length * 0.6)) && sa > 0) { res.fr.push(sp / sa - 1); res.fr0.push(s0 / sa - 1); res.ymFr.push(y + '-' + String(m).padStart(2, '0')); made++; }
+    }
+    res.nMois = made; _bt.set(key, res); return res;
+  }
+  const mae = a => a.length ? a.reduce((s, x) => s + Math.abs(x), 0) / a.length : null;
+  // Prédiction de la chute du mois en cours pour une vue (restaurant ou FRANCHISE), un champ ('ca' | 'alim')
+  function chute(field, r) {
+    const S = series(field); if (!S) return null;
+    const wd = (typeof WEEK !== 'undefined' && WEEK && WEEK.days) || null; if (!wd || !wd.length) return null;
+    const first = wd[0], lastDay = wd[wd.length - 1], a = idxOf(first), fin = idxOf(lastDay);
+    const rs = r === 'FRANCHISE' ? RESTOS : [r], ld = ((DASHBOARD_DATA.meta || {}).last_day_by_resto) || {};
+    const T = table(field, S); let kn = 0, rest = 0, rest0 = 0, miss = 0, domMax = 0; const detail = {};
+    for (const rr of rs) {
+      const Yr = S.Y[rr]; if (!Yr) return null;
+      let io = ld[rr] ? idxOf(ld[rr]) + 1 : null;
+      if (io == null || io < a) { io = a; for (let i = fin; i >= a; i--) if (Yr[i] === Yr[i]) { io = i + 1; break; } }
+      io = Math.min(Math.max(io, a), fin + 1);
+      const mdl = fitOnce(field, S, T, a), kk = known(Yr, a, io - 1), p = io <= fin ? predict(mdl, Yr, io, fin) : { sum: 0, sum0: 0, miss: 0 };
+      kn += kk.s; rest += p.sum; rest0 += p.sum0; miss += p.miss; domMax = Math.max(domMax, io - a + 1); detail[rr] = kk.s + p.sum;
+    }
+    const dom = Math.min(28, Math.max(2, domMax)), bt = backtest(field, S, T, dom, first.slice(0, 7));
+    const errs = r === 'FRANCHISE' ? bt.fr : bt.per[r], errs0 = r === 'FRANCHISE' ? bt.fr0 : bt.per0[r];
+    const n1 = (() => { let s = 0, n = 0; for (const rr of rs) { const Yr = S.Y[rr]; for (let i = a; i <= fin; i++) { const v = Yr[i - LAG]; if (v === v) { s += v; n++; } } } return n ? s : null; })();
+    const pred = kn + rest, mea = errs && errs.length >= 6 ? mae(errs) : null, band = errs && errs.length >= 6 ? Math.max(0.01, quant(errs.map(Math.abs), 0.8)) : null;
+    return { pred, known: kn, rest, rest0, miss, n1, vsN1: n1 ? pred / n1 - 1 : null, band, mae: mea, mae0: errs0 && errs0.length >= 6 ? mae(errs0) : null, n: errs ? errs.length : 0, dom, detail, last: lastDay };
+  }
+  return { chute, series, table, fit, predict, backtest, cal, idxOf, isoOf, zone, LAG, feat, ratio, known };
+})();
+const _piaEur = v => Math.round(v / 1000) * 1000;
+const _piaPct = (x, d) => (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(d == null ? 1 : d).replace('.', ',') + ' %';
+let PIA_LVL = 1;                                                    // tuile d'accès « pia » (0 = masquée)
+function piaOnLogin(r) { const a = (r && r.acces && typeof r.acces === 'object') ? r.acces : null; PIA_LVL = a ? (+a.pia || 0) : 1; }   // anciens droits (sans tuiles) : visible
+function piaTileHtml(r) {
+  try {
+    if (PIA_LVL < 1 || weekMode !== 'm' || !WEEK || !WEEK.partial || !DASHBOARD_DATA || !DASHBOARD_DATA.daily) return '';
+    r = r || 'FRANCHISE';
+    const t = PIA.chute('ca', r); if (!t || !(t.pred > 0)) return '';
+    const al = PIA.chute('alim', r), mois = _MOIS_FR[+t.last.slice(5, 7) - 1].toLowerCase();
+    const rng = t.band ? `<div class="pia-line">Fourchette <span>(80 % des cas)</span> <b>${fmt(_piaEur(t.pred * (1 - t.band)), 'euros')} – ${fmt(_piaEur(t.pred * (1 + t.band)), 'euros')}</b></div>` : '';
+    const prec = t.mae != null ? `Précision mesurée : erreur moyenne <b>${(t.mae * 100).toFixed(1).replace('.', ',')} %</b> sur ${t.n} mois à cette date${t.mae0 != null ? ` <span>(N-1 brut : ${(t.mae0 * 100).toFixed(1).replace('.', ',')} %)</span>` : ''}` : 'Précision en cours de mesure (historique insuffisant)';
+    const sv = (typeof weekChuteVals === 'function') ? weekChuteVals(r, 'ca_total') : null;
+    const vsSaisie = (sv && sv.chute > 0) ? `<div class="pia-line">Écart avec la chute saisie <b>${_piaPct(t.pred / sv.chute - 1)}</b></div>` : '';
+    const tip = "Prédiction IA : réalisé à date + CA prédit des jours restants. Modèle statistique appris sur l'historique de vos restaurants (jour équivalent N-1, tendance des 4 et 12 dernières semaines, jours fériés, vacances scolaires). Aucune donnée n'est envoyée à l'extérieur. La fourchette et la précision sont mesurées en refaisant la même prédiction sur les mois passés, à la même date du mois.";
+    return `<div class="week-card wk-pia" title="${tip.replace(/"/g, '&quot;')}">
+      <div class="wk-label">Prédiction IA <span class="pia-sub">Intelligence artificielle</span></div>
+      <div class="wk-value">≈ ${fmt(_piaEur(t.pred), 'euros')}</div>
+      <div class="pia-sub2">chute ${/^[aeiouéèêh]/i.test(mois) ? "d'" : 'de '}${mois} · CA net total${t.vsN1 != null ? ` · <b class="${t.vsN1 >= 0 ? 'wk-up' : 'wk-down'}">${t.vsN1 >= 0 ? '▲ +' : '▼ '}${Math.abs(t.vsN1 * 100).toFixed(1).replace('.', ',')} %</b> vs N-1` : ''}</div>
+      ${rng}
+      ${al && al.pred > 0 ? `<div class="pia-line">CA net alimentaire <b>≈ ${fmt(_piaEur(al.pred), 'euros')}</b>${al.band ? ` <span>± ${(al.band * 100).toFixed(1).replace('.', ',')} %</span>` : ''}</div>` : ''}
+      ${vsSaisie}
+      <div class="pia-prec">${prec}</div>
+      ${t.miss ? `<div class="pia-prec">⚠ ${t.miss} jour${t.miss > 1 ? 's' : ''} sans référence N-1 (non comptés)</div>` : ''}
+    </div>`;
+  } catch (e) { return ''; }
 }
 let weekOpenKpi = null;
 let weekResto = 'FRANCHISE';
@@ -6681,6 +6873,7 @@ function renderWeekStrip() {
       ${k.id === 'ca_total' || k.id === 'ca_alim' ? weekChuteHtml(r, k.id) : ''}
     </div>`;
   }
+  h += (typeof piaTileHtml === 'function' ? piaTileHtml(r) : '');
   h += `</div>${renderWeekMissing(r)}${renderWeekComments(r)}<div id="weekDetail"></div></div>`;
   el.innerHTML = h;
   bindCarSwipe('wkCar', weekNavResto);
@@ -11396,7 +11589,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-135437';
+const BUILD_VERSION = '20261115-142554';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
