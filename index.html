@@ -223,7 +223,7 @@ const SBA = (() => {
   // ── APERÇU (« voir le site comme ce profil ») : page ouverte avec ?apercu=1 et les droits simulés dans l'adresse (#apercu=…). LECTURE SEULE : aucune écriture partie vers l'Apps Script ni Supabase,
   //    aucune écriture dans le stockage local (sauf la session, jamais renouvelée ici), ni déconnexion, ni journal de connexion. Les droits simulés remplacent mes_droits ; le serveur, lui, ne voit que le jeton réel.
   const APERCU = (() => { if (!/[?&]apercu=1(&|$)/.test(location.search)) return null; try { return JSON.parse(decodeURIComponent(String(location.hash || '').replace(/^#apercu=/, ''))) || {}; } catch (e) { return {}; } })();
-  const RPC_READ = /\/rest\/v1\/rpc\/(mes_droits|acces_218_liste|connexions_liste|planning_restos|semaine_reglage)(\?|$)/, READ_POST = /^(read|wf_load|wf_list|bc_load|bc_list|px_load|px_journal|pb_cfg_load|pb_list|pb_load|wf_archives|rv_load|acc_login|acc_list)$/;
+  const RPC_READ = /\/rest\/v1\/rpc\/(mes_droits|acces_218_liste|connexions_liste|planning_restos|semaine_reglage|primes_frm_personnes)(\?|$)/, READ_POST = /^(read|wf_load|wf_list|bc_load|bc_list|px_load|px_journal|pb_cfg_load|pb_list|pb_load|wf_archives|rv_load|acc_login|acc_list)$/;
   const apercuOk = (url, method, body) => { if (!APERCU) return true; method = String(method || 'GET').toUpperCase(); if (method === 'GET' || method === 'HEAD') return true; if (RPC_READ.test(String(url))) return true; let a = ''; try { a = JSON.parse(String(body || '{}')).action || ''; } catch (e) {} return READ_POST.test(a); };
   const APERCU_REFUS = "Aperçu : lecture seule, rien n'est enregistré.";
   let gateRes, refreshing = null, rightsC = null, legacyOk = false;
@@ -473,11 +473,11 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', '']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
-{ const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => t[0] !== 'prim'); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
+{ const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => !['prim', 'ffoc', 'fcfv', 'fcer'].includes(t[0])); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
 const accMax = k => k === 'pb' ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
-const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : 'Modification'));
+const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? 'Réalisation' : 'Modification')));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
 const accEspLvl = (r, esp) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('esp:' + esp)); return t ? accLvl(r, t[0]) : null; };
@@ -11287,7 +11287,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261114-123910';
+const BUILD_VERSION = '20261115-090421';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
