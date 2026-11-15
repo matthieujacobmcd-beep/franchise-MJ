@@ -6434,14 +6434,38 @@ function renderWeekMissing(r) {
   return `<details class="wk-comments" style="margin-top:10px" ${rows.length <= 4 ? 'open' : ''}><summary style="cursor:pointer;font-weight:700;font-size:.82rem">⚠ Restaurants non saisis · ${rows.length} jour${rows.length > 1 ? 's' : ''} concerné${rows.length > 1 ? 's' : ''}</summary>${rows.map(line).join('')}</details>`;
 }
 
-// Prévision de CA saisie jour par jour (page « Prévision CA » : DASHBOARD_DATA.prevjour[restaurant][jour] = { alim, total }) pour les jours de la période affichée.
-// CA net total et CA net alimentaire seulement. v = valeur du jour (somme des restaurants), full = tous les restaurants de la vue ont une prévision ce jour-là ; null si aucune prévision.
+// Prévision de CA d'un restaurant pour un jour (CA net total ou alimentaire).
+//  · prévision journalière saisie (page « Prévision CA » : DASHBOARD_DATA.prevjour[restaurant][jour] = { alim, total }) ;
+//  · à défaut, et seulement si le restaurant n'a AUCUNE prévision journalière ce mois-là : son prévisionnel mensuel (budget) réparti selon le profil de l'an passé
+//    (poids du jour = CA du jour équivalent N-1 ÷ CA du mois équivalent N-1 ; à plat si l'an passé est inconnu) — valeur « estimée » (est = true), jamais enregistrée.
+const _wkMoPrev = new Map();
+function weekPrevMonth(id, rr, ym) {
+  const Y = DASHBOARD_DATA[ym.slice(0, 4)] || {}, S = Y[id === 'ca_alim' ? 'ca_alim_prev' : 'ca_total_prev'] || {}, v = (S[MONTHS[+ym.slice(5, 7) - 1]] || {})[rr];
+  return (v != null && +v > 0) ? +v : null;
+}
+function weekHasDailyPrev(rr, ym) {
+  const k = rr + ym; if (!_wkMoPrev.has(k)) _wkMoPrev.set(k, Object.keys((DASHBOARD_DATA.prevjour || {})[rr] || {}).some(x => x.startsWith(ym)));
+  return _wkMoPrev.get(k);
+}
+function weekPrevProfile(id, rr, dateIso) {
+  const fld = id === 'ca_alim' ? 'alim' : 'ca', ym = dateIso.slice(0, 7), nd = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+  let tot = 0, mine = null;
+  for (let d = 1; d <= nd; d++) { const iso = ym + '-' + String(d).padStart(2, '0'), v = _wkVal(_wkIso(Date.parse(iso + 'T00:00:00Z') - 364 * _WD), rr, fld); if (v != null) tot += v; if (iso === dateIso) mine = v; }
+  return { w: (tot > 0 && mine != null) ? mine / tot : 1 / nd };
+}
+function weekPrevDay(id, rr, d) {
+  const key = id === 'ca_alim' ? 'alim' : 'total', p = ((DASHBOARD_DATA.prevjour || {})[rr] || {})[d];
+  if (p && p[key] != null) return { v: p[key], est: false };
+  const ym = d.slice(0, 7); if (weekHasDailyPrev(rr, ym)) return null;
+  const mv = weekPrevMonth(id, rr, ym); if (mv == null) return null;
+  return { v: mv * weekPrevProfile(id, rr, d).w, est: true };
+}
+// Pour les jours de la période affichée : v = valeur du jour (somme des restaurants de la vue), n = restaurants avec prévision, est = dont estimés, full = tous les restaurants de la vue ont une prévision ce jour-là ; null si aucune.
 function weekPrevArr(id, r) {
-  const P = DASHBOARD_DATA.prevjour, key = id === 'ca_alim' ? 'alim' : (id === 'ca_total' ? 'total' : null);
-  if (!P || !key || !WEEK || !WEEK.days) return null;
+  if (!DASHBOARD_DATA.prevjour || !(id === 'ca_alim' || id === 'ca_total') || !WEEK || !WEEK.days) return null;
   const rs = r === 'FRANCHISE' ? RESTOS : [r]; let any = false;
-  const o = WEEK.days.map(d => { let s = null, n = 0; for (const rr of rs) { const p = (P[rr] || {})[d]; if (p && p[key] != null) { s = (s || 0) + p[key]; n++; } } if (n) any = true; return { v: s, n }; });
-  return any ? { v: o.map(x => x.v), full: o.map(x => x.n === rs.length), n: o.map(x => x.n), tot: rs.length } : null;
+  const o = WEEK.days.map(d => { let s = null, n = 0, e = 0; for (const rr of rs) { const q = weekPrevDay(id, rr, d); if (q) { s = (s || 0) + q.v; n++; if (q.est) e++; } } if (n) any = true; return { v: s, n, e }; });
+  return any ? { v: o.map(x => x.v), full: o.map(x => x.n === rs.length), n: o.map(x => x.n), est: o.map(x => x.e), tot: rs.length } : null;
 }
 
 // Détail d'une tuile en vue Jour : un tableau restaurant par restaurant (Franchise : les 8 restaurants + total)
@@ -6452,7 +6476,7 @@ function renderDayDetail(box, k) {
   const row = r => {
     const v = weekAgg(kk.id, 'cur', r), p = weekAgg(kk.id, 'n1', r), d = (v != null && p) ? (v - p) / p * 100 : null;
     const pa = prevOn ? weekPrevArr(kk.id, r) : null, pv = pa && pa.full[0] ? pa.v[0] : null, dp = (v != null && pv) ? (v - pv) / pv * 100 : null;
-    return `<tr><td>${r === 'FRANCHISE' ? '<b>Franchise</b>' : restoShort(r)}</td><td>${v == null ? '<span style="color:var(--muted)">non saisi</span>' : fmt(v, kk.fmt)}</td>${prevOn ? `<td style="color:#b45309">${pv == null ? '—' : fmt(pv, kk.fmt)}</td>` : ''}<td>${fmt(p, kk.fmt)}</td><td class="delta" style="color:${goodCls(d)}">${d == null ? '—' : (d >= 0 ? '▲ +' : '▼ ') + d.toFixed(1) + '%'}</td>${prevOn ? `<td class="delta" style="color:${goodCls(dp)}">${dp == null ? '—' : (dp >= 0 ? '▲ +' : '▼ ') + dp.toFixed(1) + '%'}</td>` : ''}</tr>`;
+    return `<tr><td>${r === 'FRANCHISE' ? '<b>Franchise</b>' : restoShort(r)}</td><td>${v == null ? '<span style="color:var(--muted)">non saisi</span>' : fmt(v, kk.fmt)}</td>${prevOn ? `<td style="color:#b45309"${pa && pa.est[0] ? ' title="Estimation : prévisionnel mensuel réparti selon le profil de l\'an passé"' : ''}>${pv == null ? '—' : fmt(pv, kk.fmt) + (pa.est[0] ? ' ≈' : '')}</td>` : ''}<td>${fmt(p, kk.fmt)}</td><td class="delta" style="color:${goodCls(d)}">${d == null ? '—' : (d >= 0 ? '▲ +' : '▼ ') + d.toFixed(1) + '%'}</td>${prevOn ? `<td class="delta" style="color:${goodCls(dp)}">${dp == null ? '—' : (dp >= 0 ? '▲ +' : '▼ ') + dp.toFixed(1) + '%'}</td>` : ''}</tr>`;
   };
   const list = weekResto === 'FRANCHISE' ? [...RESTOS, 'FRANCHISE'] : [weekResto];
   var prevOn = !!weekPrevArr(kk.id, weekResto || 'FRANCHISE');                // une colonne « Prévisionnel » si une prévision journalière existe pour ce jour
@@ -6465,16 +6489,16 @@ function renderDayDetail(box, k) {
 function weekChuteHtml(r) {
   if (weekMode !== 'm' || !WEEK.partial || !DASHBOARD_DATA.prevjour || !WEEK.kpis || !WEEK.kpis.ca_total) return '';
   const rs = r === 'FRANCHISE' ? RESTOS : [r], K = WEEK.kpis.ca_total, ld = (DASHBOARD_DATA.meta || {}).last_day_by_resto || {};
-  let real = 0, rest = 0, nRest = 0, nPrev = 0, n1 = 0;
+  let real = 0, rest = 0, nRest = 0, nPrev = 0, n1 = 0; const estR = new Set();
   for (const rr of rs) WEEK.days.forEach((d, i) => {
     const v = K.cur[rr][i];
     if (v != null) real += v;
-    else if (!ld[rr] || d > ld[rr]) { nRest++; const p = ((DASHBOARD_DATA.prevjour || {})[rr] || {})[d]; if (p && p.total != null) { rest += p.total; nPrev++; } }      // jour à venir : on prend la prévision journalière saisie
+    else if (!ld[rr] || d > ld[rr]) { nRest++; const q = weekPrevDay('ca_total', rr, d); if (q) { rest += q.v; nPrev++; if (q.est) estR.add(rr); } }      // jour à venir : prévision journalière saisie, à défaut prévisionnel mensuel réparti (estimation)
     const e = _wkVal(WEEK.days_eq[i], rr, 'ca'); if (e != null) n1 += e;
   });
   if (!nPrev) return '';
   const chute = real + rest, d = n1 ? (chute / n1 - 1) * 100 : null, manque = nRest - nPrev;
-  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)">Chute du mois <b>${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
 }
 let weekOpenKpi = null;
 let weekResto = 'FRANCHISE';
@@ -6619,7 +6643,7 @@ function renderWeekDetail() {
     const delta = (v != null && p) ? (v - p) / p * 100 : null;
     const dp = (v != null && prv && prv[i]) ? (v - prv[i]) / prv[i] * 100 : null;
     rows += `<tr><td>${dd[i]} <span style="color:var(--muted);font-size:.68rem">(vs ${dn[i]})</span></td>
-      <td>${fmt(v, k.fmt)}</td>${prv ? `<td style="color:#b45309"${prvR.n[i] && !prvR.full[i] ? ` title="Prévision saisie pour ${prvR.n[i]} restaurant(s) sur ${prvR.tot} : jour non retenu dans la ligne et le total"` : ''}>${prvR.n[i] ? fmt(prvR.v[i], k.fmt) + (prvR.full[i] ? '' : ' *') : '—'}</td>` : ''}<td>${fmt(p, k.fmt)}</td>
+      <td>${fmt(v, k.fmt)}</td>${prv ? `<td style="color:#b45309"${prvR.n[i] && !prvR.full[i] ? ` title="Prévision pour ${prvR.n[i]} restaurant(s) sur ${prvR.tot} : jour non retenu dans la ligne et le total"` : (prvR.est[i] ? ` title="Estimation : prévisionnel mensuel de ${prvR.est[i]} restaurant(s) sans prévision journalière, réparti selon le profil de l\'an passé"` : '')}>${prvR.n[i] ? fmt(prvR.v[i], k.fmt) + (prvR.full[i] ? (prvR.est[i] ? ' ≈' : '') : ' *') : '—'}</td>` : ''}<td>${fmt(p, k.fmt)}</td>
       <td class="delta" style="color:${goodCls(delta)}">${delta == null ? '—' : (delta >= 0 ? '▲ +' : '▼ ') + delta.toFixed(1) + '%'}</td>${prv ? `<td class="delta" style="color:${goodCls(dp)}">${dp == null ? '—' : (dp >= 0 ? '▲ +' : '▼ ') + dp.toFixed(1) + '%'}</td>` : ''}${r === 'FRANCHISE' ? `<td style="font-size:.7rem;color:var(--muted)">${(WEEK.missing?.[i] || []).map(restoShort).join(', ')}</td>` : ''}</tr>`;
   }
   const tot = weekAgg(k.id, 'cur', r), totp = weekAgg(k.id, 'n1', r);
@@ -6635,7 +6659,7 @@ function renderWeekDetail() {
       <tr style="font-weight:800;border-top:2px solid var(--border)"><td>Total ${weekMode === 'm' ? 'mois' : 'semaine'}</td>
         <td>${fmt(tot, k.fmt)}</td>${prv ? `<td style="color:#b45309">${fmt(prvTot, k.fmt)}</td>` : ''}<td>${fmt(totp, k.fmt)}</td>
         <td class="delta" style="color:${goodCls(dt)}">${dt == null ? '—' : (dt >= 0 ? '▲ +' : '▼ ') + dt.toFixed(1) + '%'}</td>${prv ? `<td class="delta" style="color:${goodCls(dpt)}">${dpt == null ? '—' : (dpt >= 0 ? '▲ +' : '▼ ') + dpt.toFixed(1) + '%'}</td>` : ''}</tr>
-      </tbody></table></div>${prv ? `<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Prévisionnel : prévision journalière saisie (page « Prévision CA »), jours à venir compris ; le total est celui de toute la période. Δ prév. : réalisé comparé à la prévision des seuls jours déjà saisis.${prvR.full.some((f, i) => prvR.n[i] && !f) ? ' * Prévision saisie pour une partie des restaurants seulement : jour non retenu dans la ligne et le total.' : ''}</div>` : ''}${weekMode === 'm' && !WEEK.n1eq ? '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Mois complet : le total est comparé au même mois de l\'an passé ; chaque ligne est comparée au jour équivalent (même jour de la semaine), d\'où une somme des lignes différente du total.</div>' : ''}</div>`;
+      </tbody></table></div>${prv ? `<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Prévisionnel : prévision journalière saisie (page « Prévision CA »), jours à venir compris ; le total est celui de toute la période. Δ prév. : réalisé comparé à la prévision des seuls jours déjà saisis.${prvR.est.some(Boolean) ? ' ≈ Estimation pour les restaurants sans prévision journalière : leur prévisionnel mensuel (budget) est réparti sur les jours selon le profil de l\'an passé (jours équivalents) ; ce n\'est pas une saisie.' : ''}${prvR.full.some((f, i) => prvR.n[i] && !f) ? ' * Prévision disponible pour une partie des restaurants seulement : jour non retenu dans la ligne et le total.' : ''}</div>` : ''}${weekMode === 'm' && !WEEK.n1eq ? '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Mois complet : le total est comparé au même mois de l\'an passé ; chaque ligne est comparée au jour équivalent (même jour de la semaine), d\'où une somme des lignes différente du total.</div>' : ''}</div>`;
 
   if (weekChartInst) { try { weekChartInst.destroy(); } catch (e) {} weekChartInst = null; }
   const canvas = document.getElementById('weekChartCanvas');
@@ -6646,7 +6670,7 @@ function renderWeekDetail() {
         { label: WEEK.yearCur, data: cur, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.10)',
           tension: .3, pointRadius: 3, borderWidth: 2.5, fill: true, spanGaps: true },
         { label: WEEK.yearN1 + ' (jour équivalent)', data: n1, borderColor: '#3b82f6', borderDash: [5, 3],
-          backgroundColor: 'transparent', tension: .3, pointRadius: 3, borderWidth: 2, spanGaps: true } ].concat(prv ? [{ label: 'Prévisionnel', data: prv, borderColor: '#f59e0b', borderDash: [2, 3], backgroundColor: 'transparent', tension: .25, pointRadius: 2, borderWidth: 2, spanGaps: true }] : []) },
+          backgroundColor: 'transparent', tension: .3, pointRadius: 3, borderWidth: 2, spanGaps: true } ].concat(prv ? [{ label: prvR.est.some(Boolean) ? 'Prévisionnel (≈ dont estimation)' : 'Prévisionnel', data: prv, borderColor: '#f59e0b', borderDash: [2, 3], backgroundColor: 'transparent', tension: .25, pointRadius: 2, borderWidth: 2, spanGaps: true }] : []) },
       options: { responsive: true, maintainAspectRatio: false,
         plugins: { legend: { labels: { color: '#6b7280', font: { size: 11 }, boxWidth: 12 } },
           tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, k.fmt)}` } } },
@@ -11302,7 +11326,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-100313';
+const BUILD_VERSION = '20261115-102401';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
