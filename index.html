@@ -480,6 +480,9 @@ const accMax = k => k === 'pia' ? 1 : (k === 'pb' || k === 'ffoc' || k === 'fcfv
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? ['', 'Consultation', 'Réalisation', 'Réalisation et critères'][v] : 'Modification')));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
+// Restaurant de référence : l'appli s'ouvre dessus. Choisi dans Équipes (colonne resto_ref) ; à défaut, l'unique restaurant de la personne ; sinon aucun (vue d'ensemble / choix à l'ouverture).
+// keys = restaurants de la page ; la valeur n'est retenue que si la personne a bien accès à ce restaurant.
+const sbRefResto = (r, keys) => { if (!r) return null; const al = SBA.allowed(r), ok = k => !!k && (!al || al.includes(k)) && (!keys || keys.includes(k)); if (ok(r.resto_ref)) return r.resto_ref; const un = al && al.length === 1 ? al[0] : null; return ok(un) ? un : null; };
 const accEspLvl = (r, esp) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('esp:' + esp)); return t ? accLvl(r, t[0]) : null; };
 function tileModules(a) {                                                       // mêmes règles que la base (acces_modules) : sert aux contrôles de formulaire
   const n = k => +((a || {})[k]) || 0, any = ks => ks.some(k => n(k) >= 1);
@@ -500,11 +503,13 @@ function fjMount(box, url) {
 }
 
 let SB_SCOPE = false, SB_DASH = null;
-function dashScope(r) {                                              // personne limitée à certains restaurants : onglets, adaptateur de données et vue de départ
-  const al = SBA.allowed(r); if (!al) return;
-  const keep = RESTOS.filter(k => al.includes(k)); RESTOS.splice(0, RESTOS.length, ...keep); SB_SCOPE = true;
-  if (typeof SheetAdapter !== 'undefined') SheetAdapter.configure({ stores: keep });
-  if (keep.length === 1) currentResto = keep[0];
+function dashScope(r) {                                              // personne limitée à certains restaurants : onglets, adaptateur de données ; vue de départ = restaurant de référence (ou son seul restaurant)
+  const al = SBA.allowed(r);
+  if (al) {
+    const keep = RESTOS.filter(k => al.includes(k)); RESTOS.splice(0, RESTOS.length, ...keep); SB_SCOPE = true;
+    if (typeof SheetAdapter !== 'undefined') SheetAdapter.configure({ stores: keep });
+  }
+  const ref = sbRefResto(r, RESTOS); if (ref) currentResto = ref;
 }
 function dashPills(r) {                                             // espaces masqués quand la tuile correspondante est à « aucun accès » (anciens droits : tout reste visible)
   if (!r || !r.acces) return;
@@ -11589,7 +11594,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-142554';
+const BUILD_VERSION = '20261115-155116';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

@@ -400,7 +400,7 @@ function init(){
   buildTabs();
   let saved=null; try{ saved=sessionStorage.getItem('mj_resto'); }catch(e){}
   // la page s'affiche tout de suite ; la dernière saisie (pour proposer la période suivante) arrive ensuite
-  if(saved && RESTOS.some(r=>r[0]===saved)) setResto(saved); else showPicker();
+  if(saved && RESTOS.some(r=>r[0]===saved)) setResto(saved); else if(typeof SB_REF!=='undefined' && SB_REF && RESTOS.some(r=>r[0]===SB_REF)) setResto(SB_REF); else showPicker();      // dernier restaurant de la session, sinon restaurant de référence de la personne, sinon choix
   const before=curResto?JSON.stringify(LAST&&LAST[curTab]&&LAST[curTab][curResto]):null;
   loadLast().then(()=>{
     loadRecent();                                   // CA des dernières semaines (léger) : contrôle de cohérence avant enregistrement
@@ -4531,6 +4531,9 @@ const accMax = k => k === 'pia' ? 1 : (k === 'pb' || k === 'ffoc' || k === 'fcfv
 const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? ['', 'Consultation', 'Réalisation', 'Réalisation et critères'][v] : 'Modification')));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
+// Restaurant de référence : l'appli s'ouvre dessus. Choisi dans Équipes (colonne resto_ref) ; à défaut, l'unique restaurant de la personne ; sinon aucun (vue d'ensemble / choix à l'ouverture).
+// keys = restaurants de la page ; la valeur n'est retenue que si la personne a bien accès à ce restaurant.
+const sbRefResto = (r, keys) => { if (!r) return null; const al = SBA.allowed(r), ok = k => !!k && (!al || al.includes(k)) && (!keys || keys.includes(k)); if (ok(r.resto_ref)) return r.resto_ref; const un = al && al.length === 1 ? al[0] : null; return ok(un) ? un : null; };
 const accEspLvl = (r, esp) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('esp:' + esp)); return t ? accLvl(r, t[0]) : null; };
 function tileModules(a) {                                                       // mêmes règles que la base (acces_modules) : sert aux contrôles de formulaire
   const n = k => +((a || {})[k]) || 0, any = ks => ks.some(k => n(k) >= 1);
@@ -4551,7 +4554,7 @@ function fjMount(box, url) {
 }
 // ══ COMPTES INDIVIDUELS — côté saisie : connexion, périmètre de la personne, onglet « Équipes » ══
 // Dépend de auth_sb.js (SBA). Inactif tant que auth.mode = 'legacy' (aucun écran, aucun onglet).
-let SB_RIGHTS = null;                                                      // droits de la personne connectée (relus dans la base à chaque ouverture)
+let SB_RIGHTS = null, SB_REF = null;                                                      // droits de la personne connectée (relus dans la base à chaque ouverture)
 const sbEffCan = r => { const c = (r.can || []).slice(); if (r.role === 'owner') { ['sim', 'budget', 'valid'].forEach(x => { if (!c.includes(x)) c.push(x); }); return c.filter(x => x !== 'edg'); } return c; };   // le propriétaire garde la main sans accéder aux salaires
 function saisieEnter(r) {                                                 // personne identifiée : on prépare le profil d'accès attendu par la saisie
   SB_RIGHTS = r; try { SBA.note(); } catch (e) {}
@@ -4562,7 +4565,7 @@ function saisieEnter(r) {                                                 // per
   } catch (e) {}
   showApp();
 }
-function saisieScope(r) { const sc = (r.restos || []).includes('*') ? '*' : (r.restos || []); if (sc !== '*') RESTOS.splice(0, RESTOS.length, ...RESTOS.filter(x => sc.includes(x[0]))); }   // seuls ses restaurants
+function saisieScope(r) { const sc = (r.restos || []).includes('*') ? '*' : (r.restos || []); if (sc !== '*') RESTOS.splice(0, RESTOS.length, ...RESTOS.filter(x => sc.includes(x[0]))); SB_REF = sbRefResto(r, RESTOS.map(x => x[0])); }   // seuls ses restaurants ; la page s'ouvre sur son restaurant de référence   // seuls ses restaurants
 function saisieMountLogin() {
   const q = s => document.querySelector(s);
   return SBA.mount({ box: q('#login .login-box'), legacy: [q('#pwd'), q('#login label.rem'), q('#loginBtn'), q('#loginErr')], onOk: saisieEnter, scope: saisieScope });
@@ -4617,7 +4620,7 @@ async function renderEquipes() {
   const [a, b, c, d] = await Promise.all([eqCall('/rest/v1/droits?franchise=eq.' + fr + '&select=*&order=nom.asc'), eqCall('/rest/v1/droits_journal?franchise=eq.' + fr + '&select=*&order=quand.desc&limit=12'), eqCall('/rest/v1/rpc/acces_218_liste', 'POST', { f: CFG.auth.franchise }), eqCall('/rest/v1/postes?franchise=eq.' + fr + '&select=*&order=ordre.asc,nom.asc')]);
   EQ.postes = d.ok && Array.isArray(d.j) && d.j.length ? d.j : null;                                // null = postes pas encore installés côté base : l'écran d'avant s'affiche
   if (!a.ok) { p.innerHTML = `<div class="entry-banner err" style="display:block">Impossible de charger les équipes${a.j && a.j.message ? ' : ' + escH(a.j.message) : ''}.</div>`; return; }
-  EQ.rows = a.j || []; EQ.journal = (b.ok && b.j) || []; EQ.edit = null; if (EQ.postes && !eqPoste(EQ.pid)) { EQ.pid = (eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[0] || EQ.postes[0]).id; EQ.pd = null; EQ.pnew = null; }
+  EQ.rows = a.j || []; EQ.hasRef = EQ.rows.some(x => 'resto_ref' in x); EQ.journal = (b.ok && b.j) || []; EQ.edit = null; if (EQ.postes && !eqPoste(EQ.pid)) { EQ.pid = (eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[0] || EQ.postes[0]).id; EQ.pd = null; EQ.pnew = null; }
   EQ.f218 = c.ok && Array.isArray(c.j) ? Object.fromEntries(c.j.map(x => [String(x.email).toLowerCase(), x])) : null;     // null = lien avec le 218 jours pas encore installé côté base
   EQ.pp = [];                                                                                       // personnes des primes (managers, responsables de zone, hôtesses… sans compte) : même principe de choix d'accès
   if (CFG.modules && CFG.modules.primes === 'on' && eqRolesFor().length) {
@@ -4722,7 +4725,8 @@ function eqGrid(get, fn, base, ro) {                                    // ro = 
     return `<div class="ap-t ${cl}${diff ? ' ov' : ''}" role="group" aria-label="${escH(n)}">${diff ? '<span class="ap-dot">Personnalisé</span>' : ''}<span class="n">${escH(n)}</span><span class="ap-seg">${Array.from({ length: accMax(k) + 1 }, (_, i) => `<button type="button" class="${i === v ? 'on' : ''}" aria-pressed="${i === v}" ${ro ? 'disabled' : ''} onclick="${fn}('${k}',${i})">${escH(accLevelName(k, i))}</button>`).join('')}</span>${diff ? `<span class="p">Poste : ${escH(accLevelName(k, b))}</span>` : ''}</div>`; }).join('')}</div>`).join('') + `<div class="ap-leg"><span><i style="border-style:dashed"></i>Aucun accès</span><span><i style="background:rgba(37,99,235,.1);border-color:#2563eb"></i>Consultation (peut juste voir)</span><span><i style="background:rgba(21,128,61,.12);border-color:#15803d"></i>Modification (peut modifier)</span><span><i style="background:rgba(234,88,12,.1);border-color:#ea580c"></i>Réponse du directeur (Point Business)</span></div>`;
 }
 const eqNPerso = r => Object.keys(r.acces || {}).length;
-const eqResto = r => (r.restos || []).includes('*') ? 'Tous' : (r.restos || []).map(x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1]).join(', ') || '—';
+const eqRefTxt = r => r.resto_ref ? ' · réf. ' + eqNomR(r.resto_ref) : '';
+const eqResto = r => ((r.restos || []).includes('*') ? 'Tous' : (r.restos || []).map(x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1]).join(', ') || '—') + eqRefTxt(r);
 const eqNomR = x => (RESTOS.find(q => q[0] === x) || (CFG.restos.map(c => [c.key, c.label]).find(q => q[0] === x)) || [x, x])[1];
 const eqPlan = r => { if (r.role !== 'directeur' || !(r.modules || []).includes('planning')) return ''; const p = r.restos_planning || []; return '<br><span style="font-size:.74rem;color:' + (p.length ? 'var(--muted)' : 'var(--gold)') + '">Planning : ' + (p.length ? p.map(eqNomR).map(escH).join(', ') : 'à définir (tous pour le moment)') + '</span>'; };
 const eqState = r => !r.actif ? ['Désactivé', 'var(--red)'] : (r.user_id ? ['Actif', 'var(--green)'] : ['Invitation en attente', 'var(--gold)']);
@@ -4819,6 +4823,22 @@ function eqOpen(id) {
   EQ.edit = id === '' ? { id: '', role: dp ? dp.role : (eqRolesFor().slice(-1)[0] || 'directeur'), poste_id: dp ? dp.id : null, acces: {}, isNew: true } : (EQ.rows.find(r => r.id === id) ? Object.assign({}, EQ.rows.find(r => r.id === id), { acces: Object.assign({}, EQ.rows.find(r => r.id === id).acces || {}) }) : null);
   eqSet(''); EQ.y = window.scrollY; eqPaint(); window.scrollTo(0, 0);
 }
+// Restaurant de référence (colonne resto_ref) : la page s'ouvre dessus ; choisi parmi les restaurants de la personne
+function eqRefOpts(restos, cur) {
+  const all = (restos || []).includes('*'), list = CFG.restos.map(c => [c.key, c.label]).filter(([k]) => all || (restos || []).includes(k));
+  return '<option value="">Aucun : vue d\'ensemble ou choix à l\'ouverture</option>' + list.map(([k, n]) => `<option value="${escH(k)}" ${k === cur ? 'selected' : ''}>${escH(n)}</option>`).join('');
+}
+function eqRefHtml(e, inp) {
+  if (!EQ.hasRef) return '';
+  const un = (e.restos || []).length === 1 && !(e.restos || []).includes('*') ? eqNomR(e.restos[0]) : null;
+  return `<div style="font-size:.78rem;color:var(--muted);margin:14px 0 4px">Restaurant de référence <span style="font-weight:400">(l'appli s'ouvre directement dessus, la personne peut ensuite changer${un ? ' ; avec un seul restaurant, c\'est lui qui s\'ouvre : ' + escH(un) : ''})</span></div>
+      <select id="eqRef" style="${inp};max-width:340px">${eqRefOpts(e.restos, e.resto_ref)}</select>`;
+}
+function eqRefRefresh() {                                                   // les options suivent les restaurants cochés
+  const s = document.getElementById('eqRef'); if (!s) return;
+  const all = document.getElementById('eqAll'), restos = all && all.checked ? ['*'] : [...document.querySelectorAll('.eqR')].filter(x => x.checked).map(x => x.value);
+  const cur = s.value; s.innerHTML = eqRefOpts(restos, cur); if (EQ.edit) EQ.edit.resto_ref = s.value || null;
+}
 function eqForm() {
   if (EQ.postes) return eqFormP();
   const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return;
@@ -4834,8 +4854,9 @@ function eqForm() {
       <label style="font-size:.78rem;color:var(--muted)">Fonction<select id="eqRole" style="${inp}" onchange="eqRoleChanged(this.value)">${(isNew || eqRolesFor().includes(e.role) ? eqRolesFor() : [e.role, ...eqRolesFor()]).map(k => `<option value="${k}" ${k === e.role ? 'selected' : ''}>${escH(eqLabel(k))}</option>`).join('')}</select></label></div>
     ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin:-6px 0 12px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurants</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
-      ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked);eqRefRefresh()"> <b>Tous</b></label>
+      ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="eqRefRefresh()"> ${escH(n)}</label>`).join('')}</div>
+    ${eqRefHtml(Object.assign({}, e, { restos: restos }), inp)}
     ${e.role === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres fonctions ouvrent tous les plannings)</span></div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Ce que la personne peut ouvrir</div>
@@ -4855,6 +4876,7 @@ function eqSync() {                                                         // r
   if (v('eqNom') !== undefined) e.nom = v('eqNom'); if (v('eqMail') !== undefined) e.email = String(v('eqMail') || '').trim().toLowerCase();
   const all = document.getElementById('eqAll'); if (all) e.restos = all.checked ? ['*'] : [...document.querySelectorAll('.eqR')].filter(x => x.checked).map(x => x.value);
   const pl = [...document.querySelectorAll('.eqP')]; if (pl.length) e.restos_planning = pl.filter(x => x.checked).map(x => x.value);
+  const rf = document.getElementById('eqRef'); if (rf) e.resto_ref = rf.value || null;
 }
 function eqFormP() {
   const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return; const y = window.scrollY;
@@ -4874,8 +4896,9 @@ function eqFormP() {
         <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
       ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}</section>
     <section class="eq-sec"><h4>Restaurants <span style="text-transform:none;letter-spacing:0;font-weight:500">(propres à cette personne, pas au poste)</span></h4>
-      <div style="display:flex;flex-wrap:wrap;gap:6px 14px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked)"> <b>Tous</b></label>
-        ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${escH(n)}</label>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 14px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked);eqRefRefresh()"> <b>Tous</b></label>
+        ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="eqRefRefresh()"> ${escH(n)}</label>`).join('')}</div>
+      ${eqRefHtml(e, inp)}
       ${eqRoleOf(e) === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin:14px 0 4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres postes ouvrent tous les plannings)</span></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqP" value="${escH(k)}" ${has(e.restos_planning, k) ? 'checked' : ''}> ${escH(n)}</label>`).join('')}</div>` : ''}</section>
     <section class="eq-sec"><h4>Accès</h4>
@@ -4900,7 +4923,7 @@ function eqPosteChanged(id) {
 }
 function eqReadP() {
   eqSync(); const e = EQ.edit, po = eqPoste(e.poste_id), eff = eqEff(po, e.acces);
-  return { nom: String(e.nom || '').trim(), email: String(e.email || '').trim().toLowerCase(), role: po ? po.role : e.role, poste_id: e.poste_id, restos: e.restos || [], restos_planning: po && po.role === 'directeur' ? (e.restos_planning || []) : [], acces: e.acces || {}, modules: tileModules(eff), can: tileCan(eff) };
+  return { nom: String(e.nom || '').trim(), email: String(e.email || '').trim().toLowerCase(), role: po ? po.role : e.role, poste_id: e.poste_id, restos: e.restos || [], resto_ref: e.resto_ref || null, restos_planning: po && po.role === 'directeur' ? (e.restos_planning || []) : [], acces: e.acces || {}, modules: tileModules(eff), can: tileCan(eff) };
 }
 // ── Postes : modèles d'accès (création, modification, alerte sur les personnalisations) ──
 function eqPostesHtml() {
@@ -4970,7 +4993,7 @@ function eqRoleChanged(k) {                                                // ch
 function eqRead() {
   const v = id => ((document.getElementById(id) || {}).value || '').trim(), ck = c => [...document.querySelectorAll(c)].filter(x => x.checked).map(x => x.value);
   const tous = !!(document.getElementById('eqAll') || {}).checked;
-  return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), restos_planning: v('eqRole') === 'directeur' ? ck('.eqP') : [], modules: ck('.eqM'), can: ck('.eqC') };
+  return { nom: v('eqNom'), email: v('eqMail').toLowerCase(), role: v('eqRole'), restos: tous ? ['*'] : ck('.eqR'), resto_ref: v('eqRef') || null, restos_planning: v('eqRole') === 'directeur' ? ck('.eqP') : [], modules: ck('.eqM'), can: ck('.eqC') };
 }
 async function eqSave() {
   const e = EQ.edit, o = EQ.postes ? eqReadP() : eqRead(), b = document.getElementById('eqGo');
@@ -4978,6 +5001,8 @@ async function eqSave() {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');
+  if (!EQ.hasRef) delete o.resto_ref;
+  if (o.resto_ref && !o.restos.includes('*') && !o.restos.includes(o.resto_ref)) return eqSet('Le restaurant de référence doit faire partie des restaurants de la personne', 'err');
   const orig = e.isNew ? null : EQ.rows.find(r => r.id === e.id);
   if (o.role === 'directeur' && o.modules.includes('planning') && !o.restos_planning.length && (e.isNew || (orig && ((orig.restos_planning || []).length || orig.role !== 'directeur')))) return eqSet('Choisissez le restaurant du planning de ce directeur', 'err');   // obligatoire pour un nouveau directeur ; un directeur existant « à affecter » peut être enregistré sans (transition)
   if (EQ.postes ? (orig && orig.poste_id !== o.poste_id && !confirm('Passer ' + o.nom + ' du poste « ' + ((eqPoste(orig.poste_id) || {}).nom || eqLabel(orig.role)) + ' » au poste « ' + ((eqPoste(o.poste_id) || {}).nom || '') + ' » ?\n\nSes accès personnalisés sont effacés : elle reprend ceux du nouveau poste (visibles dans le formulaire).'))
@@ -4986,7 +5011,7 @@ async function eqSave() {
   if (mailChanged && !confirm('Changer l\'adresse de ' + o.nom + ' ?\n\nAncienne : ' + orig.email + '\nNouvelle : ' + o.email + '\n\n' + (orig.user_id ? 'Son ancien compte perdra l\'accès tout de suite : elle devra cliquer sur « Première connexion ou mot de passe oublié » avec la nouvelle adresse (une invitation lui est envoyée).' : 'Une invitation est envoyée à la nouvelle adresse.'))) return;
   const inv = (e.isNew && !!(document.getElementById('eqInv') || {}).checked) || mailChanged;
   if (b) b.disabled = true; eqSet('Enregistrement…');
-  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : Object.assign({ nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can }, EQ.postes ? { poste_id: o.poste_id, acces: o.acces } : {}, mailChanged ? Object.assign({ email: o.email }, orig.user_id ? { user_id: null } : {}) : {});
+  const body = e.isNew ? Object.assign({ franchise: CFG.auth.franchise }, o) : Object.assign({ nom: o.nom, role: o.role, restos: o.restos, restos_planning: o.restos_planning, modules: o.modules, can: o.can }, EQ.hasRef ? { resto_ref: o.resto_ref || null } : {}, EQ.postes ? { poste_id: o.poste_id, acces: o.acces } : {}, mailChanged ? Object.assign({ email: o.email }, orig.user_id ? { user_id: null } : {}) : {});
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
