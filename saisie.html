@@ -1304,10 +1304,10 @@ function pvRecap() {
   // « Chute » du mois : ce que le mois donnera si les jours restants tombent comme prévu = réalisé à date + prévision journalière des jours restants
   if (s.nReal || s.nRestPrev) {
     const chute = s.realAll + s.prevRest, ecart = s.prevElapsed ? s.realAll / s.prevElapsed - 1 : null, manque = s.nRest - s.nRestPrev;
-    box.innerHTML += '<div class="pv-chute"><div class="pv-chute-t">Chute du mois</div>'
+    box.innerHTML += '<div class="pv-chute"><div class="pv-chute-t">Chute du mois · CA net alimentaire</div>'
       + k('Réalisé à date', pvEur(s.realAll), `${s.nReal} jour${s.nReal > 1 ? 's' : ''}${ecart != null ? ' · ' + pvPct(ecart) + ' vs prévu sur ces jours' : ''}`)
       + k('Prévu jours restants', pvEur(s.prevRest), s.nRest ? `${s.nRestPrev} jour${s.nRestPrev > 1 ? 's' : ''} prévu${s.nRestPrev > 1 ? 's' : ''} sur ${s.nRest}` : 'mois terminé')
-      + k('Chute du mois', pvEur(chute), manque > 0 ? `⚠ ${manque} jour${manque > 1 ? 's' : ''} restant${manque > 1 ? 's' : ''} sans prévision` : 'réalisé + prévu restant')
+      + k('Chute du mois (CA net alim.)', pvEur(chute), manque > 0 ? `⚠ ${manque} jour${manque > 1 ? 's' : ''} restant${manque > 1 ? 's' : ''} sans prévision` : 'réalisé + prévu restant')
       + k('Chute vs N-1', s.n1All ? pvPct(chute / s.n1All - 1) : '—', 'mois complet, jours équivalents')
       + k('Chute vs prévision', s.prev ? pvPct(chute / s.prev - 1) : '—', 'prévision saisie du mois') + '</div>';
   }

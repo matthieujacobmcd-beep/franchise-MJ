@@ -6567,7 +6567,7 @@ function weekChuteHtml(r) {
   });
   if (!nPrev) return '';
   const chute = real + rest, d = n1 ? (chute / n1 - 1) * 100 : null, manque = nRest - nPrev;
-  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+  return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (CA net total)${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois (CA net total) <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
 }
 let weekOpenKpi = null;
 let weekResto = 'FRANCHISE';
@@ -11395,7 +11395,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261115-134311';
+const BUILD_VERSION = '20261115-134723';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
