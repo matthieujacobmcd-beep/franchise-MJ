@@ -2330,9 +2330,7 @@ function renderBudget() {
       </ol></div></div>
     ${typeof bdShareHtml === 'function' ? `<div id="bdShare" class="bd-shw">${bdShareHtml(r, Ty)}</div>` : ''}
     ${typeof bcBannerHtml === 'function' ? `<div id="bcBox">${bcBannerHtml(r, Ty)}</div>` : ''}
-    <div class="bd-import"><div><b>Hypothèses :</b> ${o.file ? `reprises de « ${escH(o.file)} » (${o.date})` : 'valeurs réseau seulement (redevances, publicité, G&A, IS) — importe le classeur du restaurant pour reprendre les tiens'}</div>
-      <label class="step" style="cursor:pointer">📂 Importer le classeur PREV ET BUDGET (.xlsx)<input type="file" accept=".xlsx,.xlsm" style="display:none" onchange="bdImport(this)"></label>
-      <span class="hint" style="margin:0">Lu dans ton navigateur (onglet PNL uniquement) : rien n'est envoyé.</span><span class="save-msg" id="bdMsg"></span></div>
+    <div class="bd-import" style="border:none;background:none;padding:0;margin:0 0 10px"><label class="lv-btn" style="margin:0">Importer le classeur PREV ET BUDGET (.xlsx)<input type="file" accept=".xlsx,.xlsm" style="display:none" onchange="bdImport(this)"></label> <span class="save-msg" id="bdMsg"></span></div>
     <div class="sim-note">CA ${Ty} issu du calendrier Prévision CA : <span class="bd-src bd-j"></span>${nJ} mois complets · <span class="bd-src bd-s"></span>${nP} partiels · <span class="bd-src bd-n"></span>${nN} sans prévision.
       <a style="cursor:pointer;text-decoration:underline;margin-left:8px" onclick="setTab('prevca')">Ouvrir la Prévision CA (calendrier et simulation) →</a></div>
     <div class="sim-kpis">${kp('CA alim. ' + Ty, pvEur(A), refT ? evC(ev(A, refT.alim)) : '')}${kp('Marge brute', bdP(A ? tot('marge') / A : null), pvEur(tot('marge')))}${kp('Main-d\'œuvre', bdP(A ? tot('mo') / A : null), pvEur(tot('mo')))}
@@ -3075,7 +3073,7 @@ async function wfLoadApply(r, Y, keepTy) {                                      
 // ── Premier contact avec un dossier (appareil jamais calé dessus) : le dossier partagé fait FOI. La saisie locale de l'appareil n'est jamais envoyée ; elle est gardée de côté (« sauvegarde de sécurité »)
 //    et peut être reprise, dans les cases vides ou en totalité. Consulter n'écrit jamais dans le dossier.
 // ── MODE CONSULTATION : l'écran affiche la saisie partagée mais rien n'est enregistré, partagé ni validé depuis cet appareil. Par défaut pour le propriétaire ; choix retenu sur l'appareil (py_consult).
-const wfConsult = () => { let v = null; try { v = localStorage.getItem('py_consult'); } catch (e) {} if (v === '1') return true; if (v === '0') return false; const ps = accProfiles(); return ps.length > 0 && ps.every(p => p.role === 'owner'); };
+const wfConsult = () => { let v = null; try { v = localStorage.getItem('py_consult'); } catch (e) {} if (v === '1') return true; if (v === '0') return false; return false; };   // le circuit par niveaux (niveaux.js) remplace le mode consultation par défaut
 function wfConsultSet(on) { if (!on && !confirm("Passer en modification ?\nTes saisies seront de nouveau partagées avec les directeurs, superviseurs et le franchisé.")) return; try { localStorage.setItem('py_consult', on ? '1' : '0'); } catch (e) {} if (!on && curResto) Object.values(WF.byKey).filter(D => D.restaurant === curResto).forEach(D => wfFirstContact(curResto, +D.year));   // en quittant la consultation, l'écran repart de la version partagée (ce qui a été tapé pendant la consultation est gardé de côté, jamais envoyé)
   try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
   wfRefreshScreens(); wfBarPaint(); try { buildTabs(); } catch (e) {} }
@@ -3248,6 +3246,266 @@ function bdSharePaint() { wfBarPaint(); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { wfAutoPull(true); if (Object.values(WFA.dirty).some(Boolean)) wfAutoRun(); } });
   [3000, 9000, 20000].forEach(ms => setTimeout(() => wfAutoPull(), ms));
   window.addEventListener('beforeunload', e => { try { if (Object.values(WFA.dirty).some(Boolean)) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
+})();
+// ── CIRCUIT PAR NIVEAUX (simple) : directeur → superviseur → franchisé ──
+// Chacun enregistre SA version par un bouton ; les autres niveaux la consultent. « Valider » envoie au niveau suivant (qui démarre d'une copie) et passe la personne en consultation ;
+// « Demander le déblocage » prévient le niveau au-dessus, qui débloque ; le franchisé se débloque seul ; la validation du franchisé publie dans le Sheet.
+// AUCUN enregistrement automatique : rien ne part vers le serveur sans clic sur « Enregistrer » ou « Valider ». Remplace le partage en continu et la fusion de workflow.js (conservés, mais plus appelés).
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `
+.lv-bar{ background:var(--card); border:1.5px solid var(--border); border-radius:14px; padding:14px 16px; margin:0 0 14px; font-size:.86rem; line-height:1.5; color:var(--text); }
+.lv-bar.err{ border-color:#dc2626; background:rgba(220,38,38,.05); }
+.lv-chips{ display:flex; gap:10px; flex-wrap:wrap; margin:0 0 12px; }
+.lv-chip{ flex:1; min-width:170px; border:1.5px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--card2); }
+.lv-chip.view{ border-color:var(--gold2); background:#fffaf0; }
+.lv-chip b{ display:block; font-size:.86rem; } .lv-chip .st{ display:block; font-size:.76rem; font-weight:700; margin-top:2px; color:var(--muted); }
+.lv-chip .st.ok{ color:#1e8449; } .lv-chip .st.cur{ color:var(--gold); } .lv-chip small{ display:block; color:var(--muted); font-size:.72rem; margin-top:2px; line-height:1.4; }
+.lv-chip .ask{ display:block; color:#b45309; font-size:.72rem; font-weight:700; margin-top:4px; }
+.lv-btn{ border:1.5px solid var(--border); background:var(--card); color:var(--text); font-family:inherit; font-size:.78rem; font-weight:700; border-radius:10px; padding:7px 12px; cursor:pointer; white-space:nowrap; margin:8px 6px 0 0; }
+.lv-btn:hover{ border-color:var(--gold2); } .lv-btn.p{ background:var(--gold); border-color:var(--gold); color:#fff; box-shadow:0 2px 8px rgba(184,134,11,.25); }
+.lv-line{ font-size:.86rem; } .lv-line b{ font-weight:800; } .lv-act{ display:flex; gap:0; flex-wrap:wrap; align-items:center; margin-top:2px; }
+.lv-ro #panel input[type=text], .lv-ro #panel input[type=number], .lv-ro #panel input:not([type]), .lv-ro #panel textarea, .lv-ro #panel table select{ pointer-events:none; background:var(--card2); }
+.lv-ro #panel .bd-mv, .lv-ro #panel [onclick*="bdDet"], .lv-ro #panel [onclick*="pvSave"], .lv-ro #panel [onclick*="bdApply"]{ pointer-events:none; opacity:.45; }
+.lv-ro #panel .lv-bar input, .lv-ro #panel .lv-bar textarea{ pointer-events:auto; }`;
+  document.head.appendChild(st);
+})();
+const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, busy: null, at: 0, backend: null, busyAct: false };
+const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
+const lvK = (r, Y) => r + '|' + Y;
+const lvRow = (r, Y, n) => LV.rows[r + '|' + Y + '|' + n] || null;
+const lvChain = r => LV.chains[r] || ((CFG.access || []).some(a => a.role === 'superviseur') ? ['directeur', 'superviseur', 'franchise'] : ['directeur', 'franchise']);
+const lvRk = { owner: 3, franchise: 3, superviseur: 2, directeur: 1 };
+const lvProf = r => accProfiles().filter(p => accCovers(p, r) && p.h).sort((a, b) => (lvRk[b.role] || 0) - (lvRk[a.role] || 0))[0] || null;
+const lvMy = r => { const p = accProfiles().filter(x => accCovers(x, r)).sort((a, b) => (lvRk[b.role] || 0) - (lvRk[a.role] || 0))[0]; return p ? (p.role === 'owner' ? 'franchise' : p.role) : null; };
+const lvYearOf = () => curTab === 'prevca' && PV.ym ? +PV.ym.slice(0, 4) : +SIM.ty;
+async function lvCall(act, r, Y, extra) {
+  const p = lvProf(r); if (!p) return { ok: false, error: 'accès non débloqué pour ce restaurant' };
+  const j = await postJson(Object.assign({ action: 'lv_' + act, pwd: p.h, restaurant: r, year: String(Y) }, extra || {}));
+  if (!j.ok && /action inconnue/.test(j.error || '')) { LV.backend = false; j.error = "Le circuit demande une mise à jour de l'Apps Script du Sheet : colle le nouveau fichier " + ((CFG.files && CFG.files.apps_script) || 'AppsScript') + ' puis « Nouvelle version ».'; }
+  return j;
+}
+// ── Lecture (aucune écriture) : état de chaque niveau pour mes restaurants ──
+function lvRefresh(force) {
+  if (!accProfiles().length) return Promise.resolve();
+  if (LV.busy) return LV.busy;
+  if (!force && Date.now() - LV.at < 15000) return Promise.resolve();
+  LV.busy = (async () => {
+    try {
+      const rows = {}, chains = {}, seen = new Set(); let ok = false;
+      for (const p of accProfiles()) {
+        if (!p.h || seen.has(p.id)) continue; seen.add(p.id);
+        const j = await postJson({ action: 'lv_list', pwd: p.h });
+        if (!j.ok) { if (/action inconnue/.test(j.error || '')) LV.backend = false; continue; }
+        ok = true; LV.level = j.level; (j.rows || []).forEach(x => { rows[x.restaurant + '|' + x.year + '|' + x.niveau] = x; }); Object.assign(chains, j.chains || {});
+      }
+      if (ok) {
+        LV.rows = rows; LV.chains = chains; LV.backend = true;
+        const by = {}; Object.values(rows).forEach(x => { const k = x.restaurant + '|' + x.year; if (!by[k] || (LV_RK[x.niveau] || 0) > (LV_RK[by[k].niveau] || 0)) by[k] = x; });
+        Object.keys(WF.byKey).forEach(k => delete WF.byKey[k]);                       // wfInCircuit / verrou des enregistrements directs dans le Sheet
+        Object.keys(by).forEach(k => { const x = by[k]; WF.byKey[k] = { restaurant: x.restaurant, year: x.year, etape: 'directeur', statut: x.statut, version: x.version, at: x.at, by: x.by }; });
+      }
+    } catch (e) {} finally { LV.at = Date.now(); LV.busy = null; }
+  })();
+  return LV.busy;
+}
+function wfEnsureList(force) { return lvRefresh(force === 'now' || force === true); }
+// ── Qui peut quoi ──
+function lvEditable(r, Y) {
+  const my = lvMy(r); if (!my || !wfRightsOk(r)) return false;
+  const ch = lvChain(r), i = ch.indexOf(my); if (i < 0) return false;
+  if (i > 0) { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }
+  const m = lvRow(r, Y, my); return !m || m.statut === 'en_cours';
+}
+const lvView = (r, Y) => LV.view && LV.view[lvK(r, Y)] || 'mine';
+LV.view = {};
+const lvIsRO = (r, Y) => lvView(r, Y) !== 'mine' || !lvEditable(r, Y);
+const lvCanUnlock = (my, n) => my === 'franchise' || LV_RK[my] > LV_RK[n];
+function lvTarget(r, Y) {                                                                    // version à afficher en lecture seule
+  const v = lvView(r, Y); if (v !== 'mine') return v;
+  const my = lvMy(r), ch = lvChain(r); if (my && lvRow(r, Y, my)) return my;
+  for (let i = ch.indexOf(my) - 1; i >= 0; i--) if (lvRow(r, Y, ch[i])) return ch[i];
+  return null;
+}
+// ── Écran : afficher la version d'un niveau (lecture seule) ou reprendre la mienne ──
+function lvApply(r, P, sal, level) {
+  const ty = SIM.ty; WFA.applying++;
+  try { wfApply(r, P, sal ? { [level]: sal } : undefined); if (ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; }
+  wfRefreshScreens();
+}
+async function lvShow(r, Y, level) {
+  const key = lvK(r, Y), j = await lvCall('load', r, Y, { niveau: level });
+  if (!j.ok || !j.record) { LV.flash[key] = ['err', j.ok ? 'Aucune saisie enregistrée à ce niveau pour le moment.' : j.error]; return false; }
+  const P = wfParse(j.record.donnees); if (!P) { LV.flash[key] = ['err', 'version illisible']; return false; }
+  const now = wfCollect(r, Y);
+  if (!LV.shown[key] && wfHasContent(now)) { wfSafeSave(r, Y, now, P); if (lvEditable(r, Y) && !LV.stash[key]) LV.stash[key] = now; }   // ma saisie en cours est mise de côté le temps de la consultation (et gardée sur l'appareil)
+  LV.shown[key] = level + '@' + j.record.version; lvApply(r, P, j.record.salaires, level); return true;
+}
+async function lvLoadMine(r, Y) {                                                            // remet à l'écran MA version enregistrée
+  const key = lvK(r, Y), my = lvMy(r), j = await lvCall('load', r, Y, { niveau: my });
+  if (!j.ok || !j.record) return false; const P = wfParse(j.record.donnees); if (!P) return false;
+  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; delete LV.stash[key]; return true;
+}
+async function lvEnter(r, Y) {                                                               // à l'ouverture d'un écran : l'écran suit l'état ; AUCUNE écriture
+  if (!r || !Y || LV.entering) return; LV.entering = true;
+  try {
+    await lvRefresh(false); const key = lvK(r, Y);
+    if (!wfInCircuit(r, Y) || !wfRightsOk(r)) { wfBarPaint(); return; }
+    if (lvIsRO(r, Y)) {
+      const t = lvTarget(r, Y), row = t && lvRow(r, Y, t);
+      if (t && row && LV.shown[key] !== t + '@' + row.version) await lvShow(r, Y, t);
+    } else if (LV.shown[key]) {
+      const st0 = LV.stash[key]; delete LV.shown[key];
+      if (st0) { delete LV.stash[key]; lvApply(r, st0, undefined, lvMy(r)); LV.sig[key] = LV.sig[key]; } else await lvLoadMine(r, Y);
+    } else if (LV.sig[key] === undefined && lvRow(r, Y, lvMy(r)) && !wfHasContent(wfCollect(r, Y))) await lvLoadMine(r, Y);    // appareil vide : je reprends ma version enregistrée
+  } finally { LV.entering = false; wfBarPaint(); }
+}
+async function lvViewSet(level) {
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y), my = lvMy(r);
+  if (level === 'mine' || (level === my && lvEditable(r, Y))) LV.view[key] = 'mine'; else LV.view[key] = level;
+  LV.flash[key] = null;
+  await lvEnter(r, Y);
+  if (curTab === 'valid') renderValid();
+}
+// ── Actions : tout se fait par bouton ──
+const lvMsg = (r, Y, c, t) => { LV.flash[lvK(r, Y)] = [c, t]; wfBarPaint(); if (curTab === 'valid') renderValid(); };
+const lvCnt = d => { try { return Object.values(wfLines(d)).filter(v => !wfEmptyV(v)).length; } catch (e) { return 0; } };
+async function lvSave(silent) {
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y), my = lvMy(r), m = lvRow(r, Y, my);
+  if (LV.busyAct) return false; if (lvView(r, Y) !== 'mine' || !lvEditable(r, Y)) { lvMsg(r, Y, 'err', "Ta saisie n'est pas modifiable pour le moment."); return false; }
+  const mine = wfCollect(r, Y); if (!wfHasContent(mine)) { lvMsg(r, Y, 'err', "Rien à enregistrer : saisis d'abord une prévision journalière ou des montants de budget."); return false; }
+  const donnees = JSON.stringify(mine); if (donnees.length > 45000) { lvMsg(r, Y, 'err', 'Dossier trop volumineux (' + donnees.length + ' caractères).'); return false; }
+  LV.busyAct = true; lvMsg(r, Y, '', 'Enregistrement…');
+  try {
+    if (m) {                                                                                 // garde-fou : un écran bien plus vide que ma dernière version n'est jamais enregistré sans confirmation
+      const jm = await lvCall('load', r, Y, { niveau: my }), old = jm.ok && jm.record ? wfParse(jm.record.donnees) : null;
+      if (old && lvCnt(old) >= 10 && lvCnt(mine) < 0.7 * lvCnt(old) && !confirm('Attention : cet écran contient beaucoup moins de saisies (' + lvCnt(mine) + ' lignes) que ta dernière version enregistrée (' + lvCnt(old) + ' lignes).\nEnregistrer quand même ? (l\'ancienne version reste dans l\'historique)')) { lvMsg(r, Y, '', 'Enregistrement annulé.'); return false; }
+    }
+    let j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r), base_version: m ? m.version : undefined });
+    if (j.conflict) { if (!confirm("Une version plus récente de ta saisie a été enregistrée depuis un autre appareil.\nL'écraser avec cet écran ?")) { lvMsg(r, Y, 'err', 'Enregistrement annulé : recharge ta version (bouton « Charger ma version enregistrée »).'); return false; } j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r) }); }
+    if (!j.ok) { lvMsg(r, Y, 'err', 'Erreur : ' + j.error); return false; }
+    LV.sig[key] = wfSig(r, Y); await lvRefresh(true); lvMsg(r, Y, 'ok', 'Enregistré.'); return true;
+  } finally { LV.busyAct = false; }
+}
+async function lvValidate() {
+  const r = curResto, Y = lvYearOf(), nm = (RESTOS.find(x => x[0] === r) || [0, r])[1], my = lvMy(r), ch = lvChain(r), next = ch[ch.indexOf(my) + 1];
+  if (LV.busyAct || lvView(r, Y) !== 'mine' || !lvEditable(r, Y)) return;
+  const mine = wfCollect(r, Y); if (!wfHasContent(mine)) return lvMsg(r, Y, 'err', 'Rien à valider.');
+  let extra = {}, txt;
+  if (next) txt = `Valider ta saisie ${Y} de ${nm} et l'envoyer au ${LV_NAME[next]} ?\nTu passeras en consultation ; pour modifier, tu devras demander le déblocage.`;
+  else {
+    if (!mine.cal || !Object.keys(mine.cal).length) return lvMsg(r, Y, 'err', 'Aucune prévision journalière à publier.');
+    const sal = {}; for (const n of ch.filter(x => x !== my)) { const jj = await lvCall('load', r, Y, { niveau: n }); if (jj.ok && jj.record) sal[n] = jj.record.salaires; }
+    const my_ = wfEdgSeg(r); if (my_) sal[my] = my_;
+    const seg = accCan('edg', r) ? wfTopSeg(sal) : undefined, R = wfRows(r, mine, seg && { on: seg.on, rows: seg.rows });
+    extra = { rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel, _R: R };
+    txt = `Valider et PUBLIER le prévisionnel ${Y} de ${nm} dans le Sheet ?\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ces jours seront remplacées.`;
+  }
+  if (!confirm(txt)) return;
+  LV.busyAct = true; lvMsg(r, Y, '', 'Validation…');
+  try {
+    const m = lvRow(r, Y, my), R = extra._R; delete extra._R;
+    const j = await lvCall('validate', r, Y, Object.assign({ donnees: JSON.stringify(mine), salaires: wfEdgSeg(r), base_version: m ? m.version : undefined }, extra));
+    if (!j.ok) return lvMsg(r, Y, 'err', j.conflict ? "Une version plus récente de ta saisie existe (autre appareil) : charge-la avant de valider." : 'Erreur : ' + j.error);
+    if (R) {                                                                                 // publication : le Sheet est à jour, l'écran aussi
+      PREVJ[r] = PREVJ[r] || {}; PREVT = PREVT || {}; PREVT[r] = PREVT[r] || {};
+      for (const x of R.prevjour) { if (x.data.ca_alim_prev === '') { delete PREVJ[r][x.periode]; delete PREVT[r][x.periode]; } else { PREVJ[r][x.periode] = x.data.ca_alim_prev; PREVT[r][x.periode] = x.data.ca_total_prev; } }
+      for (let mth = 1; mth <= 12; mth++) delete PV.drafts[pvKey(r, Y + '-' + pad2(mth))];
+      pvDraftPersist(); PV.resto = null; PV.loadedYm = null;
+    }
+    LV.sig[lvK(r, Y)] = wfSig(r, Y); LV.view[lvK(r, Y)] = 'mine'; delete LV.shown[lvK(r, Y)]; delete LV.stash[lvK(r, Y)];
+    await lvRefresh(true); lvMsg(r, Y, 'ok', next ? 'Saisie validée et envoyée au ' + LV_NAME[next] + '. Tu es en consultation.' : 'Prévisionnel ' + Y + ' publié dans le Sheet.'); await lvEnter(r, Y);
+  } finally { LV.busyAct = false; }
+}
+async function lvRequest() {
+  const r = curResto, Y = lvYearOf(), c = prompt('Pourquoi veux-tu modifier ta saisie ? (facultatif, visible du niveau au-dessus)', ''); if (c === null) return;
+  const j = await lvCall('request', r, Y, { comment: c }); if (!j.ok) return lvMsg(r, Y, 'err', 'Erreur : ' + j.error);
+  await lvRefresh(true); lvMsg(r, Y, 'ok', 'Demande de déblocage envoyée.');
+}
+async function lvUnlock(level) {
+  const r = curResto, Y = lvYearOf(), my = lvMy(r), self = level === my;
+  if (!confirm(self ? `Te débloquer pour modifier ta saisie ${Y} ?` : `Débloquer la saisie ${Y} du ${LV_NAME[level]} ? Elle redeviendra modifiable par lui.`)) return;
+  const j = await lvCall('unlock', r, Y, { niveau: level }); if (!j.ok) return lvMsg(r, Y, 'err', 'Erreur : ' + j.error);
+  await lvRefresh(true); if (self) { LV.view[lvK(r, Y)] = 'mine'; await lvLoadMine(r, Y); } lvMsg(r, Y, 'ok', 'Saisie débloquée.'); await lvEnter(r, Y);
+}
+const lvLoadClick = async () => { const r = curResto, Y = lvYearOf(); if (!confirm('Charger ta version enregistrée ? Ce qui est à l\'écran et non enregistré sera remplacé.')) return; await lvLoadMine(r, Y); lvMsg(r, Y, 'ok', 'Ta version enregistrée est à l\'écran.'); };
+// ── Bandeau (Prévision CA, Budget & PNL, Validation) ──
+function lvBarHtml(r, Y) {
+  if (!r || !wfInCircuit(r, Y)) return '';
+  const box = (c, h) => `<div class="lv-bar ${c}">${h}</div>`;
+  if (LV.backend === false) return box('err', "Le circuit de validation demande une mise à jour de l'Apps Script du Sheet.");
+  if (!wfRightsOk(r)) return box('', `Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL ». Demande au franchisé de l'activer (Équipes → Modifier).`);
+  if (LV.backend === null) return box('', 'Chargement du circuit de validation…');
+  const key = lvK(r, Y), ch = lvChain(r), my = lvMy(r), view = lvView(r, Y), i = ch.indexOf(my), ed = lvEditable(r, Y) && view === 'mine', next = ch[i + 1], mrow = lvRow(r, Y, my), fl = LV.flash[key];
+  const target = lvTarget(r, Y), showing = lvIsRO(r, Y) ? target : my;
+  const chips = ch.map((n, k) => {
+    const x = lvRow(r, Y, n), prev = k > 0 ? lvRow(r, Y, ch[k - 1]) : null, wait = k > 0 && !(prev && (prev.statut === 'valide' || prev.statut === 'publie')) && !x;
+    const cls = x && (x.statut === 'valide' || x.statut === 'publie') ? 'done' : (x ? 'cur' : ''), when = x ? `${wfDate(x.at)}${x.by ? ' · ' + escH(x.by) : ''}` : '';
+    const lab = !x ? (wait ? 'En attente du ' + LV_NAME[ch[k - 1]] : 'Pas encore de saisie') : (x.statut === 'publie' ? 'Validé et publié' : x.statut === 'valide' ? 'Validé' : 'En cours'), lcl = x ? (x.statut === 'en_cours' ? 'cur' : 'ok') : '';
+    let dem = ''; try { if (x && x.demande) { const d = JSON.parse(x.demande); dem = `<span class="ask">Déblocage demandé${d.comment ? ' : ' + escH(d.comment) : ''}</span>`; } } catch (e) {}
+    const nx = k + 1 < ch.length ? lvRow(r, Y, ch[k + 1]) : null, unl = x && (x.statut === 'valide' || x.statut === 'publie') && lvCanUnlock(my, n) && n !== my && !(nx && (nx.statut === 'valide' || nx.statut === 'publie')) ? `<button class="lv-btn p" onclick="lvUnlock('${n}')">Débloquer</button>` : '';
+    const see = x ? `<button class="lv-btn" onclick="lvViewSet('${n === my ? 'mine' : n}')">${showing === n ? 'Affichée' : 'Voir'}</button>` : '';
+    return `<div class="lv-chip ${showing === n ? 'view' : ''}"><b>${LV_NAME[n]}${n === my ? ' (toi)' : ''}</b><span class="st ${lcl}">${lab}</span>${when ? `<small>${when}</small>` : ''}${dem}${see}${unl}</div>`;
+  }).join('');
+  let act = '', head = '';
+  if (view !== 'mine') head = `<b>Consultation de la saisie du ${LV_NAME[view]}</b> (lecture seule). <button class="lv-btn" onclick="lvViewSet('mine')">Revenir à ma saisie</button>`;
+  else if (ed) {
+    const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
+    head = `<b>Ta saisie (${LV_NAME[my]})</b> — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
+    act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button><button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>`;
+    if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
+  } else if (mrow && (mrow.statut === 'valide' || mrow.statut === 'publie')) {
+    let dem = ''; try { if (mrow.demande) dem = JSON.parse(mrow.demande); } catch (e) {}
+    head = `<b>Ta saisie est validée</b> (${wfDate(mrow.at)}) : tu es en consultation.`;
+    act = my === 'franchise' ? `<button class="lv-btn p" onclick="lvUnlock('${my}')">Me débloquer pour modifier</button>` : (dem ? `<span class="hint" style="margin:8px 0 0">Déblocage demandé le ${wfDate(dem.at)} : en attente du ${LV_NAME[ch[i + 1]] || 'niveau supérieur'}.</span>` : `<button class="lv-btn p" onclick="lvRequest()">Demander le déblocage</button>`);
+  } else head = `<b>En attente de la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}</b> : tu consultes sa saisie ; la tienne démarrera d'une copie dès sa validation.`;
+  const msg = fl ? `<span class="save-msg ${fl[0]}">${escH(fl[1])}</span>` : '';
+  return box('', `${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
+}
+function wfBarHtml(r, Y) { return lvBarHtml(r, Y); }
+function wfBarCore(r, Y) { return lvBarHtml(r, Y); }
+function wfBarPaint() {
+  const r = curResto; if (!r) return;
+  const Y = lvYearOf(), on = (curTab === 'budget' || curTab === 'prevca') && wfInCircuit(r, Y) && wfRightsOk(r) && lvIsRO(r, Y);
+  document.body.classList.toggle('lv-ro', !!on);
+  const b = document.getElementById('bdShare'); if (b && curTab === 'budget') b.innerHTML = lvBarHtml(r, +SIM.ty);
+  const p = document.getElementById('pvShare'); if (p && curTab === 'prevca') p.innerHTML = lvBarHtml(r, Y);
+  try { if (typeof pvDraftBar === 'function' && curTab === 'prevca') pvDraftBar(); } catch (e) {}
+}
+// ── Plus aucun enregistrement automatique : les anciens mécanismes sont neutralisés ──
+function wfAutoSchedule() {}
+async function wfAutoPull() {}
+async function wfAutoRun() {}
+async function wfShareNow() { return { ok: false, msg: 'utilise le bouton « Enregistrer »', skip: true }; }
+function wfShareClick() { return lvSave(); }
+// ── Onglet « Validation du prévisionnel » ──
+function wfYear(v) { WF.year = +v; LV.view = {}; renderValid(); }
+function renderValid() {
+  const pn = document.getElementById('panel');
+  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Validation du prévisionnel</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div>`; return; }
+  const r = curResto, name = (RESTOS.find(x => x[0] === r) || [0, r])[1], Y = WF.year || (WF.year = +SIM.ty);
+  const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
+  const head = `<div class="panel-head"><div><div class="panel-title">Validation du prévisionnel ${Y} · ${escH(name)}</div>
+    <div class="last-saisie">Chaque niveau <b>enregistre sa propre saisie</b> (bouton « Enregistrer ») puis la <b>valide</b> pour l'envoyer au niveau suivant ; le franchisé publie dans le Sheet. Les autres niveaux consultent (bouton « Voir »). Pour modifier une saisie validée : « Demander le déblocage ».</div>
+    <div class="period"><select onchange="wfYear(this.value)">${years.map(v => `<option ${v === Y ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>`;
+  if (!wfRightsOk(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
+  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
+  if (LV.backend === null) { pn.innerHTML = head + `<div class="hint">⏳ Chargement…</div>`; lvRefresh(true).then(() => { if (curTab === 'valid') renderValid(); }); return; }
+  const key = lvK(r, Y), me = accProfiles().find(p => accCovers(p, r)) || null, jk = LV.journal[key];
+  if (!jk || Date.now() - jk.at > 30000) { LV.journal[key] = { at: Date.now(), rows: jk ? jk.rows : [] }; const my = lvMy(r); if (my) lvCall('load', r, Y, { niveau: my }).then(j => { if (j.ok) { LV.journal[key] = { at: Date.now(), rows: j.journal || [], sum: null }; if (curTab === 'valid') renderValid(); } }); }
+  const J = (LV.journal[key] || {}).rows || [];
+  const T = { lv_save: 'a enregistré (version précédente archivée)', lv_validate: 'a validé', lv_request: 'a demandé le déblocage', lv_unlock: 'a débloqué', lv_reset: 'a remis à zéro', open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: 'a déverrouillé', comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', restore: 'a restauré une version' };
+  const hist = J.filter(x => x.action !== 'comment' || x.comment).slice().reverse().slice(0, 40).map(x => `<li><b>${escH(x.by)}</b> ${T[x.action] || escH(x.action)}${x.from && /^lv_/.test(x.action) ? ' (' + escH(LV_NAME[x.from] || x.from) + ')' : ''} <small>· ${wfDate(x.at)}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`).join('');
+  const ov = RESTOS.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th>${['directeur', 'superviseur', 'franchise'].map(n => `<th>${LV_NAME[n]}</th>`).join('')}</tr></thead><tbody>${RESTOS.map(x => `<tr><td class="l">${escH(x[1])}</td>${['directeur', 'superviseur', 'franchise'].map(n => { const v = lvRow(x[0], Y, n); return `<td>${!lvChain(x[0]).includes(n) ? '—' : !v ? '<span style="color:var(--muted)">—</span>' : (v.statut === 'publie' ? 'Publié' : v.statut === 'valide' ? 'Validé' : 'En cours') + (v.demande ? ' (déblocage demandé)' : '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div></details>` : '';
+  pn.innerHTML = head + `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div><div id="lvVal">${lvBarHtml(r, Y)}</div>` + `<div class="hint" style="margin:6px 0 10px">Pour modifier ou consulter le détail d'une saisie : ouvre « Prévision CA » ou « Budget &amp; PNL » (l'écran affiche la version choisie ci-dessus).</div>` + ov + `<div class="sim-h">Historique</div>${hist ? `<ul class="wf-log">${hist}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}`;
+}
+// ── Branchement : l'écran suit l'état à chaque ouverture (lecture seulement) ──
+(function () {
+  const rs = setResto; setResto = function (r) { rs(r); setTimeout(() => lvEnter(curResto, +SIM.ty), 400); };
+  const ts = setTab; setTab = function (t) { ts(t); if (t === 'prevca' || t === 'budget') setTimeout(() => lvEnter(curResto, lvYearOf()), 250); else if (t === 'valid') { WF.year = WF.year || +SIM.ty; lvRefresh(true).then(() => { if (curTab === 'valid') renderValid(); }); } else document.body.classList.remove('lv-ro'); };
+  const so = simSet; simSet = function (k, v) { const x = so.apply(this, arguments); if (k === 'ty') setTimeout(() => lvEnter(curResto, +SIM.ty), 250); return x; };
+  setInterval(() => { if (document.visibilityState === 'visible' && curResto && (curTab === 'prevca' || curTab === 'budget')) lvRefresh(true).then(() => lvEnter(curResto, lvYearOf())); }, 60000);
+  setTimeout(() => lvRefresh(true).then(() => wfBarPaint()), 1500);
 })();
 // ── Saisie de la collaboratrice (Budget & PNL), partagée avec TOUS les niveaux : directeurs, superviseurs et franchisé ──
 // Elle saisit les hypothèses du budget (lignes du PNL, services extérieurs par société) de n'importe quel restaurant avec son accès (rôle « collab », droit « budget » seul)
