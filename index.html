@@ -9752,6 +9752,12 @@ function igGo() {
 #espace-planning .plg-cf{display:flex;gap:8px;align-items:flex-end}
 #espace-planning .plg-cf textarea{flex:1;resize:none;min-height:40px;max-height:130px;box-sizing:border-box;border:1.5px solid var(--border);border-radius:12px;padding:9px 11px;font:inherit;font-size:.86rem;background:var(--card);color:var(--text)}
 #espace-planning .plg-cf textarea:focus{outline:none;border-color:var(--gold)}
+#espace-planning .plg-cm{position:relative}
+#espace-planning .plg-cm.me{padding-right:24px}
+#espace-planning .plg-cm.del{background:transparent;border:1px dashed var(--border);color:var(--muted);font-size:.78rem}
+#espace-planning .plg-cm.del.me{padding-right:11px}
+#espace-planning .plg-cx{position:absolute;top:2px;right:4px;border:0;background:transparent;color:inherit;cursor:pointer;font-size:.72rem;opacity:.55;padding:2px 4px;line-height:1}
+#espace-planning .plg-cm:hover .plg-cx,#espace-planning .plg-cx:focus{opacity:1}
 #espace-planning .plg-tph{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:.84rem}
 #espace-planning .plg-i{display:inline-block;width:14px;height:14px;vertical-align:-2px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 #espace-planning .ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;background:var(--e-bg);color:var(--e-color);flex-shrink:0}
@@ -10846,13 +10852,13 @@ async function plgChPoll() {
 }
 async function plgChLight() {                                                   // pastilles : derniers messages de mes restaurants (numéro, restaurant, auteur seulement)
   PLG.chat.at = Date.now();
-  const r = await plgApi('/rest/v1/planning_chat?' + plgQ({ franchise: 'eq.' + PLG.FR, select: 'id,restaurant,auteur_email', order: 'id.desc', limit: 300 }));
+  const r = await plgApi('/rest/v1/planning_chat?' + plgQ({ franchise: 'eq.' + PLG.FR, select: 'id,restaurant,auteur_email,supprime_le', order: 'id.desc', limit: 300 }));
   if (!r.ok) { if (plgChDown(r) && PLG.chat.ok !== false) { PLG.chat.ok = false; plgChPill(); } return; }
   const was = PLG.chat.ok; PLG.chat.ok = true;
   const me = plgChMe(), mx = {}, un = {}; let ch = false;
   (r.j || []).forEach(m => { mx[m.restaurant] = Math.max(mx[m.restaurant] || 0, m.id); });
   Object.keys(mx).forEach(k => { if (PLG.chat.seen[k] === undefined) { PLG.chat.seen[k] = mx[k]; ch = true; } });      // premier passage sur cet appareil : on part de l'existant, sans tout signaler
-  (r.j || []).forEach(m => { if (m.id > (PLG.chat.seen[m.restaurant] || 0) && String(m.auteur_email).toLowerCase() !== me) un[m.restaurant] = (un[m.restaurant] || 0) + 1; });
+  (r.j || []).forEach(m => { if (!m.supprime_le && m.id > (PLG.chat.seen[m.restaurant] || 0) && String(m.auteur_email).toLowerCase() !== me) un[m.restaurant] = (un[m.restaurant] || 0) + 1; });
   if (ch) plgChSeenSave();
   if (plgChOpenNow() && PLG.resto) delete un[PLG.resto];
   const before = JSON.stringify(PLG.chat.unread), prevTot = plgChTotal(); PLG.chat.unread = un; if (plgChTotal() > prevTot) plgChNotify();
@@ -10863,14 +10869,12 @@ async function plgChFetchNew(R) {
   const c = PLG.chat.by[R] || (PLG.chat.by[R] = { msgs: [], last: 0, loaded: false, seenAtOpen: 0 });
   if (PLG.chat.busy[R]) return 0; PLG.chat.busy[R] = true;
   try {
-    const base = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + R };
-    const r = await plgApi('/rest/v1/planning_chat?' + plgQ(c.loaded ? Object.assign(base, { id: 'gt.' + c.last, order: 'id.asc', limit: 200 }) : Object.assign(base, { order: 'id.desc', limit: 150 })));
+    const r = await plgApi('/rest/v1/planning_chat?' + plgQ({ franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + R, order: 'id.desc', limit: 150 }));      // fenêtre récente relue à chaque fois : on voit aussi les messages effacés
     if (!r.ok) { if (plgChDown(r)) { PLG.chat.ok = false; plgChPill(); } return 0; }
-    const rows = (r.j || []).slice(); if (!c.loaded) rows.reverse();
-    const add = rows.filter(m => m.id > c.last); c.loaded = true;
-    if (add.length) { c.msgs = c.msgs.concat(add); c.last = add[add.length - 1].id; if (c.msgs.length > 400) c.msgs = c.msgs.slice(-400); }
-    if (R === PLG.resto && PLG.tile === 'chat') { plgChPaint(R, add.length > 0); plgChMarkSeen(R); }
-    if (add.length || !c.msgs.length) plgChBadges();                            // résumé de la tuile (dernier message)
+    const rows = (r.j || []).slice().reverse(), sig = rows.map(m => m.id + (m.supprime_le ? 'x' : '')).join(','), add = c.loaded ? rows.filter(m => m.id > c.last) : rows, changed = !c.loaded || sig !== c.sig;
+    c.loaded = true; c.sig = sig; c.msgs = rows; if (rows.length) c.last = rows[rows.length - 1].id;
+    if (R === PLG.resto && PLG.tile === 'chat') { if (changed) plgChPaint(R, add.length > 0); plgChMarkSeen(R); }
+    if (changed || !c.msgs.length) plgChBadges();                               // résumé de la tuile (dernier message)
     return add.length;
   } finally { PLG.chat.busy[R] = false; }
 }
@@ -10888,9 +10892,10 @@ function plgChList(R) {
   if (!c.msgs.length) return '<div class="plg-mm" style="margin:0">Aucun message pour le moment.' + (plgChLvl() >= 2 ? ' Écris le premier : il sera lu par toutes les personnes qui ont le planning de ce restaurant.' : '') + '</div>';
   const me = plgChMe(), sn = c.seenAtOpen || 0; let h = '', day = '', marked = false;
   c.msgs.forEach(m => {
-    const d = plgChDay(m.cree_le), mine = String(m.auteur_email).toLowerCase() === me; if (d !== day) { day = d; h += '<div class="plg-cd">' + plgE(d) + '</div>'; }
-    if (!marked && sn && m.id > sn && !mine) { marked = true; h += '<div class="plg-cn">Nouveaux messages</div>'; }
-    h += '<div class="plg-cm' + (mine ? ' me' : '') + '"><span class="who">' + plgE(mine ? 'Moi' : m.auteur_nom) + '</span>' + plgE(m.texte) + '<span class="at">' + plgChT(m.cree_le) + '</span></div>';
+    const d = plgChDay(m.cree_le), mine = String(m.auteur_email).toLowerCase() === me, del = !!m.supprime_le; if (d !== day) { day = d; h += '<div class="plg-cd">' + plgE(d) + '</div>'; }
+    if (!marked && sn && m.id > sn && !mine && !del) { marked = true; h += '<div class="plg-cn">Nouveaux messages</div>'; }
+    h += del ? '<div class="plg-cm del' + (mine ? ' me' : '') + '"><span class="who">' + plgE(mine ? 'Moi' : m.auteur_nom) + '</span><i>Message supprimé</i><span class="at">' + plgChT(m.cree_le) + '</span></div>'
+      : '<div class="plg-cm' + (mine ? ' me' : '') + '">' + (mine ? '<button type="button" class="plg-cx" title="Supprimer ce message" aria-label="Supprimer ce message" onclick="plgChDel(' + m.id + ')">🗑</button>' : '') + '<span class="who">' + plgE(mine ? 'Moi' : m.auteur_nom) + '</span>' + plgE(m.texte) + '<span class="at">' + plgChT(m.cree_le) + '</span></div>';
   });
   return h;
 }
@@ -10901,7 +10906,7 @@ function plgChPaint(R, down) {
 function plgChBody() {
   const R = PLG.resto, lv = plgChLvl(), dr = PLG.chat.draft[R] || '';
   return '<div class="plg-chat"><div class="plg-cl" id="plgCl">' + plgChList(R) + '</div>'
-    + (lv >= 2 ? '<div class="plg-cf"><textarea id="plgCt" rows="1" maxlength="1000" placeholder="Écrire à l\'équipe de ce restaurant…" aria-label="Message" oninput="plgChDraft(this)" onkeydown="plgChKey(event)">' + plgE(dr) + '</textarea><button type="button" class="plg-btn pri" id="plgCs" onclick="plgChSend()">Envoyer</button></div><div class="plg-mm" style="margin:0">Entrée envoie · Maj + Entrée = nouvelle ligne. Les messages ne se modifient pas et ne se suppriment pas ; ils sont lus par toutes les personnes qui ont le planning de ce restaurant.</div>'
+    + (lv >= 2 ? '<div class="plg-cf"><textarea id="plgCt" rows="1" maxlength="1000" placeholder="Écrire à l\'équipe de ce restaurant…" aria-label="Message" oninput="plgChDraft(this)" onkeydown="plgChKey(event)">' + plgE(dr) + '</textarea><button type="button" class="plg-btn pri" id="plgCs" onclick="plgChSend()">Envoyer</button></div><div class="plg-mm" style="margin:0">Entrée envoie · Maj + Entrée = nouvelle ligne. Tu peux supprimer tes propres messages (🗑) ; ils ne se modifient pas. Ils sont lus par toutes les personnes qui ont le planning de ce restaurant.</div>'
       : '<div class="plg-mm" style="margin:0">Lecture seulement : tu peux lire le fil, pas y écrire.</div>')
     + plgChNotifHtml() + '<div id="plgCe" class="plg-mm" style="margin:0;color:var(--red)"></div></div>';
 }
@@ -10925,8 +10930,15 @@ function plgChNotify() {
 function plgChSum() {
   const R = PLG.resto, n = plgChUnread(R), c = PLG.chat.by[R];
   if (n) return n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : '');
-  if (c && c.loaded) { if (!c.msgs.length) return 'Aucun message'; const m = c.msgs[c.msgs.length - 1], t = String(m.texte).replace(/\s+/g, ' '); return String(m.auteur_nom).split(' ')[0] + ' : ' + t.slice(0, 26) + (t.length > 26 ? '…' : ''); }
+  if (c && c.loaded) { const L = c.msgs.filter(x => !x.supprime_le); if (!L.length) return c.msgs.length ? 'Messages supprimés' : 'Aucun message'; const m = L[L.length - 1], t = String(m.texte).replace(/\s+/g, ' '); return String(m.auteur_nom).split(' ')[0] + ' : ' + t.slice(0, 26) + (t.length > 26 ? '…' : ''); }
   return 'Discussion de l\'équipe';
+}
+async function plgChDel(id) {                                                  // l'auteur efface son message (fonction planning_chat_delete) : il reste « Message supprimé » dans le fil
+  const R = PLG.resto, er = document.getElementById('plgCe'); if (er) er.textContent = '';
+  if (!confirm('Supprimer ce message ?\nIl sera effacé pour tout le monde (il restera « Message supprimé » dans le fil).')) return;
+  const r = await plgApi('/rest/v1/rpc/planning_chat_delete', 'POST', { f: PLG.FR, msg_id: id });
+  if (!r.ok) { const e2 = document.getElementById('plgCe'); if (e2) e2.textContent = '✗ ' + ((r.j && r.j.message) || 'suppression impossible'); return; }
+  PLG.chat.busy[R] = false; await plgChFetchNew(R);
 }
 function plgChDraft(el) { PLG.chat.draft[PLG.resto] = el.value; el.style.height = 'auto'; el.style.height = Math.min(130, el.scrollHeight) + 'px'; }
 function plgChKey(e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); plgChSend(); } }
@@ -11753,7 +11765,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261116-113348';
+const BUILD_VERSION = '20261116-120138';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
