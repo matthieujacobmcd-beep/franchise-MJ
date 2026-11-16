@@ -8397,6 +8397,10 @@ function qhInitChart(canvas) {
 .pc-cal { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; padding:9px 10px; border:1.5px dashed var(--border); border-radius:10px; font-size:.76rem; font-weight:700; color:var(--muted); } .pc-cal .pc-btn { font-size:.72rem; padding:5px 10px; }
 .pc-day.fer { background:color-mix(in srgb, #ef4444 8%, var(--card)); border-color:color-mix(in srgb, #ef4444 35%, var(--border)); } .pc-fn { font-size:.64rem; font-weight:800; color:#b91c1c; line-height:1.2; overflow-wrap:anywhere; }
 .pc-lfer { background:color-mix(in srgb, #ef4444 7%, var(--card)); --tc:#ef4444; cursor:default; } .pc-lfer .pc-lt { color:#b91c1c; }
+.pc-vz { display:inline-block; font-size:.58rem; font-weight:800; line-height:1; padding:2px 4px; border-radius:4px; margin-left:3px; vertical-align:middle; }
+.pc-vn { font-size:.6rem; font-weight:800; line-height:1.2; overflow-wrap:anywhere; }
+.pc-vsep { font-size:.7rem; font-weight:800; color:var(--muted); margin:0 2px 0 8px; align-self:center; }
+.pc-lvac { background:color-mix(in srgb, var(--tc) 7%, var(--card)); cursor:default; }
 .pc-day.today { border-color:#0891b2; border-width:2px; } .pc-dn { font-size:.78rem; font-weight:800; color:var(--text); } .pc-day.today .pc-dn { color:#0891b2; }
 .pc-ev { display:block; width:100%; text-align:left; font-family:inherit; font-size:.68rem; font-weight:700; line-height:1.25; padding:3px 6px; border:0; border-left:3px solid var(--tc); border-radius:5px; background:color-mix(in srgb, var(--tc) 14%, transparent); color:var(--text); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pc-more { font-family:inherit; font-size:.64rem; font-weight:700; color:var(--muted); padding:1px 6px; background:none; border:0; border-radius:6px; text-align:left; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; } .pc-more:hover { color:#0891b2; }
@@ -8475,6 +8479,7 @@ const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_di
 const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE', PC_NONE = 'SANS RESTAURANT';          // PC_FR : événement pour toute la franchise (une seule ligne)
 const PC_FERKEY = 'fmj_pcfer';                                  // afficher les jours fériés (préférence de l'appareil)
 const PC = { fer: (() => { try { return localStorage.getItem(PC_FERKEY) !== '0'; } catch (e) { return true; } })(), rows: [], adds: [], over: {}, dels: new Set(), resto: 'ALL', ym: null, openDay: null, upAll: false, types: new Set(PC_TYPES.map(t => t.k)), view: null, edit: null, mType: 'reunion', busy: false };
+PC.vz = (() => { try { const a = JSON.parse(localStorage.getItem('fmj_pcvac') || 'null'); if (Array.isArray(a)) return a.filter(z => z === 'A' || z === 'B' || z === 'C'); } catch (e) {} return ['A', 'B', 'C']; })();       // zones de vacances scolaires affichées (préférence de l'appareil)
 const PC_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const PC_J = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const pcEsc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -8507,6 +8512,19 @@ function pcFeries(y) {
 }
 const pcFer = iso => pcFeries(+iso.slice(0, 4))[iso] || '';
 const pcFerMonth = ym => Object.entries(pcFeries(+ym.slice(0, 4))).filter(([d]) => d.startsWith(ym)).sort((x, y) => x[0].localeCompare(y[0]));
+// ── Vacances scolaires (zones A, B, C) : mêmes dates que le planning (PLG_VAC : calendrier officiel jusqu'en 2028) ; une période = [premier jour, jour de la reprise, nom] ──
+const PC_VACKEY = 'fmj_pcvac', PC_VACTXT = { A: 'Lyon, Grenoble…', B: 'Marseille, Nice…', C: 'Paris, Toulouse…' };
+const pcVacData = () => (typeof PLG_VAC !== 'undefined' ? PLG_VAC : {});
+const pcVacCol = z => (typeof PLG_ZC !== 'undefined' && PLG_ZC[z]) || ['#e5e7eb', '#374151'];                 // [fond, texte]
+function pcVacOn(iso) {                                          // périodes des zones choisies qui couvrent ce jour : [{ z, v }]
+  const D = pcVacData(), out = []; (PC.vz || []).forEach(z => (D[z] || []).forEach(v => { if (v[0] <= iso && iso < v[1]) out.push({ z, v }); })); return out;
+}
+function pcVacMonth(ym) {                                        // périodes qui touchent le mois (zones aux dates identiques regroupées), pour la liste
+  const D = pcVacData(), lo = ym + '-01', hi = ym + '-' + String(nDaysOf(ym)).padStart(2, '0'), g = new Map();
+  (PC.vz || []).forEach(z => (D[z] || []).forEach(v => { if (v[0] <= hi && pcAdd(v[1], -1) >= lo) { const k = v[0] + '|' + v[1] + '|' + v[2]; if (!g.has(k)) g.set(k, { vac: true, v, zs: [], periode: v[0] < lo ? lo : v[0] }); g.get(k).zs.push(z); } }));
+  return [...g.values()];
+}
+function pcToggleVac(z) { const s = new Set(PC.vz || []); if (s.has(z)) s.delete(z); else s.add(z); PC.vz = ['A', 'B', 'C'].filter(k => s.has(k)); try { localStorage.setItem(PC_VACKEY, JSON.stringify(PC.vz)); } catch (e) {} pcRender(); }
 // ── Ajouter à mon agenda : fichier .ics (Apple Calendar, Outlook, Google Agenda…) ou lien Google Agenda ──
 // Un événement d'un seul jour avec une heure (« 09:00 – 12:00 », « 14h30 ») devient un rendez-vous horaire (1 h par défaut si une seule heure) ; sinon, journée entière / plage de jours.
 const pcAdd = (iso, n) => pcIso(new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 86400000));
@@ -8640,7 +8658,7 @@ function pcRender() {
       <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
       <span class="pc-seg pc-viewseg"><button type="button" class="pc-btn ${view === 'cal' ? 'on' : ''}" onclick="pcView('cal')">Calendrier</button><button type="button" class="pc-btn ${view === 'list' ? 'on' : ''}" onclick="pcView('list')">Liste</button></span>
       <button type="button" class="pc-btn pc-add" onclick="pcNew()">+ Ajouter un événement</button></div>
-    <div class="pc-legend">${PC_TYPES.map(t => `<button type="button" class="pc-chip-f ${PC.types.has(t.k) ? 'on' : ''}" style="--tc:${t.c}" onclick="pcToggleType('${t.k}')"><i></i>${t.l} (${count(t.k)})</button>`).join('')}<button type="button" class="pc-chip-f ${PC.fer ? 'on' : ''}" style="--tc:#ef4444" onclick="pcToggleFer()" title="Afficher ou masquer les jours fériés"><i></i>Jours fériés (${pcFerMonth(PC.ym).length})</button></div>`;
+    <div class="pc-legend">${PC_TYPES.map(t => `<button type="button" class="pc-chip-f ${PC.types.has(t.k) ? 'on' : ''}" style="--tc:${t.c}" onclick="pcToggleType('${t.k}')"><i></i>${t.l} (${count(t.k)})</button>`).join('')}<button type="button" class="pc-chip-f ${PC.fer ? 'on' : ''}" style="--tc:#ef4444" onclick="pcToggleFer()" title="Afficher ou masquer les jours fériés"><i></i>Jours fériés (${pcFerMonth(PC.ym).length})</button><span class="pc-vsep">Vacances scolaires :</span>${['A', 'B', 'C'].map(z => `<button type="button" class="pc-chip-f ${(PC.vz || []).includes(z) ? 'on' : ''}" style="--tc:${pcVacCol(z)[1]}" onclick="pcToggleVac('${z}')" title="Vacances scolaires de la zone ${z} (${PC_VACTXT[z]}) : afficher ou masquer"><i></i>Zone ${z}</button>`).join('')}</div>`;
   let body = '';
   if (view === 'cal') {
     const first = `${PC.ym}-01`, lead = pcDow(first), nDays = new Date(Date.UTC(Y, M, 0)).getUTCDate(), today = pcIso(new Date());
@@ -8649,19 +8667,23 @@ function pcRender() {
     for (let d = 1; d <= nDays; d++) {
       const iso = `${PC.ym}-${String(d).padStart(2, '0')}`, evs = monthEv.filter(e => e.type !== 'campagne' && pcOn(e, iso)).sort((a, b) => PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type) || a.restaurant.localeCompare(b.restaurant));
       const fer = PC.fer ? pcFer(iso) : '';
+      const vd = pcVacOn(iso), vk = x => x.v[0] + '|' + x.v[2];
+      const vzH = vd.map(x => { const c = pcVacCol(x.z); return `<span class="pc-vz" style="background:${c[0]};color:${c[1]}" title="${pcEsc('Zone ' + x.z + ' · ' + x.v[2] + ' : du ' + pcFmt(x.v[0]) + ' au ' + pcFmt(pcAdd(x.v[1], -1)) + ' (reprise le ' + pcFmt(x.v[1]) + ')')}">${x.z}</span>`; }).join('');
+      const vnH = [...new Set(vd.filter(x => x.v[0] === iso || d === 1).map(vk))].map(k => { const g = vd.filter(x => vk(x) === k), c = pcVacCol(g.length === 1 ? g[0].z : 'M'); return `<div class="pc-vn" style="color:${c[1]}">Vac. ${pcEsc(g[0].v[2])} (${g.map(x => x.z).join('+')})</div>`; }).join('');
       if (d === 1 || (lead + d - 1) % 7 === 0) cells += pcCampBand(PC.ym, lead, nDays, d, camps, fresh) + (d === 1 ? '<div class="pc-day out"></div>'.repeat(lead) : '');
       const opn = PC.openDay === iso && evs.length > 3;
-      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''} ${opn ? 'open' : ''}" data-day="${iso}"><div class="pc-dn">${d}</div>${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, opn ? evs.length : 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${opn && e.heure ? '<span style="font-weight:800">' + pcEsc(e.heure) + '</span> · ' : ''}${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<button type="button" class="pc-more" data-more="${iso}" title="${opn ? 'Replier la journée' : 'Voir tous les rendez-vous de ce jour'}">${opn ? '▲ Réduire' : `+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}`}</button>` : ''}</div>`;
+      cells += `<div class="pc-day ${pcDow(iso) > 4 ? 'we' : ''} ${fer ? 'fer' : ''} ${iso === today ? 'today' : ''} ${opn ? 'open' : ''}" data-day="${iso}"><div class="pc-dn">${d}${vzH}</div>${vnH}${fer ? `<div class="pc-fn" title="Jour férié : ${pcEsc(fer)}">${pcEsc(fer)}</div>` : ''}${evs.slice(0, opn ? evs.length : 3).map(e => `<button type="button" class="pc-ev ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}" data-id="${pcEsc(e.id)}" title="${pcEsc(pcTitle(e))}">${opn && e.heure ? '<span style="font-weight:800">' + pcEsc(e.heure) + '</span> · ' : ''}${pcEsc(pcLabel(e, showResto))}</button>`).join('')}${evs.length > 3 ? `<button type="button" class="pc-more" data-more="${iso}" title="${opn ? 'Replier la journée' : 'Voir tous les rendez-vous de ce jour'}">${opn ? '▲ Réduire' : `+ ${evs.length - 3} autre${evs.length > 4 ? 's' : ''}`}</button>` : ''}</div>`;
     }
     body = `<div class="pc-grid" id="pcGrid">${cells}</div>`;
   }
   // liste (toujours rendue sous 700 px ; en option sur grand écran)
   const sorted = monthEv.filter(e => e.type !== 'campagne').sort((a, b) => a.periode.localeCompare(b.periode) || PC_TYPES.findIndex(t => t.k === a.type) - PC_TYPES.findIndex(t => t.k === b.type));
-  const ferRows = PC.fer ? pcFerMonth(PC.ym).map(([d, n]) => ({ fer: n, periode: d })) : [], mixed = sorted.concat(ferRows).sort((a, b) => a.periode.localeCompare(b.periode) || (b.fer ? 1 : 0) - (a.fer ? 1 : 0));
+  const ferRows = PC.fer ? pcFerMonth(PC.ym).map(([d, n]) => ({ fer: n, periode: d })) : [], rk = e => e.fer ? 0 : e.vac ? 1 : 2, mixed = sorted.concat(ferRows, pcVacMonth(PC.ym)).sort((a, b) => a.periode.localeCompare(b.periode) || rk(a) - rk(b));
   const ferLi = e => `<div class="pc-lrow pc-lfer"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt">${pcEsc(e.fer)}<small>Jour férié</small></div><div class="pc-la"></div></div>`;
-  const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" onclick="pcCalList('${pcEsc(e.id)}')" title="Ajouter à mon agenda (fichier .ics)">📅</button><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
+  const vacLi = e => { const c = pcVacCol(e.zs.length === 1 ? e.zs[0] : 'M'), end = pcAdd(e.v[1], -1); return `<div class="pc-lrow pc-lvac" style="--tc:${c[1]}"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt" style="color:${c[1]}">Vacances ${pcEsc(e.v[2])} · ${e.zs.length > 1 ? 'zones ' : 'zone '}${e.zs.join(' + ')}<small>du ${pcFmt(e.v[0]).slice(0, 5)} au ${pcFmt(end).slice(0, 5)} · reprise le ${pcFmt(e.v[1]).slice(0, 5)}</small></div><div class="pc-la"></div></div>`; };
+  const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : e.vac ? vacLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" onclick="pcCalList('${pcEsc(e.id)}')" title="Ajouter à mon agenda (fichier .ics)">📅</button><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
   const strip = pcCampStrip(PC.ym, nDaysOf(PC.ym), monthEv.filter(e => e.type === 'campagne'), fresh);
-  card.innerHTML = top + body + (view === 'list' ? strip + list : `<div class="pc-onlymobile">${strip}${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.<span class="pc-status" id="pcStatus"></span></div>`;
+  card.innerHTML = top + body + (view === 'list' ? strip + list : `<div class="pc-onlymobile">${strip}${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.${(PC.vz || []).length && typeof PLG_VAC_FIN !== 'undefined' && PC.ym + '-01' > PLG_VAC_FIN ? ' Calendrier des vacances scolaires publié jusqu’au ' + pcFmt(PLG_VAC_FIN) + '.' : ''}<span class="pc-status" id="pcStatus"></span></div>`;
   const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
   pcMarkSeen(monthEv); pcBadge();
   const nt = card.querySelector('.pc-note'); if (nt && unseenLeft) nt.insertAdjacentHTML('beforeend', ` <b style="color:#ef4444">${unseenLeft} autre${unseenLeft > 1 ? 's' : ''} événement${unseenLeft > 1 ? 's' : ''} non vu${unseenLeft > 1 ? 's' : ''} (autre mois, restaurant ou catégorie)</b> — <a href="#" onclick="pcSeenAll();return false" style="color:#0891b2;font-weight:700">Tout marquer comme vu</a>`);
@@ -11765,7 +11787,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261116-120138';
+const BUILD_VERSION = '20261116-123951';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
