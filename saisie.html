@@ -3274,6 +3274,18 @@ function bdSharePaint() { wfBarPaint(); }
 const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
 const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
 const lvK = (r, Y) => r + '|' + Y;
+// Dernière version enregistrée connue de CET appareil pour mon niveau (version + contenu + empreinte de l'écran à ce moment) : sert à fusionner ligne par ligne, sans rien perdre,
+// quand une autre personne (alimentation par le franchisé, autre appareil) a fait évoluer ma version enregistrée.
+const LVB_KEY = 'mj_wfbase_lv';
+const lvBases = (() => { try { return JSON.parse(localStorage.getItem(LVB_KEY) || '{}') || {}; } catch (e) { return {}; } })();
+const lvBaseGet = (r, Y, n) => lvBases[r + '|' + Y + '|' + n] || null;
+function lvBaseSet(r, Y, n, version, doc, sig) {
+  lvBases[r + '|' + Y + '|' + n] = { version, doc, sig: sig !== undefined ? sig : wfSig(r, Y) };
+  const put = () => localStorage.setItem(LVB_KEY, JSON.stringify(lvBases));
+  try { put(); } catch (e) { try { const ks = Object.keys(lvBases); for (let i = 0; i < ks.length - 6; i++) delete lvBases[ks[i]]; put(); } catch (e2) {} }
+}
+const lvLinesSig = d => { const L = wfLines(d); return JSON.stringify(Object.keys(L).sort().map(k => [k, L[k]])); };
+const lvEmptyDoc = () => ({ v: 1, cal: {}, bud: JSON.parse(wfDefBud()) });                  // « rien saisi » = les valeurs par défaut du budget : une ligne qui les a gardées n'a pas été touchée
 const lvRow = (r, Y, n) => LV.rows[r + '|' + Y + '|' + n] || null;
 const lvChain = r => LV.chains[r] || ((CFG.access || []).some(a => a.role === 'superviseur') ? ['directeur', 'superviseur', 'franchise'] : ['directeur', 'franchise']);
 const lvRk = { owner: 3, franchise: 3, superviseur: 2, directeur: 1 };
@@ -3317,9 +3329,11 @@ function lvEditable(r, Y) {
   const ch = lvChain(r), i = ch.indexOf(my); if (i < 0) return false;
   const m = lvRow(r, Y, my);
   if (lvIsOwner(r)) return !!LV.edit[lvK(r, Y)] && (!m || m.statut === 'en_cours');      // le propriétaire CONSULTE par défaut : modifier = « correction exceptionnelle » (confirmation + motif)
-  if (i > 0) { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }
+  if (i > 0 && my !== 'franchise') { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }      // le franchisé saisit à tout moment (sa saisie alimente les autres niveaux) ; seule sa VALIDATION attend celle du niveau précédent
   return !m || m.statut === 'en_cours';
 }
+const lvFeeder = r => lvMy(r) === 'franchise' && !lvIsOwner(r);                      // le franchisé (pas le propriétaire en correction) alimente les niveaux en dessous
+const lvPrevOk = (r, Y) => { const ch = lvChain(r), i = ch.indexOf(lvMy(r)); if (i <= 0 || lvIsOwner(r)) return true; const pv = lvRow(r, Y, ch[i - 1]); return !!(pv && (pv.statut === 'valide' || pv.statut === 'publie')); };
 const lvView = (r, Y) => LV.view && LV.view[lvK(r, Y)] || 'mine';
 LV.view = {};
 const lvIsRO = (r, Y) => lvView(r, Y) !== 'mine' || !lvEditable(r, Y);
@@ -3348,7 +3362,7 @@ async function lvShow(r, Y, level) {
 async function lvLoadMine(r, Y) {                                                            // remet à l'écran MA version enregistrée
   const key = lvK(r, Y), my = lvMy(r), j = await lvCall('load', r, Y, { niveau: my });
   if (!j.ok || !j.record) return false; const P = wfParse(j.record.donnees); if (!P) return false;
-  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; delete LV.stash[key]; return true;
+  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P); delete LV.shown[key]; delete LV.stash[key]; return true;
 }
 async function lvCopyAsMine(r, Y, level) {                                                    // le propriétaire qui passe devant démarre d'une copie de la dernière saisie existante
   const key = lvK(r, Y), j = await lvCall('load', r, Y, { niveau: level }); if (!j.ok || !j.record) return false;
@@ -3365,6 +3379,8 @@ async function lvEnter(r, Y) {                                                  
   try {
     await lvRefresh(false); const key = lvK(r, Y);
     if (!wfInCircuit(r, Y) || !wfRightsOk(r)) { wfBarPaint(); return; }
+    if (await lvSync(r, Y)) return;
+    await lvBaseInit(r, Y);
     if (lvIsRO(r, Y)) {
       const t = lvTarget(r, Y), row = t && lvRow(r, Y, t);
       if (t && row && LV.shown[key] !== t + '@' + row.version) await lvShow(r, Y, t);
@@ -3388,26 +3404,89 @@ const lvCnt = d => { try { return Object.values(wfLines(d)).filter(v => !wfEmpty
 async function lvSave(silent) {
   const r = curResto, Y = lvYearOf(), key = lvK(r, Y), my = lvMy(r), m = lvRow(r, Y, my);
   if (LV.busyAct) return false; if (lvView(r, Y) !== 'mine' || !lvEditable(r, Y)) { lvMsg(r, Y, 'err', "Ta saisie n'est pas modifiable pour le moment."); return false; }
+  const B0 = lvBaseGet(r, Y, my);
+  if (m && B0 && m.version > B0.version && await lvSync(r, Y)) return false;                // ma version enregistrée a changé depuis mon dernier enregistrement : fusion d'abord (rien n'est perdu), tu enregistres ensuite
   if (lvIsOwner(r) && !confirm("Enregistrer ta correction exceptionnelle ?\nElle sera visible des autres niveaux.")) return false;
   const mine = wfCollect(r, Y); if (!wfHasContent(mine)) { lvMsg(r, Y, 'err', "Rien à enregistrer : saisis d'abord une prévision journalière ou des montants de budget."); return false; }
   const donnees = JSON.stringify(mine); if (donnees.length > 45000) { lvMsg(r, Y, 'err', 'Dossier trop volumineux (' + donnees.length + ' caractères).'); return false; }
   LV.busyAct = true; lvMsg(r, Y, '', 'Enregistrement…');
+  let old = null;
   try {
     if (m) {                                                                                 // garde-fou : un écran bien plus vide que ma dernière version n'est jamais enregistré sans confirmation
-      const jm = await lvCall('load', r, Y, { niveau: my }), old = jm.ok && jm.record ? wfParse(jm.record.donnees) : null;
+      const jm = await lvCall('load', r, Y, { niveau: my }); old = jm.ok && jm.record ? wfParse(jm.record.donnees) : null;
       if (old && lvCnt(old) >= 10 && lvCnt(mine) < 0.7 * lvCnt(old) && !confirm('Attention : cet écran contient beaucoup moins de saisies (' + lvCnt(mine) + ' lignes) que ta dernière version enregistrée (' + lvCnt(old) + ' lignes).\nEnregistrer quand même ? (l\'ancienne version reste dans l\'historique)')) { lvMsg(r, Y, '', 'Enregistrement annulé.'); return false; }
     }
     let j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r), base_version: m ? m.version : undefined });
-    if (j.conflict) { if (!confirm("Une version plus récente de ta saisie a été enregistrée depuis un autre appareil.\nL'écraser avec cet écran ?")) { lvMsg(r, Y, 'err', 'Enregistrement annulé : recharge ta version (bouton « Charger ma version enregistrée »).'); return false; } j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r) }); }
+    if (j.conflict) { await lvRefresh(true); LV.busyAct = false; if (await lvSync(r, Y)) return false; LV.busyAct = true; if (!confirm("Une version plus récente de ta saisie a été enregistrée depuis un autre appareil.\nL'écraser avec cet écran ?")) { lvMsg(r, Y, 'err', 'Enregistrement annulé : recharge ta version (bouton « Charger ma version enregistrée »).'); return false; } j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r) }); }
     if (!j.ok) { lvMsg(r, Y, 'err', 'Erreur : ' + j.error); return false; }
-    LV.sig[key] = wfSig(r, Y); await lvRefresh(true); lvMsg(r, Y, 'ok', 'Enregistré.'); return true;
+    LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.version, mine);
+    const prevDoc = (B0 && B0.doc) || old || lvEmptyDoc();
+    const feed = lvFeeder(r) ? await lvFeedMsg(r, Y, prevDoc, mine) : '';
+    await lvRefresh(true); lvMsg(r, Y, 'ok', 'Enregistré' + feed + '.'); return true;
   } finally { LV.busyAct = false; }
+}
+// ── Alimentation : ce que le franchisé enregistre arrive dans la version du Directeur (créée au besoin) et du Superviseur (si elle existe et n'est pas validée) ──
+// Fusion à 3 voies ligne par ligne : base = ma version précédente, « à moi » = la version du niveau, « à eux » = ma nouvelle saisie → les lignes que le niveau a lui-même modifiées sont gardées,
+// les autres suivent ma saisie. Un niveau déjà validé n'est jamais touché ; l'ancienne version est archivée par le serveur avant chaque écriture.
+async function lvFeed(r, Y, base, hers) {
+  const my = lvMy(r), ch = lvChain(r), res = { fed: [], locked: [], err: [] }, now = new Date().toISOString();
+  for (const n of ch.slice(0, ch.indexOf(my))) {
+    for (let t = 0; t < 2; t++) {
+      const j = await lvCall('load', r, Y, { niveau: n }); if (!j.ok) { res.err.push(n); break; }
+      const rec = j.record; if (rec && rec.statut !== 'en_cours') { res.locked.push(n); break; }
+      if (!rec && ch.indexOf(n) !== 0) break;                                                 // ce niveau démarrera d'une copie de la version validée du niveau précédent (qui contient déjà cette saisie)
+      let doc = hers;
+      if (rec) {
+        const T = wfParse(rec.donnees); if (!T) { res.err.push(n); break; }
+        doc = wfMerge(base, T, hers, { id: 'feed', name: 'alimentation' }, now, { noflag: true }).doc; delete doc.m;
+        if (lvLinesSig(doc) === lvLinesSig(T)) break;                                         // rien de nouveau pour ce niveau
+      }
+      const k = await lvCall('feed', r, Y, { niveau: n, donnees: JSON.stringify(doc), base_version: rec ? rec.version : 0 });
+      if (k.ok) { res.fed.push(n); break; } if (k.locked) { res.locked.push(n); break; } if (!k.conflict) { res.err.push(n); break; }
+    }
+  }
+  return res;
+}
+async function lvFeedMsg(r, Y, base, hers) {
+  try {
+    const R = await lvFeed(r, Y, base, hers), P = [];
+    if (R.fed.length) P.push('alimenté : ' + R.fed.map(n => LV_NAME[n]).join(', '));
+    if (R.locked.length) P.push('non alimenté (déjà validé) : ' + R.locked.map(n => LV_NAME[n]).join(', '));
+    if (R.err.length) P.push("échec d'alimentation : " + R.err.map(n => LV_NAME[n]).join(', '));
+    return P.length ? ' — ' + P.join(' · ') : '';
+  } catch (e) { return ' — alimentation impossible pour le moment'; }
+}
+// ── Ma version enregistrée a changé ailleurs (alimentation par le franchisé, autre appareil) : l'écran la suit SANS RIEN PERDRE ──
+// Écran inchangé depuis ma dernière synchronisation → la version du serveur est affichée. Modifications non enregistrées → fusion ligne par ligne (mes lignes gardées), copie de l'écran conservée,
+// et c'est à moi d'enregistrer. Aucun enregistrement automatique.
+async function lvSync(r, Y) {
+  const key = lvK(r, Y), my = lvMy(r), m = lvRow(r, Y, my), B = lvBaseGet(r, Y, my), fed = !!m && /\(alimentation\)$/.test(String(m.by || ''));
+  if (!m || m.statut !== 'en_cours' || !(B ? m.version > B.version : fed) || lvView(r, Y) !== 'mine' || !lvEditable(r, Y) || LV.syncing || LV.busyAct) return false;
+  LV.syncing = true;
+  try {
+    const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record) return false;
+    const T = wfParse(j.record.donnees); if (!T) return false;
+    const now = wfCollect(r, Y), dirty = B ? wfSig(r, Y) !== B.sig : wfHasContent(now), who = String(j.record.by || 'un autre niveau').replace(/ \(alimentation\)$/, '');
+    if (!dirty) { lvApply(r, T, j.record.salaires, my); lvBaseSet(r, Y, my, j.record.version, T); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; lvMsg(r, Y, 'ok', 'Ta saisie a été mise à jour par ' + who + " : elle est à l'écran."); return true; }
+    wfSafeSave(r, Y, now, T);                                                                    // l'écran d'avant la fusion reste gardé de côté sur l'appareil
+    const R = wfMerge(B ? B.doc : lvEmptyDoc(), now, T, { id: 'lv', name: 'moi' }, new Date().toISOString(), { noflag: true }); delete R.doc.m;
+    lvApply(r, R.doc, undefined, my); lvBaseSet(r, Y, my, j.record.version, T, '~'); LV.sig[key] = '~'; delete LV.shown[key];      // '~' = l'écran contient des lignes non enregistrées
+    lvMsg(r, Y, 'ok', who + ' a mis à jour ta saisie : ses changements sont fusionnés avec tes modifications non enregistrées (' + (R.stats.mine + R.stats.conflicts) + ' ligne(s) à toi conservées). Vérifie puis enregistre.');
+    return true;
+  } finally { LV.syncing = false; }
+}
+async function lvBaseInit(r, Y) {                                                               // appareil sans base connue : si l'écran est identique à ma version enregistrée, elle devient la base
+  const my = lvMy(r), m = lvRow(r, Y, my), key = lvK(r, Y); LV.bchk = LV.bchk || {};
+  if (!m || m.statut !== 'en_cours' || lvBaseGet(r, Y, my) || LV.bchk[key + '|' + m.version] || lvIsRO(r, Y)) return; LV.bchk[key + '|' + m.version] = 1;
+  const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record) return; const P = wfParse(j.record.donnees); if (!P) return;
+  if (lvLinesSig(wfCollect(r, Y)) === lvLinesSig(P)) lvBaseSet(r, Y, my, j.record.version, P);
 }
 async function lvValidate() {
   const r = curResto, Y = lvYearOf(), nm = (RESTOS.find(x => x[0] === r) || [0, r])[1], my = lvMy(r), ch = lvChain(r), next = ch[ch.indexOf(my) + 1];
   const key = lvK(r, Y), safe = lvIsOwner(r) && !LV.edit[key];                            // propriétaire sans correction : il valide la saisie existante TELLE QUELLE
   if (LV.busyAct || lvView(r, Y) !== 'mine') return; if (!safe && !lvEditable(r, Y)) return;
   const m0 = lvRow(r, Y, my), i0 = ch.indexOf(my), pv0 = i0 > 0 ? lvRow(r, Y, ch[i0 - 1]) : null;
+  if (!safe && i0 > 0 && !lvIsOwner(r) && !(pv0 && (pv0.statut === 'valide' || pv0.statut === 'publie'))) return lvMsg(r, Y, 'err', 'Tu pourras valider quand le ' + LV_NAME[ch[i0 - 1]] + ' aura validé sa saisie : enregistre en attendant.');
   let mine, mineSal;
   if (safe) {
     if (!m0 || m0.statut !== 'en_cours' || (i0 > 0 && !(pv0 && (pv0.statut === 'valide' || pv0.statut === 'publie')))) return lvMsg(r, Y, 'err', "Rien à valider pour le moment : attends la validation du niveau précédent (ou passe en correction exceptionnelle).");
@@ -3478,7 +3557,7 @@ function lvBarHtml(r, Y) {
   const key = lvK(r, Y), ch = lvChain(r), my = lvMy(r), view = lvView(r, Y), i = ch.indexOf(my), ed = lvEditable(r, Y) && view === 'mine', next = ch[i + 1], mrow = lvRow(r, Y, my), fl = LV.flash[key];
   const target = lvTarget(r, Y), showing = lvIsRO(r, Y) ? target : my;
   const chips = ch.map((n, k) => {
-    const x = lvRow(r, Y, n), prev = k > 0 ? lvRow(r, Y, ch[k - 1]) : null, wait = k > 0 && !(prev && (prev.statut === 'valide' || prev.statut === 'publie')) && !x;
+    const x = lvRow(r, Y, n), prev = k > 0 ? lvRow(r, Y, ch[k - 1]) : null, wait = k > 0 && !(prev && (prev.statut === 'valide' || prev.statut === 'publie')) && !x && !(n === my && lvEditable(r, Y));
     const cls = x && (x.statut === 'valide' || x.statut === 'publie') ? 'done' : (x ? 'cur' : ''), when = x ? `${wfDate(x.at)}${x.by ? ' · ' + escH(x.by) : ''}` : '';
     const lab = !x ? (wait ? 'En attente du ' + LV_NAME[ch[k - 1]] : 'Pas encore de saisie') : (x.statut === 'publie' ? 'Validé et publié' : x.statut === 'valide' ? 'Validé' : 'En cours'), lcl = x ? (x.statut === 'en_cours' ? 'cur' : 'ok') : '';
     let dem = ''; try { if (x && x.demande) { const d = JSON.parse(x.demande); dem = `<span class="ask">Déblocage demandé${d.comment ? ' : ' + escH(d.comment) : ''}</span>`; } } catch (e) {}
@@ -3492,8 +3571,10 @@ function lvBarHtml(r, Y) {
     const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
     const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, bypass = lvIsOwner(r) && i > 0 && !(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie'));
     head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
+    if (lvFeeder(r)) head += ` <span class="hint" style="margin:0">· ce que tu enregistres alimente automatiquement le ${ch.slice(0, i).map(n => LV_NAME[n]).join(' et le ')} (jamais ce qui est déjà validé, jamais leurs propres modifications).</span>`;
     let lowK = null; if (bypass && !mrow) for (let k = i - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { lowK = ch[k]; break; }
-    act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button><button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>`;
+    const canVal = lvPrevOk(r, Y);
+    act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button>` + (canVal ? `<button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>` : `<span class="hint" style="margin:8px 6px 0 0">Valider : possible après la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}.</span>`);
     if (lowK) act += `<button class="lv-btn" onclick="lvCopyClick('${lowK}')">Partir de la saisie du ${LV_NAME[lowK]}</button>`;
     if (lvIsOwner(r)) act += `<button class="lv-btn" onclick="lvOwnerCancel()">Annuler la correction</button>`;
     if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
@@ -3542,7 +3623,7 @@ function renderValid() {
   const key = lvK(r, Y), me = accProfiles().find(p => accCovers(p, r)) || null, jk = LV.journal[key];
   if (!jk || Date.now() - jk.at > 30000) { LV.journal[key] = { at: Date.now(), rows: jk ? jk.rows : [] }; const my = lvMy(r); if (my) lvCall('load', r, Y, { niveau: my }).then(j => { if (j.ok) { LV.journal[key] = { at: Date.now(), rows: j.journal || [], sum: null }; if (curTab === 'valid') renderValid(); } }); }
   const J = (LV.journal[key] || {}).rows || [];
-  const T = { lv_save: 'a enregistré (version précédente archivée)', lv_validate: 'a validé', lv_request: 'a demandé le déblocage', lv_unlock: 'a débloqué', lv_reset: 'a remis à zéro', open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: 'a déverrouillé', comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', restore: 'a restauré une version' };
+  const T = { lv_save: 'a enregistré (version précédente archivée)', lv_feed: 'a alimenté la version de ce niveau (version précédente conservée)', lv_validate: 'a validé', lv_request: 'a demandé le déblocage', lv_unlock: 'a débloqué', lv_reset: 'a remis à zéro', open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: 'a déverrouillé', comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', restore: 'a restauré une version' };
   const hist = J.filter(x => x.action !== 'comment' || x.comment).slice().reverse().slice(0, 40).map(x => `<li><b>${escH(x.by)}</b> ${T[x.action] || escH(x.action)}${x.from && /^lv_/.test(x.action) ? ' (' + escH(LV_NAME[x.from] || x.from) + ')' : ''} <small>· ${wfDate(x.at)}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`).join('');
   const ov = RESTOS.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th>${['directeur', 'superviseur', 'franchise'].map(n => `<th>${LV_NAME[n]}</th>`).join('')}</tr></thead><tbody>${RESTOS.map(x => `<tr><td class="l">${escH(x[1])}</td>${['directeur', 'superviseur', 'franchise'].map(n => { const v = lvRow(x[0], Y, n); return `<td>${!lvChain(x[0]).includes(n) ? '—' : !v ? '<span style="color:var(--muted)">—</span>' : (v.statut === 'publie' ? 'Publié' : v.statut === 'valide' ? 'Validé' : 'En cours') + (v.demande ? ' (déblocage demandé)' : '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div></details>` : '';
   pn.innerHTML = head + `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div><div id="lvVal">${lvBarHtml(r, Y)}</div>` + `<div class="hint" style="margin:6px 0 10px">Pour modifier ou consulter le détail d'une saisie : ouvre « Prévision CA » ou « Budget &amp; PNL » (l'écran affiche la version choisie ci-dessus).</div>` + ov + `<div class="sim-h">Historique</div>${hist ? `<ul class="wf-log">${hist}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}`;
