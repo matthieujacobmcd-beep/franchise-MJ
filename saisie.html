@@ -3268,10 +3268,18 @@ function bdSharePaint() { wfBarPaint(); }
 .lv-line{ font-size:.86rem; } .lv-line b{ font-weight:800; } .lv-act{ display:flex; gap:0; flex-wrap:wrap; align-items:center; margin-top:2px; }
 .lv-ro #panel input[type=text], .lv-ro #panel input[type=number], .lv-ro #panel input:not([type]), .lv-ro #panel textarea, .lv-ro #panel table select{ pointer-events:none; background:var(--card2); }
 .lv-ro #panel .bd-mv, .lv-ro #panel [onclick*="bdDet"], .lv-ro #panel [onclick*="pvSave"], .lv-ro #panel [onclick*="bdApply"]{ pointer-events:none; opacity:.45; }
-.lv-ro #panel .lv-bar input, .lv-ro #panel .lv-bar textarea{ pointer-events:auto; }`;
+.lv-ro #panel .lv-bar input, .lv-ro #panel .lv-bar textarea{ pointer-events:auto; }
+.lv-st{ display:flex; align-items:center; gap:9px; font-size:.8rem; font-weight:800; padding:8px 12px; border-radius:10px; margin:0 0 12px; background:rgba(184,134,11,.10); color:#8a6508; border:1px solid rgba(184,134,11,.35); }
+.lv-spin{ width:15px; height:15px; flex:none; border:2.5px solid rgba(184,134,11,.3); border-top-color:var(--gold); border-radius:50%; animation:lvspin .8s linear infinite; }
+@keyframes lvspin{ to{ transform:rotate(360deg); } }
+.lv-bar.busy{ position:relative; overflow:hidden; }
+.lv-bar.busy::after{ content:''; position:absolute; left:-40%; top:0; height:3px; width:40%; background:linear-gradient(90deg,transparent,var(--gold),transparent); animation:lvbar 1.1s ease-in-out infinite; }
+@keyframes lvbar{ to{ left:100%; } }
+.lv-sync{ font-size:.72rem; color:var(--muted); margin:-4px 0 10px; }
+.lv-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:baseline; }`;
   document.head.appendChild(st);
 })();
-const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, stale: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
+const LV = { ops: [], rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, stale: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
 const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
 const lvK = (r, Y) => r + '|' + Y;
 // Dernière version enregistrée connue de CET appareil pour mon niveau (version + contenu + empreinte de l'écran à ce moment) : sert à fusionner ligne par ligne, sans rien perdre,
@@ -3593,6 +3601,19 @@ async function lvUnlock(level) {
   await lvRefresh(true); if (self) { LV.view[lvK(r, Y)] = 'mine'; if (lvIsOwner(r)) { LV.edit[lvK(r, Y)] = true; LV.reason[lvK(r, Y)] = 'déblocage par le propriétaire'; } await lvLoadMine(r, Y); } lvMsg(r, Y, 'ok', 'Saisie débloquée.'); await lvEnter(r, Y);
 }
 const lvLoadClick = async () => { const r = curResto, Y = lvYearOf(); if (!confirm('Charger ta version enregistrée ? Ce qui est à l\'écran et non enregistré sera remplacé.')) return; await lvLoadMine(r, Y); lvMsg(r, Y, 'ok', 'Ta version enregistrée est à l\'écran.'); };
+// ── Indicateur de mise à jour : une roue + un libellé tant qu'une opération est en cours (chargement, mise à jour de l'écran, enregistrement, validation…) ; sinon « À jour » / « Modifications non enregistrées » en direct ──
+const lvDirtyHtml = u => u ? '<b style="color:#b45309"><span class="lv-dot" style="background:#d97706"></span>Modifications non enregistrées</b>' : '<span style="color:#1e8449"><span class="lv-dot" style="background:#1e8449"></span>À jour</span>';
+function lvStatusHtml() {
+  const o = LV.ops.filter(x => x.show).pop();
+  if (o) return `<div class="lv-st" role="status" aria-live="polite"><span class="lv-spin"></span>${escH(o.label)}</div>`;
+  return LV.at ? `<div class="lv-sync">Données vérifiées à ${new Date(LV.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>` : '';
+}
+function lvOpWrap(fn, label, now) {                                                           // enveloppe une action asynchrone : la roue s'affiche tout de suite (actions de l'utilisateur) ou après 0,3 s (mises à jour automatiques)
+  return async function () {
+    const tok = { label, show: !!now }; LV.ops.push(tok); if (now) wfBarPaint(); else setTimeout(() => { if (LV.ops.includes(tok)) { tok.show = true; wfBarPaint(); } }, 300);
+    try { return await fn.apply(this, arguments); } finally { const i = LV.ops.indexOf(tok); if (i >= 0) LV.ops.splice(i, 1); wfBarPaint(); }
+  };
+}
 // ── Bandeau (Prévision CA, Budget & PNL, Validation) ──
 function lvBarHtml(r, Y) {
   if (!r || !wfInCircuit(r, Y)) return '';
@@ -3616,7 +3637,7 @@ function lvBarHtml(r, Y) {
   else if (ed) {
     const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
     const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, bypass = lvIsOwner(r) && i > 0 && !(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie'));
-    head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. ${unsaved ? '<b style="color:#b45309">Modifications non enregistrées</b>' : '<span style="color:#1e8449">À jour</span>'}`;
+    head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. <span id="lvDirty">${lvDirtyHtml(unsaved)}</span>`;
     if (lvFeeder(r)) head += ` <span class="hint" style="margin:0">· ce que tu enregistres alimente automatiquement le ${ch.slice(0, i).map(n => LV_NAME[n]).join(' et le ')} (jamais ce qui est déjà validé, jamais leurs propres modifications).</span>`;
     let lowK = null; if (bypass && !mrow) for (let k = i - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { lowK = ch[k]; break; }
     const canVal = lvPrevOk(r, Y);
@@ -3637,7 +3658,7 @@ function lvBarHtml(r, Y) {
     act += `<button class="lv-btn" onclick="lvOwnerEdit()">Modifier (correction exceptionnelle)</button>`;
   } else head = `<b>En attente de la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}</b> : tu consultes sa saisie ; la tienne démarrera d'une copie dès sa validation.`;
   const msg = fl ? `<span class="save-msg ${fl[0]}">${escH(fl[1])}</span>` : '';
-  return box('', `${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
+  return box(LV.ops.some(x => x.show) ? 'busy' : '', `${lvStatusHtml()}${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
 }
 function wfBarHtml(r, Y) { return lvBarHtml(r, Y); }
 function wfBarCore(r, Y) { return lvBarHtml(r, Y); }
@@ -3683,6 +3704,15 @@ function renderValid() {
   const so = simSet; simSet = function (k, v) { const x = so.apply(this, arguments); if (k === 'ty') setTimeout(() => lvEnter(curResto, +SIM.ty), 250); return x; };
   setInterval(() => { if (document.visibilityState === 'visible' && curResto && (curTab === 'prevca' || curTab === 'budget')) lvRefresh(true).then(() => lvEnter(curResto, lvYearOf())); }, 60000);
   setTimeout(() => lvRefresh(true).then(() => wfBarPaint()), 1500);
+  lvSave = lvOpWrap(lvSave, 'Enregistrement en cours…', true); lvValidate = lvOpWrap(lvValidate, 'Validation en cours…', true);
+  lvRequest = lvOpWrap(lvRequest, 'Demande de déblocage en cours…', true); lvUnlock = lvOpWrap(lvUnlock, 'Déblocage en cours…', true);
+  lvLoadMine = lvOpWrap(lvLoadMine, 'Chargement de ta version enregistrée…'); lvShow = lvOpWrap(lvShow, 'Chargement de la version…'); lvCopyAsMine = lvOpWrap(lvCopyAsMine, 'Chargement de la version…');
+  lvSync = lvOpWrap(lvSync, 'Mise à jour de ta saisie avec la version enregistrée…'); lvRelay = lvOpWrap(lvRelay, 'Reprise de la version du niveau précédent…'); lvEnter = lvOpWrap(lvEnter, 'Mise à jour de l\'écran…');
+  setInterval(() => {                                                                          // « À jour » / « Modifications non enregistrées » suit la saisie en direct (sans repeindre tout le bandeau)
+    const el = document.getElementById('lvDirty'); if (!el || document.visibilityState !== 'visible' || !curResto || LV.ops.length) return;
+    const r = curResto, Y = lvYearOf(), key = lvK(r, Y); let u; try { u = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y); } catch (e) { return; }
+    const nv = u ? '1' : '0'; if (el.dataset.u !== nv) { el.dataset.u = nv; el.innerHTML = lvDirtyHtml(u); }
+  }, 1500);
 })();
 // ── Prévisionnel mensuel : le Budget & PNL est la SOURCE d'information (comme les saisies déjà présentes) ──
 // Le mois affiché est prérempli (suggestion verte) avec les 7 chiffres calculés par le budget de l'année : CA net, CA alimentaire, marge, PAC, coût MO, cash flow, résultat net.
