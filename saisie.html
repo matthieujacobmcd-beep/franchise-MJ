@@ -3348,9 +3348,16 @@ function lvTarget(r, Y) {                                                       
   return null;
 }
 // ── Écran : afficher la version d'un niveau (lecture seule) ou reprendre la mienne ──
+// Segments de salaires (équipe de gestion) à appliquer avec une version : celui du niveau affiché ET ceux des niveaux d'en dessous, que le serveur ne recopie pas dans la copie du niveau suivant.
+// Le plus haut niveau qui contient des salaires prime (même règle qu'à la publication) : la copie du superviseur affiche donc la main-d'œuvre saisie par le directeur tant que le superviseur n'a pas saisi la sienne.
+async function lvSals(r, Y, level, own) {
+  const ch = lvChain(r), i = ch.indexOf(level); if (i < 0) return undefined; const out = {}; out[level] = own || {};
+  for (let k = 0; k < i; k++) { try { const j = await lvCall('load', r, Y, { niveau: ch[k] }); if (j.ok && j.record && j.record.salaires) out[ch[k]] = j.record.salaires; } catch (e) {} }
+  return out;
+}
 function lvApply(r, P, sal, level) {
   const ty = SIM.ty; WFA.applying++;
-  try { wfApply(r, P, sal ? { [level]: sal } : undefined); if (ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; }
+  try { wfApply(r, P, sal); if (ty && ty !== SIM.ty) { SIM.ty = ty; simSave(); } } finally { WFA.applying--; }
   wfRefreshScreens();
 }
 async function lvShow(r, Y, level) {
@@ -3359,19 +3366,19 @@ async function lvShow(r, Y, level) {
   const P = wfParse(j.record.donnees); if (!P) { LV.flash[key] = ['err', 'version illisible']; return false; }
   const now = wfCollect(r, Y);
   if (!LV.shown[key] && wfHasContent(now)) { wfSafeSave(r, Y, now, P); if (lvEditable(r, Y) && !LV.stash[key]) LV.stash[key] = now; }   // ma saisie en cours est mise de côté le temps de la consultation (et gardée sur l'appareil)
-  LV.shown[key] = level + '@' + j.record.version; lvApply(r, P, j.record.salaires, level); return true;
+  LV.shown[key] = level + '@' + j.record.version; lvApply(r, P, await lvSals(r, Y, level, j.record.salaires), level); return true;
 }
 async function lvLoadMine(r, Y) {                                                            // remet à l'écran MA version enregistrée
   const key = lvK(r, Y), my = lvMy(r), j = await lvCall('load', r, Y, { niveau: my });
   if (!j.ok || !j.record) return false; const P = wfParse(j.record.donnees); if (!P) return false;
   const now = wfCollect(r, Y); if (!LV.shown[key] && wfHasContent(now) && lvLinesSig(now) !== lvLinesSig(P)) wfSafeSave(r, Y, now, P);       // l'écran d'avant reste gardé de côté sur l'appareil
-  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P); delete LV.shown[key]; delete LV.stash[key]; delete LV.stale[key]; return true;
+  lvApply(r, P, await lvSals(r, Y, my, j.record.salaires), my); LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P); delete LV.shown[key]; delete LV.stash[key]; delete LV.stale[key]; return true;
 }
 async function lvCopyAsMine(r, Y, level) {                                                    // le propriétaire qui passe devant démarre d'une copie de la dernière saisie existante
   const key = lvK(r, Y), j = await lvCall('load', r, Y, { niveau: level }); if (!j.ok || !j.record) return false;
   const P = wfParse(j.record.donnees); if (!P) return false;
   const now = wfCollect(r, Y); if (wfHasContent(now)) wfSafeSave(r, Y, now, P);                 // ce qui était à l'écran est gardé de côté sur l'appareil
-  lvApply(r, P, j.record.salaires, level); LV.sig[key] = wfSig(r, Y); return true;
+  lvApply(r, P, await lvSals(r, Y, level, j.record.salaires), level); LV.sig[key] = wfSig(r, Y); return true;
 }
 async function lvCopyClick(level) {
   const r = curResto, Y = lvYearOf(); if (!confirm(`Partir de la saisie du ${LV_NAME[level]} ?\nCe qui est à l'écran et non enregistré est remplacé (une copie reste gardée de côté sur cet appareil).`)) return;
@@ -3478,7 +3485,7 @@ async function lvSync(r, Y) {
     const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record) return false;
     const T = wfParse(j.record.donnees); if (!T) return false;
     const now = wfCollect(r, Y), dirty = B ? wfSig(r, Y) !== B.sig : wfHasContent(now), who = String(j.record.by || (lvChain(r)[lvChain(r).indexOf(my) - 1] ? LV_NAME[lvChain(r)[lvChain(r).indexOf(my) - 1]] : 'un autre niveau')).replace(/ \(alimentation\)$/, '');
-    if (!dirty) { lvApply(r, T, j.record.salaires, my); lvBaseSet(r, Y, my, j.record.version, T); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; lvMsg(r, Y, 'ok', 'Ta saisie a été mise à jour par ' + who + " : elle est à l'écran."); return true; }
+    if (!dirty) { lvApply(r, T, await lvSals(r, Y, my, j.record.salaires), my); lvBaseSet(r, Y, my, j.record.version, T); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; lvMsg(r, Y, 'ok', 'Ta saisie a été mise à jour par ' + who + " : elle est à l'écran."); return true; }
     wfSafeSave(r, Y, now, T);                                                                    // l'écran d'avant la fusion reste gardé de côté sur l'appareil
     const R = wfMerge(B ? B.doc : lvEmptyDoc(), now, T, { id: 'lv', name: 'moi' }, new Date().toISOString(), { noflag: true }); delete R.doc.m;
     lvApply(r, R.doc, undefined, my); lvBaseSet(r, Y, my, j.record.version, T, '~'); LV.sig[key] = '~'; delete LV.shown[key];      // '~' = l'écran contient des lignes non enregistrées
@@ -3496,7 +3503,7 @@ async function lvRelay(r, Y) {
     const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record || j.record.by) return false;
     const P = wfParse(j.record.donnees); if (!P) return false;
     const now = wfCollect(r, Y), same = lvLinesSig(now) === lvLinesSig(P), had = wfHasContent(now);
-    if (!same) { if (had) wfSafeSave(r, Y, now, P); lvApply(r, P, j.record.salaires, my); }
+    if (!same) { if (had) wfSafeSave(r, Y, now, P); lvApply(r, P, await lvSals(r, Y, my, j.record.salaires), my); }
     delete LV.shown[key]; delete LV.stash[key]; LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P);
     if (!same) lvMsg(r, Y, 'ok', 'La saisie validée du ' + LV_NAME[ch[i - 1]] + " est devenue la tienne : elle est à l'écran, tu peux la modifier puis l'enregistrer." + (had ? " (Ce qui était à l'écran avant reste gardé de côté sur cet appareil.)" : ''));
     return !same;
@@ -3511,7 +3518,7 @@ async function lvBaseInit(r, Y) {                                               
   const loss = lvLoss(P, now);                                                                  // cet appareil n'a jamais synchronisé ce niveau et son écran a bien moins de saisies que la version enregistrée : le serveur fait foi
   if (loss.length && !lvIsOwner(r) && lvView(r, Y) === 'mine' && lvEditable(r, Y) && !LV.busyAct) {
     if (wfHasContent(now)) wfSafeSave(r, Y, now, P);
-    lvApply(r, P, j.record.salaires, my); delete LV.shown[key]; delete LV.stash[key]; LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P);
+    lvApply(r, P, await lvSals(r, Y, my, j.record.salaires), my); delete LV.shown[key]; delete LV.stash[key]; LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P);
     lvMsg(r, Y, 'ok', 'Ta version enregistrée est revenue à l\'écran : cet appareil contenait beaucoup moins de saisies (' + lvLossTxt(loss) + '). Ce qui était à l\'écran reste gardé de côté sur cet appareil.');
   }
 }
