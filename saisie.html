@@ -2184,7 +2184,7 @@ async function bdImport(inp) {
 function renderBudget() {
   const pn = document.getElementById('panel');
   if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
-  if (!accCan('budget', curResto)) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd', curResto)}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel est ouvert au directeur du restaurant, au superviseur de son secteur et au franchisé (chacun son mot de passe). Chaque échelon saisit ses salaires par poste ; la saisie d'un échelon n'est jamais visible des échelons en dessous.</div>`; return; }
+  if (!(accCan('budget', curResto) || (typeof lvSeeBud === 'function' && lvSeeBud(curResto)))) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd', curResto)}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel est ouvert au directeur du restaurant, au superviseur de son secteur et au franchisé (chacun son mot de passe). Chaque échelon saisit ses salaires par poste ; la saisie d'un échelon n'est jamais visible des échelons en dessous.</div>`; return; }
   if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Ty = +SIM.ty, o = bdParams(r), p = o.p, ca = bdCa(r, Ty), L = bdCompute(p, ca.alim);
   const tot = k => L[k].reduce((a, b) => a + b, 0), A = tot('alim'), ref = o.ref, view = BUD.view;
@@ -3332,6 +3332,8 @@ function lvEditable(r, Y) {
   if (i > 0 && my !== 'franchise') { const pv = lvRow(r, Y, ch[i - 1]); if (!pv || !(pv.statut === 'valide' || pv.statut === 'publie')) return false; }      // le franchisé saisit à tout moment (sa saisie alimente les autres niveaux) ; seule sa VALIDATION attend celle du niveau précédent
   return !m || m.statut === 'en_cours';
 }
+const lvCanView = r => wfRightsOk(r) || (accProfiles().some(p => accCovers(p, r)) && ['bud', 'pca', 'pv', 'val'].some(k => ((typeof SB_RIGHTS !== 'undefined' && SB_RIGHTS && accLvl(SB_RIGHTS, k)) || 0) >= 1));      // consultation (tuiles Budget, Prévision CA…) : on voit les saisies de chaque niveau sans pouvoir les modifier
+const lvSeeBud = r => accProfiles().some(p => accCovers(p, r)) && ((typeof SB_RIGHTS !== 'undefined' && SB_RIGHTS && accLvl(SB_RIGHTS, 'bud')) || 0) >= 1;      // tuile « Budget et PNL » en consultation : l'onglet s'ouvre en lecture seule
 const lvFeeder = r => lvMy(r) === 'franchise' && !lvIsOwner(r);                      // le franchisé (pas le propriétaire en correction) alimente les niveaux en dessous
 const lvPrevOk = (r, Y) => { const ch = lvChain(r), i = ch.indexOf(lvMy(r)); if (i <= 0 || lvIsOwner(r)) return true; const pv = lvRow(r, Y, ch[i - 1]); return !!(pv && (pv.statut === 'valide' || pv.statut === 'publie')); };
 const lvView = (r, Y) => LV.view && LV.view[lvK(r, Y)] || 'mine';
@@ -3378,7 +3380,7 @@ async function lvEnter(r, Y) {                                                  
   if (!r || !Y || LV.entering) return; LV.entering = true;
   try {
     await lvRefresh(false); const key = lvK(r, Y);
-    if (!wfInCircuit(r, Y) || !wfRightsOk(r)) { wfBarPaint(); return; }
+    if (!wfInCircuit(r, Y) || !lvCanView(r)) { wfBarPaint(); return; }
     if (await lvSync(r, Y)) return;
     await lvBaseInit(r, Y);
     if (lvIsRO(r, Y)) {
@@ -3552,7 +3554,7 @@ function lvBarHtml(r, Y) {
   if (!r || !wfInCircuit(r, Y)) return '';
   const box = (c, h) => `<div class="lv-bar ${c}">${h}</div>`;
   if (LV.backend === false) return box('err', "Le circuit de validation demande une mise à jour de l'Apps Script du Sheet.");
-  if (!wfRightsOk(r)) return box('', `Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL ». Demande au franchisé de l'activer (Équipes → Modifier).`);
+  if (!lvCanView(r)) return box('', `Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL ». Demande au franchisé de l'activer (Équipes → Modifier).`);
   if (LV.backend === null) return box('', 'Chargement du circuit de validation…');
   const key = lvK(r, Y), ch = lvChain(r), my = lvMy(r), view = lvView(r, Y), i = ch.indexOf(my), ed = lvEditable(r, Y) && view === 'mine', next = ch[i + 1], mrow = lvRow(r, Y, my), fl = LV.flash[key];
   const target = lvTarget(r, Y), showing = lvIsRO(r, Y) ? target : my;
@@ -3578,6 +3580,8 @@ function lvBarHtml(r, Y) {
     if (lowK) act += `<button class="lv-btn" onclick="lvCopyClick('${lowK}')">Partir de la saisie du ${LV_NAME[lowK]}</button>`;
     if (lvIsOwner(r)) act += `<button class="lv-btn" onclick="lvOwnerCancel()">Annuler la correction</button>`;
     if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
+  } else if (!wfRightsOk(r)) {
+    head = `<b>Consultation</b> — ton accès te permet de voir les saisies de chaque niveau (boutons « Voir »), pas de les modifier. Version affichée : ${lvTarget(r, Y) ? LV_NAME[lvTarget(r, Y)] : 'aucune pour le moment'}.`;
   } else if (mrow && (mrow.statut === 'valide' || mrow.statut === 'publie')) {
     let dem = ''; try { if (mrow.demande) dem = JSON.parse(mrow.demande); } catch (e) {}
     head = `<b>Ta saisie est validée</b> (${wfDate(mrow.at)}) : tu es en consultation.`;
@@ -3595,7 +3599,7 @@ function wfBarHtml(r, Y) { return lvBarHtml(r, Y); }
 function wfBarCore(r, Y) { return lvBarHtml(r, Y); }
 function wfBarPaint() {
   const r = curResto; if (!r) return;
-  const Y = lvYearOf(), on = (curTab === 'budget' || curTab === 'prevca') && wfInCircuit(r, Y) && wfRightsOk(r) && lvIsRO(r, Y);
+  const Y = lvYearOf(), on = (curTab === 'budget' || curTab === 'prevca') && wfInCircuit(r, Y) && lvCanView(r) && lvIsRO(r, Y);
   document.body.classList.toggle('lv-ro', !!on);
   const b = document.getElementById('bdShare'); if (b && curTab === 'budget') b.innerHTML = lvBarHtml(r, +SIM.ty);
   const p = document.getElementById('pvShare'); if (p && curTab === 'prevca') p.innerHTML = lvBarHtml(r, Y);
@@ -3617,7 +3621,7 @@ function renderValid() {
   const head = `<div class="panel-head"><div><div class="panel-title">Validation du prévisionnel ${Y} · ${escH(name)}</div>
     <div class="last-saisie">Chaque niveau <b>enregistre sa propre saisie</b> (bouton « Enregistrer ») puis la <b>valide</b> pour l'envoyer au niveau suivant ; le franchisé publie dans le Sheet. Les autres niveaux consultent (bouton « Voir »). Pour modifier une saisie validée : « Demander le déblocage ».</div>
     <div class="period"><select onchange="wfYear(this.value)">${years.map(v => `<option ${v === Y ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>`;
-  if (!wfRightsOk(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
+  if (!lvCanView(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
   if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   if (LV.backend === null) { pn.innerHTML = head + `<div class="hint">⏳ Chargement…</div>`; lvRefresh(true).then(() => { if (curTab === 'valid') renderValid(); }); return; }
   const key = lvK(r, Y), me = accProfiles().find(p => accCovers(p, r)) || null, jk = LV.journal[key];
