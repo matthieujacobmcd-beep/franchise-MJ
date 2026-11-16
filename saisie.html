@@ -3271,7 +3271,7 @@ function bdSharePaint() { wfBarPaint(); }
 .lv-ro #panel .lv-bar input, .lv-ro #panel .lv-bar textarea{ pointer-events:auto; }`;
   document.head.appendChild(st);
 })();
-const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
+const LV = { rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, stale: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
 const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
 const lvK = (r, Y) => r + '|' + Y;
 // Dernière version enregistrée connue de CET appareil pour mon niveau (version + contenu + empreinte de l'écran à ce moment) : sert à fusionner ligne par ligne, sans rien perdre,
@@ -3364,7 +3364,8 @@ async function lvShow(r, Y, level) {
 async function lvLoadMine(r, Y) {                                                            // remet à l'écran MA version enregistrée
   const key = lvK(r, Y), my = lvMy(r), j = await lvCall('load', r, Y, { niveau: my });
   if (!j.ok || !j.record) return false; const P = wfParse(j.record.donnees); if (!P) return false;
-  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P); delete LV.shown[key]; delete LV.stash[key]; return true;
+  const now = wfCollect(r, Y); if (!LV.shown[key] && wfHasContent(now) && lvLinesSig(now) !== lvLinesSig(P)) wfSafeSave(r, Y, now, P);       // l'écran d'avant reste gardé de côté sur l'appareil
+  lvApply(r, P, j.record.salaires, my); LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P); delete LV.shown[key]; delete LV.stash[key]; delete LV.stale[key]; return true;
 }
 async function lvCopyAsMine(r, Y, level) {                                                    // le propriétaire qui passe devant démarre d'une copie de la dernière saisie existante
   const key = lvK(r, Y), j = await lvCall('load', r, Y, { niveau: level }); if (!j.ok || !j.record) return false;
@@ -3403,6 +3404,12 @@ async function lvViewSet(level) {
 }
 // ── Actions : tout se fait par bouton ──
 const lvMsg = (r, Y, c, t) => { LV.flash[lvK(r, Y)] = [c, t]; wfBarPaint(); if (curTab === 'valid') renderValid(); };
+// Comptage « réel » par catégorie (ce qui diffère des valeurs par défaut) : c = jours de prévision, b = hypothèses du budget, d = lignes de détail.
+// Le calendrier (365 jours) ne doit pas masquer un budget vidé : chaque catégorie est comparée à part.
+const LV_GRP = { c: 'jours de prévision', b: "hypothèses de budget", d: 'lignes de détail' };
+const lvReal = d => { const o = { c: 0, b: 0, d: 0 }; try { const L = wfLines(d), D0 = wfDefLines(); for (const k of Object.keys(L)) { const g = k[0]; if (!(g in o) || wfEmptyV(L[k]) || wfJ(L[k]) === wfJ(D0[k])) continue; o[g]++; } } catch (e) {} return o; };
+function lvLoss(old, mine) { const a = lvReal(old), b = lvReal(mine), out = []; for (const g of ['c', 'b', 'd']) if (a[g] >= 3 && b[g] < 0.7 * a[g]) out.push({ g, was: a[g], now: b[g] }); return out; }
+const lvLossTxt = L => L.map(x => x.now + ' ' + LV_GRP[x.g] + ' au lieu de ' + x.was).join(', ');
 const lvCnt = d => { try { return Object.values(wfLines(d)).filter(v => !wfEmptyV(v)).length; } catch (e) { return 0; } };
 async function lvSave(silent) {
   const r = curResto, Y = lvYearOf(), key = lvK(r, Y), my = lvMy(r), m = lvRow(r, Y, my);
@@ -3417,7 +3424,8 @@ async function lvSave(silent) {
   try {
     if (m) {                                                                                 // garde-fou : un écran bien plus vide que ma dernière version n'est jamais enregistré sans confirmation
       const jm = await lvCall('load', r, Y, { niveau: my }); old = jm.ok && jm.record ? wfParse(jm.record.donnees) : null;
-      if (old && lvCnt(old) >= 10 && lvCnt(mine) < 0.7 * lvCnt(old) && !confirm('Attention : cet écran contient beaucoup moins de saisies (' + lvCnt(mine) + ' lignes) que ta dernière version enregistrée (' + lvCnt(old) + ' lignes).\nEnregistrer quand même ? (l\'ancienne version reste dans l\'historique)')) { lvMsg(r, Y, '', 'Enregistrement annulé.'); return false; }
+      const loss = old ? lvLoss(old, mine) : []; if (loss.length) LV.stale[key] = 1;
+      if (old && ((lvCnt(old) >= 10 && lvCnt(mine) < 0.7 * lvCnt(old)) || loss.length) && !confirm('Attention : cet écran contient beaucoup moins de saisies que ta dernière version enregistrée' + (loss.length ? ' (' + lvLossTxt(loss) + ')' : ' (' + lvCnt(mine) + ' lignes au lieu de ' + lvCnt(old) + ')') + '.\nEnregistrer quand même ? (l\'ancienne version reste dans l\'historique)')) { lvMsg(r, Y, '', 'Enregistrement annulé.'); return false; }
     }
     let j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r), base_version: m ? m.version : undefined });
     if (j.conflict) { await lvRefresh(true); LV.busyAct = false; if (await lvSync(r, Y)) return false; LV.busyAct = true; if (!confirm("Une version plus récente de ta saisie a été enregistrée depuis un autre appareil.\nL'écraser avec cet écran ?")) { lvMsg(r, Y, 'err', 'Enregistrement annulé : recharge ta version (bouton « Charger ma version enregistrée »).'); return false; } j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r) }); }
@@ -3498,7 +3506,14 @@ async function lvBaseInit(r, Y) {                                               
   const my = lvMy(r), m = lvRow(r, Y, my), key = lvK(r, Y); LV.bchk = LV.bchk || {};
   if (!m || m.statut !== 'en_cours' || lvBaseGet(r, Y, my) || LV.bchk[key + '|' + m.version] || lvIsRO(r, Y)) return; LV.bchk[key + '|' + m.version] = 1;
   const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record) return; const P = wfParse(j.record.donnees); if (!P) return;
-  if (lvLinesSig(wfCollect(r, Y)) === lvLinesSig(P)) lvBaseSet(r, Y, my, j.record.version, P);
+  const now = wfCollect(r, Y);
+  if (lvLinesSig(now) === lvLinesSig(P)) { lvBaseSet(r, Y, my, j.record.version, P); return; }
+  const loss = lvLoss(P, now);                                                                  // cet appareil n'a jamais synchronisé ce niveau et son écran a bien moins de saisies que la version enregistrée : le serveur fait foi
+  if (loss.length && !lvIsOwner(r) && lvView(r, Y) === 'mine' && lvEditable(r, Y) && !LV.busyAct) {
+    if (wfHasContent(now)) wfSafeSave(r, Y, now, P);
+    lvApply(r, P, j.record.salaires, my); delete LV.shown[key]; delete LV.stash[key]; LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.record.version, P);
+    lvMsg(r, Y, 'ok', 'Ta version enregistrée est revenue à l\'écran : cet appareil contenait beaucoup moins de saisies (' + lvLossTxt(loss) + '). Ce qui était à l\'écran reste gardé de côté sur cet appareil.');
+  }
 }
 async function lvValidate() {
   const r = curResto, Y = lvYearOf(), nm = (RESTOS.find(x => x[0] === r) || [0, r])[1], my = lvMy(r), ch = lvChain(r), next = ch[ch.indexOf(my) + 1];
@@ -3513,6 +3528,11 @@ async function lvValidate() {
     if (!mine) return lvMsg(r, Y, 'err', 'Impossible de lire la saisie à valider.');
   } else mine = wfCollect(r, Y);
   if (!wfHasContent(mine)) return lvMsg(r, Y, 'err', 'Rien à valider.');
+  if (!safe && m0) {                                                                         // garde-fou : on ne VALIDE jamais un écran bien plus vide que ma version enregistrée (la validation part au niveau suivant)
+    const jo = await lvCall('load', r, Y, { niveau: my }), oldD = jo.ok && jo.record ? wfParse(jo.record.donnees) : null, loss = oldD ? lvLoss(oldD, mine) : [];
+    if (loss.length) LV.stale[key] = 1;
+    if (loss.length) return lvMsg(r, Y, 'err', 'Validation refusée : cet écran contient beaucoup moins de saisies que ta version enregistrée (' + lvLossTxt(loss) + '). Clique « Charger ma version enregistrée » pour la retrouver. Si ce contenu réduit est voulu, enregistre-le d\'abord (confirmation demandée), puis valide.');
+  }
   let extra = {}, txt;
   if (next) txt = `Valider ta saisie ${Y} de ${nm} et l'envoyer au ${LV_NAME[next]} ?\nTu passeras en consultation ; pour modifier, tu devras demander le déblocage.`;
   else {
@@ -3596,7 +3616,7 @@ function lvBarHtml(r, Y) {
     act = `<button class="lv-btn p" onclick="lvSave()">Enregistrer</button>` + (canVal ? `<button class="lv-btn p" onclick="lvValidate()">Valider${next ? ' et envoyer au ' + LV_NAME[next] : ' et publier'}</button>` : `<span class="hint" style="margin:8px 6px 0 0">Valider : possible après la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}.</span>`);
     if (lowK) act += `<button class="lv-btn" onclick="lvCopyClick('${lowK}')">Partir de la saisie du ${LV_NAME[lowK]}</button>`;
     if (lvIsOwner(r)) act += `<button class="lv-btn" onclick="lvOwnerCancel()">Annuler la correction</button>`;
-    if (mrow && LV.sig[key] === undefined && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
+    if (mrow && (LV.sig[key] === undefined || LV.stale[key]) && wfHasContent(wfCollect(r, Y))) act += `<button class="lv-btn" onclick="lvLoadClick()">Charger ma version enregistrée</button>`;
   } else if (!wfRightsOk(r)) {
     head = `<b>Consultation</b> — ton accès te permet de voir les saisies de chaque niveau (boutons « Voir »), pas de les modifier. Version affichée : ${lvTarget(r, Y) ? LV_NAME[lvTarget(r, Y)] : 'aucune pour le moment'}.`;
   } else if (mrow && (mrow.statut === 'valide' || mrow.statut === 'publie')) {
