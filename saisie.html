@@ -3477,7 +3477,7 @@ async function lvSync(r, Y) {
   try {
     const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record) return false;
     const T = wfParse(j.record.donnees); if (!T) return false;
-    const now = wfCollect(r, Y), dirty = B ? wfSig(r, Y) !== B.sig : wfHasContent(now), who = String(j.record.by || 'un autre niveau').replace(/ \(alimentation\)$/, '');
+    const now = wfCollect(r, Y), dirty = B ? wfSig(r, Y) !== B.sig : wfHasContent(now), who = String(j.record.by || (lvChain(r)[lvChain(r).indexOf(my) - 1] ? LV_NAME[lvChain(r)[lvChain(r).indexOf(my) - 1]] : 'un autre niveau')).replace(/ \(alimentation\)$/, '');
     if (!dirty) { lvApply(r, T, j.record.salaires, my); lvBaseSet(r, Y, my, j.record.version, T); LV.sig[key] = wfSig(r, Y); delete LV.shown[key]; lvMsg(r, Y, 'ok', 'Ta saisie a été mise à jour par ' + who + " : elle est à l'écran."); return true; }
     wfSafeSave(r, Y, now, T);                                                                    // l'écran d'avant la fusion reste gardé de côté sur l'appareil
     const R = wfMerge(B ? B.doc : lvEmptyDoc(), now, T, { id: 'lv', name: 'moi' }, new Date().toISOString(), { noflag: true }); delete R.doc.m;
@@ -3486,11 +3486,11 @@ async function lvSync(r, Y) {
     return true;
   } finally { LV.syncing = false; }
 }
-// ── RELAIS : quand le niveau précédent valide, ma version démarre d'une COPIE de la sienne (créée par le serveur, jamais enregistrée par moi : version 1, sans auteur). Elle est mise à l'écran toute seule, sans clic. ──
+// ── RELAIS : quand le niveau précédent valide, ma version démarre d'une COPIE de la sienne (créée par le serveur, jamais enregistrée par moi : sans auteur ; le serveur la rafraîchit si le niveau précédent re-valide ou est corrigé). Elle est mise à l'écran toute seule, sans clic. ──
 // Ce qui était à l'écran avant (ancien brouillon, affichage en lecture seule d'avant la validation…) reste gardé de côté sur l'appareil (wfSafeSave). Une fois que j'ai enregistré ou chargé ma version, l'appareil a une base : le relais ne rejoue plus.
 async function lvRelay(r, Y) {
   const key = lvK(r, Y), my = lvMy(r), ch = lvChain(r), i = ch.indexOf(my), m = lvRow(r, Y, my);
-  if (i < 1 || !m || m.statut !== 'en_cours' || +m.version !== 1 || m.by || lvIsOwner(r) || lvBaseGet(r, Y, my) || lvView(r, Y) !== 'mine' || !lvEditable(r, Y) || LV.relaying || LV.busyAct) return false;
+  if (i < 1 || !m || m.statut !== 'en_cours' || m.by || lvIsOwner(r) || lvBaseGet(r, Y, my) || lvView(r, Y) !== 'mine' || !lvEditable(r, Y) || LV.relaying || LV.busyAct) return false;
   LV.relaying = true;
   try {
     const j = await lvCall('load', r, Y, { niveau: my }); if (!j.ok || !j.record || j.record.by) return false;
