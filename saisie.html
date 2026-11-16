@@ -674,6 +674,7 @@ async function loadExisting(){
   } else {
     setBanner('new','🆕 Aucune saisie pour cette période — nouvelle saisie.');
   }
+  if(tab==='previsionnel' && typeof pvbSuggest==='function'){ try{ await pvbSuggest(resto, seq, data); }catch(e){} }      // le Budget & PNL est la source : le mois est prérempli
   // Mensuel : indicateurs hebdo non encore validés pour le mois → moyenne des semaines
   if(tab==='mensuel' && !HEBDO_KEYS.every(k=>data&&data[k]!=null&&data[k]!=='')){
     try{
@@ -3554,6 +3555,49 @@ function renderValid() {
   setInterval(() => { if (document.visibilityState === 'visible' && curResto && (curTab === 'prevca' || curTab === 'budget')) lvRefresh(true).then(() => lvEnter(curResto, lvYearOf())); }, 60000);
   setTimeout(() => lvRefresh(true).then(() => wfBarPaint()), 1500);
 })();
+// ── Prévisionnel mensuel : le Budget & PNL est la SOURCE d'information (comme les saisies déjà présentes) ──
+// Le mois affiché est prérempli (suggestion verte) avec les 7 chiffres calculés par le budget de l'année : CA net, CA alimentaire, marge, PAC, coût MO, cash flow, résultat net.
+// Source : la saisie la plus avancée du circuit (franchisé, sinon superviseur, sinon directeur) ; à défaut, le budget de cet appareil. Rien n'est enregistré tant que la personne ne clique pas sur « Enregistrer ».
+const PVB = { cache: {} };
+async function pvbSource(r, Y) {
+  const key = r + '|' + Y, c = PVB.cache[key]; if (c && Date.now() - c.at < 60000) return c.v;
+  let P = null, sal = null, label = '';
+  try {
+    if (typeof lvRefresh === 'function' && typeof lvChain === 'function') {
+      await lvRefresh(false);
+      for (const n of lvChain(r).slice().reverse()) {
+        if (!lvRow(r, Y, n)) continue;
+        const j = await lvCall('load', r, Y, { niveau: n }); if (j.ok && j.record) { P = wfParse(j.record.donnees); sal = j.record.salaires; label = 'saisie du ' + LV_NAME[n]; }
+        break;
+      }
+    }
+  } catch (e) {}
+  if (!P) { try { if (typeof wfCollect === 'function' && typeof PREVJ !== 'undefined' && PREVJ) { const loc = wfCollect(r, Y); if (wfHasContent(loc)) { P = loc; label = 'budget de cet appareil'; } } } catch (e) {} }
+  let v = null;
+  if (P && P.bud) {
+    const bud = JSON.parse(JSON.stringify(P.bud));
+    if (sal && sal.on !== false) { if (typeof accCan === 'function' && accCan('edg', r) && Array.isArray(sal.rows)) bud.edg = { on: true, rows: sal.rows }; else if (Array.isArray(sal.momg)) bud.edgMomg = sal.momg.map(Number); }      // même coût des managers que dans le Budget
+    try { const rows = bdRowsFrom(r, Y, bdCompute(bud, wfAlim(P))).rows; if (rows.length) v = { rows, label }; } catch (e) {}
+  }
+  PVB.cache[key] = { at: Date.now(), v }; return v;
+}
+function pvbFill(row, only) {                                                                  // only = true : champs vides seulement
+  const filled = [];
+  fieldsFor('previsionnel').forEach(f => { const v = row.data[f.k]; if (v == null) return; const el = document.getElementById('f_' + f.k); if (!el) return; if (only && el.value !== '') return; el.value = showVal(f, v); el.classList.add('suggest'); filled.push(f.l); });
+  recompute(); return filled;
+}
+async function pvbSuggest(resto, seq, data) {
+  const m = /^([A-ZÉÛ]+) (\d{4})$/.exec(currentPeriode() || ''); if (!m) return; const Y = +m[2];
+  const src = await pvbSource(resto, Y); if (seq !== loadSeq || !src) return;
+  const row = src.rows.find(x => x.periode === currentPeriode()); if (!row) return;            // mois sans CA prévu dans le budget : rien à proposer
+  window.__pvbRow = row;
+  const have = k => data && data[k] != null && data[k] !== '';
+  const diff = fieldsFor('previsionnel').filter(f => have(f.k) && row.data[f.k] != null && Math.abs(data[f.k] - row.data[f.k]) > (isPct(f) ? 0.0005 : 1)).map(f => f.l);
+  const filled = pvbFill(row, true);
+  if (filled.length) setBanner('suggest', `💡 <b>Valeurs issues du Budget & PNL ${Y}</b> (${src.label}) : ${filled.length} champ${filled.length > 1 ? 's' : ''} prérempli${filled.length > 1 ? 's' : ''} — vérifie puis clique sur « Enregistrer » pour les publier dans le Sheet.`);
+  else if (diff.length) setBanner('exists', `📝 <b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées.<br>ℹ Le Budget & PNL ${Y} (${src.label}) donne d'autres valeurs (${diff.join(', ')}). <button type="button" class="step" style="margin-left:6px" onclick="pvbApply()">Reprendre les valeurs du budget</button>`);
+}
+function pvbApply() { const row = window.__pvbRow; if (!row) return; const f = pvbFill(row, false); setBanner('suggest', `💡 <b>Valeurs du budget reprises</b> (${f.length} champs) — clique sur « Enregistrer » pour les publier dans le Sheet.`); }
 // ── Saisie de la collaboratrice (Budget & PNL), partagée avec TOUS les niveaux : directeurs, superviseurs et franchisé ──
 // Elle saisit les hypothèses du budget (lignes du PNL, services extérieurs par société) de n'importe quel restaurant avec son accès (rôle « collab », droit « budget » seul)
 // puis les partage : une version par restaurant et par année est enregistrée dans l'onglet « BudgetCollab » du Sheet (Apps Script, actions bc_*).
