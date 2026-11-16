@@ -473,11 +473,11 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['pia', 'Prédiction IA (bannière du Pilotage)', ''], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['pia', 'Prédiction IA (bannière du Pilotage)', ''], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['pchat', 'Planning · Chat du restaurant', ''],['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
 { const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => !['prim', 'ffoc', 'fcfv', 'fcer'].includes(t[0])); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
 const accMax = k => k === 'pia' ? 1 : (k === 'pb' || k === 'ffoc' || k === 'fcfv' || k === 'fcer') ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
-const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? ['', 'Consultation', 'Réalisation', 'Réalisation et critères'][v] : 'Modification')));
+const accLevelName = (k, v) => v === 0 ? 'Aucun accès' : (k === 'pchat' ? (v === 1 ? 'Lecture' : 'Lecture et écriture') : k === 'pb' ? ['', 'Consultation', 'Réponse du directeur', 'Rédaction'][v] : (v === 1 ? 'Consultation' : (['ffoc', 'fcfv', 'fcer'].includes(k) ? ['', 'Consultation', 'Réalisation', 'Réalisation et critères'][v] : 'Modification')));
 const accLvl = (r, k) => (r && r.acces && typeof r.acces === 'object') ? (+r.acces[k] || 0) : null;           // null = anciens droits (pas de tuiles)
 const accTabLvl = (r, tab) => { const t = ACC_CAT.flatMap(g => g[1]).find(x => (x[2] || '').split('|').includes('tab:' + tab)); return t ? accLvl(r, t[0]) : null; };
 // Restaurant de référence : l'appli s'ouvre dessus. Choisi dans Équipes (colonne resto_ref) ; à défaut, l'unique restaurant de la personne ; sinon aucun (vue d'ensemble / choix à l'ouverture).
@@ -9740,6 +9740,18 @@ function igGo() {
 #espace-planning .plg-tile.al.on,#espace-planning .plg-tile.wa.on{box-shadow:0 0 0 2px rgba(184,134,11,.35)}
 #espace-planning .plg-tp{display:none;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px 12px;margin:0 0 10px}
 #espace-planning .plg-tp.on{display:block}
+.plg-bg{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:.66rem;font-weight:800;align-items:center;justify-content:center;margin-left:6px;line-height:1;box-sizing:border-box}
+#espace-planning .plg-chat{display:flex;flex-direction:column;gap:8px}
+#espace-planning .plg-cl{max-height:min(54vh,480px);min-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:6px 2px;overscroll-behavior:contain}
+#espace-planning .plg-cm{max-width:84%;align-self:flex-start;background:var(--card2);color:var(--text);border-radius:14px 14px 14px 4px;padding:7px 11px 5px;font-size:.84rem;line-height:1.4;word-break:break-word;white-space:pre-wrap}
+#espace-planning .plg-cm.me{align-self:flex-end;background:var(--gold);color:#fff;border-radius:14px 14px 4px 14px}
+#espace-planning .plg-cm .who{display:block;font-size:.68rem;font-weight:800;opacity:.75;margin-bottom:1px}
+#espace-planning .plg-cm .at{display:block;font-size:.64rem;opacity:.7;margin-top:2px;text-align:right}
+#espace-planning .plg-cd{align-self:center;font-size:.68rem;font-weight:700;color:var(--muted);background:var(--card2);border-radius:999px;padding:2px 12px;text-transform:capitalize}
+#espace-planning .plg-cn{align-self:center;font-size:.72rem;font-weight:800;color:#b45309;background:#fff7ed;border-radius:999px;padding:2px 12px}
+#espace-planning .plg-cf{display:flex;gap:8px;align-items:flex-end}
+#espace-planning .plg-cf textarea{flex:1;resize:none;min-height:40px;max-height:130px;box-sizing:border-box;border:1.5px solid var(--border);border-radius:12px;padding:9px 11px;font:inherit;font-size:.86rem;background:var(--card);color:var(--text)}
+#espace-planning .plg-cf textarea:focus{outline:none;border-color:var(--gold)}
 #espace-planning .plg-tph{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:.84rem}
 #espace-planning .plg-i{display:inline-block;width:14px;height:14px;vertical-align:-2px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 #espace-planning .ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;background:var(--e-bg);color:var(--e-color);flex-shrink:0}
@@ -9893,7 +9905,7 @@ const plgQ = o => Object.entries(o).map(([k, v]) => k + '=' + encodeURIComponent
 function plgOnLogin(r) {
   PLG.rights = r; PLG.FR = (FRANCHISE_CFG.auth && FRANCHISE_CFG.auth.franchise) || '';
   const ok = !!r && (r.modules || []).includes('planning');
-  const pill = document.getElementById('pillPlanning'); if (pill) pill.style.display = ok ? '' : 'none';
+  const pill = document.getElementById('pillPlanning'); if (pill) pill.style.display = ok ? '' : 'none'; setTimeout(plgChInit, 0);
   const tous = FRANCHISE_CFG.restos.map(x => x.key), al = !r ? [] : (r.role === 'directeur' ? tous.filter(k => (r.restos || []).includes(k)) : tous);   // liste complète de la franchise (RESTOS est déjà limité au périmètre de la personne)   // le directeur : ses restaurants seulement ; les autres rôles ayant le module « planning » : tous
   PLG.restos = al; if (!PLG.resto || !al.includes(PLG.resto)) PLG.resto = al[0] || null;
 }
@@ -10171,7 +10183,7 @@ function plgRender() {
   const evs = plgEvList(ws, N), alerts = [], covAl = [], rems = []; PLG.pcSig = plgEvSig(ws);
   let WK = null;
   let h = '<div class="plg-bar"><div class="plg-tabs">' + PLG.restos.map(k => { const cfg = (typeof RESTO_CFG !== 'undefined' && RESTO_CFG[k]) || { bg: '#f0f0f0', color: '#666' }, kk = plgE(k);
-      return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + '</div>'; }).join('') + '</div>'
+      return '<div class="tab ' + (k === PLG.resto ? 'active' : '') + '" data-k="' + kk + '" role="button" tabindex="0" onclick="plgSetResto(\'' + kk + '\')" onkeydown="if(event.key===\'Enter\')plgSetResto(\'' + kk + '\')" style="--tab-bg:' + cfg.bg + ';--tab-color:' + cfg.color + '"><span class="tab-avatar" data-color="' + cfg.color + '" style="background:' + cfg.bg + ';--ac:' + cfg.color + '">' + (typeof archSvg === 'function' ? archSvg(cfg.color) : '') + '</span>' + plgE(_rtab ? _rtab(k) : k) + plgChBadge(k) + '</div>'; }).join('') + '</div>'
     + '<label class="plg-mod"><input type="checkbox" ' + (mod ? 'checked' : '') + ' ' + (can ? '' : 'disabled') + ' onchange="plgSetMod(this.checked)"> Modulation (cycles de 13 semaines)</label></div>';
   const sem = N > 1, bt = (n, a, b) => '<button class="plg-btn" onclick="plgStep(' + n + ')" title="' + b + '">' + a + '</button>';
   const navH = (sem ? bt(-7 * N, '« ' + N + ' sem.', 'Reculer de ' + N + ' semaines') + bt(-7, '‹ 1 sem.', 'Reculer d\'une semaine') : bt(-7, '« 7 j', 'Reculer de 7 jours') + bt(-1, '‹ 1 j', 'Reculer d\'un jour : la veille et les jours précédents restent à l\'écran'))
@@ -10197,6 +10209,7 @@ function plgRender() {
   const defs = [
     ['ev', 'cal', 'Événements de la période', evs.length ? S(evs.length, 'événement', 'événements') : 'Aucun', '', plgEvForm(can), 'Événements'],
     ['cp', 'sun', 'Congés et absences', runs.length ? S(runs.length, 'période', 'périodes') : 'Aucun', '', plgCpForm(can), 'Congés']];
+  if (plgChOn()) defs.push(['chat', 'msg', 'Chat du restaurant', plgChSum(), plgChUnread(PLG.resto) ? 'wa' : '', plgChBody(), 'Chat' + plgChBadge(PLG.resto)]);
   if (T.length) defs.push(['al', 'alert', 'À vérifier', al.length + cv.length ? S(al.length + cv.length, 'alerte', 'alertes') : '✓ Rien à signaler', al.length ? 'al' : (cv.length ? 'wa' : 'ok'), alBody, 'À vérifier']);
   if (rm.length) defs.push(['rm', 'msg', 'Remarques', S(rm.length, 'remarque', 'remarques'), '', '<div class="plg-mm" style="margin:0">Non bloquantes.</div>' + tl(rm, 'rm', plgI('msg'), 24), 'Remarques']);
   defs.push(['sum', 'chart', mod ? 'Résumé du cycle' : 'Résumé du mois', mod ? 'Cycle de 13 sem.' : 'Mois et week-ends', '', '<div id="plgSum">' + plgSummary(codes) + plgWeTable(WK) + '</div>', 'Résumé'],
@@ -10204,19 +10217,20 @@ function plgRender() {
     ['cfg', 'bell', 'Alertes du restaurant', 'Réglages' + (plgCfgA().regles.length ? ' · ' + plgCfgA().regles.length + ' perso' : ''), '', plgAlertBox(), 'Alertes'],
     ['team', 'users', 'Équipe du restaurant', S(T.length, 'personne', 'personnes'), '', plgTeamBox(can), 'Équipe']);
   if (!defs.some(d => d[0] === PLG.tile)) PLG.tile = null;
-  const PLG_TC = { ev: '#0e7490', cp: '#0d9488', rm: '#6b7280', sum: '#2563eb', let: '#7c3aed', cfg: '#ea580c', team: '#b8860b' }, tcol = d => d[0] === 'al' ? (al.length ? '#c0392b' : (cv.length ? '#ea580c' : '#1e8449')) : (PLG_TC[d[0]] || '#0e7490');
+  const PLG_TC = { ev: '#0e7490', cp: '#0d9488', chat: '#16a34a', rm: '#6b7280', sum: '#2563eb', let: '#7c3aed', cfg: '#ea580c', team: '#b8860b' }, tcol = d => d[0] === 'al' ? (al.length ? '#c0392b' : (cv.length ? '#ea580c' : '#1e8449')) : (PLG_TC[d[0]] || '#0e7490');
   const tst = d => '--e-color:' + tcol(d) + ';--e-bg:color-mix(in srgb,' + tcol(d) + ' 14%,transparent)';
   h += '<div class="plg-tb">' + defs.map(d => '<button type="button" class="plg-tile ' + d[4] + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '" aria-expanded="' + (PLG.tile === d[0]) + '" title="' + plgE(d[2]) + '" style="' + tst(d) + '" onclick="plgTile(\'' + d[0] + '\')"><span class="ic">' + plgI(d[1]) + '</span><span class="tx"><span class="t1">' + (d[6] || d[2]) + '</span><span class="t2">' + plgE(d[3]) + '</span></span></button>').join('') + '</div>';
   h += defs.map(d => '<div class="plg-tp' + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '"><div class="plg-tph"><b class="plg-tpt" style="' + tst(d) + '"><span class="ic">' + plgI(d[1]) + '</span>' + d[2] + '</b><button type="button" class="plg-btn" style="padding:2px 10px" onclick="plgTile(\'' + d[0] + '\')" aria-label="Fermer">✕</button></div>' + d[5] + '</div>').join('');
   h += gridH;
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
   if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
-  card.innerHTML = h; plgMsg(PLG.msg[0], PLG.msg[1]);
+  card.innerHTML = h; plgMsg(PLG.msg[0], PLG.msg[1]); plgChAfter();
 }
 function plgTile(k) {                                                          // un clic sur une tuile ouvre son contenu (un seul à la fois) ; un second clic le referme ; aucune ré-écriture de la page (les saisies en cours sont conservées)
   PLG.tile = PLG.tile === k ? null : k;
   document.querySelectorAll('#plgCard .plg-tile').forEach(b => { const on = b.dataset.k === PLG.tile; b.classList.toggle('on', on); b.setAttribute('aria-expanded', on ? 'true' : 'false'); });
   document.querySelectorAll('#plgCard .plg-tp').forEach(p => p.classList.toggle('on', p.dataset.k === PLG.tile));
+  if (PLG.tile === 'chat') plgChOpen(); else plgChBadges();
 }
 // ── résumés : mois (35 h) ou cycle de 13 semaines (modulation), comme la feuille « 35H OU MODULATION » ──
 function plgSummary(codes) {
@@ -10803,6 +10817,151 @@ async function plgExport() {                                                 // 
     plgXMsg('✓ ' + file + ' exporté (4 cycles de 13 semaines + synthèse).', 'ok');
   } catch (e) { plgXMsg('Export impossible : ' + e.message, 'err'); }
   finally { const b2 = document.getElementById('plgExpModel'); if (b2) { b2.disabled = false; b2.textContent = 'Excel modèle (cycles)'; } }
+}
+// ══ Chat du restaurant ══
+// Un fil de discussion par restaurant (table planning_chat : supabase/migration_planning_chat.sql), dans la tuile « Chat ». Visible des personnes qui ont le planning de ce restaurant ET la tuile d'accès
+// « Planning · Chat du restaurant » (Équipes : 1 lecture, 2 lecture et écriture). Les messages ne se modifient ni ne se suppriment. Pas de temps réel : lecture régulière (10 s fil ouvert, 30 s sinon pour les pastilles).
+const PLG_CK = 'fmj_plgchat';                                                   // par appareil : { restaurant : dernier message vu }
+PLG.chat = { by: {}, seen: (() => { try { return JSON.parse(localStorage.getItem(PLG_CK) || '{}') || {}; } catch (e) { return {}; } })(), unread: {}, ok: null, at: 0, busy: {}, draft: {}, init: false, sending: false };
+const plgChLvl = () => { const a = PLG.rights && PLG.rights.acces; return (PLG.rights && (PLG.rights.modules || []).includes('planning') && a && typeof a === 'object') ? (+a.pchat || 0) : 0; };
+const plgChOn = () => plgChLvl() >= 1 && PLG.chat.ok === true;                 // la tuile n'apparaît qu'une fois la base reconnue (table installée)
+const plgChSeenSave = () => { try { localStorage.setItem(PLG_CK, JSON.stringify(PLG.chat.seen)); } catch (e) { } };
+const plgChUnread = k => PLG.chat.unread[k] || 0;
+const plgChTotal = () => Object.values(PLG.chat.unread).reduce((a, b) => a + b, 0);
+const plgChMe = () => String((PLG.rights && PLG.rights.email) || '').toLowerCase();
+const plgChOpenNow = () => PLG.tile === 'chat' && typeof currentEspace !== 'undefined' && currentEspace === 'planning' && document.visibilityState === 'visible';
+const plgChDown = r => r.status === 404 || !!(r.j && ['PGRST205', '42P01', 'PGRST202'].includes(r.j.code));
+const plgChBadgeHtml = n => n ? '<span class="plg-bg" title="' + n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : '') + '">' + (n > 99 ? '99+' : n) + '</span>' : '';
+const plgChBadge = k => plgChOn() ? plgChBadgeHtml(plgChUnread(k)) : '';
+function plgChInit() {
+  if (PLG.chat.init || !plgChLvl()) { plgChPill(); return; } PLG.chat.init = true;
+  setTimeout(plgChPoll, 1200); setInterval(plgChPoll, 10000);
+}
+async function plgChPoll() {
+  if (!plgChLvl() || PLG.chat.ok === false || !PLG.FR) return;                  // aussi en arrière-plan (onglet non affiché) : le navigateur ralentit simplement la lecture
+  try {
+    if (PLG.chat.ok === true && plgChOpenNow() && PLG.resto) await plgChFetchNew(PLG.resto);
+    if (Date.now() - PLG.chat.at > 28000) await plgChLight();
+  } catch (e) { }
+}
+async function plgChLight() {                                                   // pastilles : derniers messages de mes restaurants (numéro, restaurant, auteur seulement)
+  PLG.chat.at = Date.now();
+  const r = await plgApi('/rest/v1/planning_chat?' + plgQ({ franchise: 'eq.' + PLG.FR, select: 'id,restaurant,auteur_email', order: 'id.desc', limit: 300 }));
+  if (!r.ok) { if (plgChDown(r) && PLG.chat.ok !== false) { PLG.chat.ok = false; plgChPill(); } return; }
+  const was = PLG.chat.ok; PLG.chat.ok = true;
+  const me = plgChMe(), mx = {}, un = {}; let ch = false;
+  (r.j || []).forEach(m => { mx[m.restaurant] = Math.max(mx[m.restaurant] || 0, m.id); });
+  Object.keys(mx).forEach(k => { if (PLG.chat.seen[k] === undefined) { PLG.chat.seen[k] = mx[k]; ch = true; } });      // premier passage sur cet appareil : on part de l'existant, sans tout signaler
+  (r.j || []).forEach(m => { if (m.id > (PLG.chat.seen[m.restaurant] || 0) && String(m.auteur_email).toLowerCase() !== me) un[m.restaurant] = (un[m.restaurant] || 0) + 1; });
+  if (ch) plgChSeenSave();
+  if (plgChOpenNow() && PLG.resto) delete un[PLG.resto];
+  const before = JSON.stringify(PLG.chat.unread), prevTot = plgChTotal(); PLG.chat.unread = un; if (plgChTotal() > prevTot) plgChNotify();
+  if (!was && document.getElementById('plgCard') && PLG.rng && !PLG.busy && !PLG.dirty && typeof currentEspace !== 'undefined' && currentEspace === 'planning') plgRender();   // la tuile apparaît
+  else if (JSON.stringify(un) !== before) plgChBadges(); else plgChPill();
+}
+async function plgChFetchNew(R) {
+  const c = PLG.chat.by[R] || (PLG.chat.by[R] = { msgs: [], last: 0, loaded: false, seenAtOpen: 0 });
+  if (PLG.chat.busy[R]) return 0; PLG.chat.busy[R] = true;
+  try {
+    const base = { franchise: 'eq.' + PLG.FR, restaurant: 'eq.' + R };
+    const r = await plgApi('/rest/v1/planning_chat?' + plgQ(c.loaded ? Object.assign(base, { id: 'gt.' + c.last, order: 'id.asc', limit: 200 }) : Object.assign(base, { order: 'id.desc', limit: 150 })));
+    if (!r.ok) { if (plgChDown(r)) { PLG.chat.ok = false; plgChPill(); } return 0; }
+    const rows = (r.j || []).slice(); if (!c.loaded) rows.reverse();
+    const add = rows.filter(m => m.id > c.last); c.loaded = true;
+    if (add.length) { c.msgs = c.msgs.concat(add); c.last = add[add.length - 1].id; if (c.msgs.length > 400) c.msgs = c.msgs.slice(-400); }
+    if (R === PLG.resto && PLG.tile === 'chat') { plgChPaint(R, add.length > 0); plgChMarkSeen(R); }
+    if (add.length || !c.msgs.length) plgChBadges();                            // résumé de la tuile (dernier message)
+    return add.length;
+  } finally { PLG.chat.busy[R] = false; }
+}
+function plgChMarkSeen(R) {
+  const c = PLG.chat.by[R]; if (c && c.loaded && c.last > (PLG.chat.seen[R] || 0)) { PLG.chat.seen[R] = c.last; plgChSeenSave(); }
+  if (PLG.chat.unread[R]) { delete PLG.chat.unread[R]; plgChBadges(); }
+}
+const plgChT = iso => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+function plgChDay(iso) {
+  const d = new Date(iso), t = new Date(), y = new Date(Date.now() - 864e5), same = (a, b) => a.toDateString() === b.toDateString();
+  return same(d, t) ? "Aujourd'hui" : same(d, y) ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+function plgChList(R) {
+  const c = PLG.chat.by[R]; if (!c || !c.loaded) return '<div class="plg-mm" style="margin:0">Chargement…</div>';
+  if (!c.msgs.length) return '<div class="plg-mm" style="margin:0">Aucun message pour le moment.' + (plgChLvl() >= 2 ? ' Écris le premier : il sera lu par toutes les personnes qui ont le planning de ce restaurant.' : '') + '</div>';
+  const me = plgChMe(), sn = c.seenAtOpen || 0; let h = '', day = '', marked = false;
+  c.msgs.forEach(m => {
+    const d = plgChDay(m.cree_le), mine = String(m.auteur_email).toLowerCase() === me; if (d !== day) { day = d; h += '<div class="plg-cd">' + plgE(d) + '</div>'; }
+    if (!marked && sn && m.id > sn && !mine) { marked = true; h += '<div class="plg-cn">Nouveaux messages</div>'; }
+    h += '<div class="plg-cm' + (mine ? ' me' : '') + '"><span class="who">' + plgE(mine ? 'Moi' : m.auteur_nom) + '</span>' + plgE(m.texte) + '<span class="at">' + plgChT(m.cree_le) + '</span></div>';
+  });
+  return h;
+}
+function plgChPaint(R, down) {
+  const el = document.getElementById('plgCl'); if (!el || R !== PLG.resto) return;
+  const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60; el.innerHTML = plgChList(R); if (down || bottom) el.scrollTop = el.scrollHeight;
+}
+function plgChBody() {
+  const R = PLG.resto, lv = plgChLvl(), dr = PLG.chat.draft[R] || '';
+  return '<div class="plg-chat"><div class="plg-cl" id="plgCl">' + plgChList(R) + '</div>'
+    + (lv >= 2 ? '<div class="plg-cf"><textarea id="plgCt" rows="1" maxlength="1000" placeholder="Écrire à l\'équipe de ce restaurant…" aria-label="Message" oninput="plgChDraft(this)" onkeydown="plgChKey(event)">' + plgE(dr) + '</textarea><button type="button" class="plg-btn pri" id="plgCs" onclick="plgChSend()">Envoyer</button></div><div class="plg-mm" style="margin:0">Entrée envoie · Maj + Entrée = nouvelle ligne. Les messages ne se modifient pas et ne se suppriment pas ; ils sont lus par toutes les personnes qui ont le planning de ce restaurant.</div>'
+      : '<div class="plg-mm" style="margin:0">Lecture seulement : tu peux lire le fil, pas y écrire.</div>')
+    + plgChNotifHtml() + '<div id="plgCe" class="plg-mm" style="margin:0;color:var(--red)"></div></div>';
+}
+// Notification du navigateur (facultative, par appareil) : prévient d'un nouveau message tant que le site est ouvert dans le navigateur, même en arrière-plan. Sans contenu du message (écran verrouillé).
+function plgChNotifHtml() {
+  if (!('Notification' in window)) return '';
+  const p = Notification.permission;
+  if (p === 'granted') return '<div class="plg-mm" style="margin:0">🔔 Notifications activées sur cet appareil (tant que ce site reste ouvert dans le navigateur).</div>';
+  if (p === 'denied') return '<div class="plg-mm" style="margin:0">🔕 Notifications bloquées dans ton navigateur (réglages du site) : tu verras seulement les pastilles.</div>';
+  return '<div class="plg-mm" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="plg-btn" onclick="plgChNotifAsk()">🔔 Me prévenir d\'un nouveau message sur cet appareil</button><span>Notification du navigateur, tant que ce site est ouvert (même en arrière-plan).</span></div>';
+}
+async function plgChNotifAsk() { try { await Notification.requestPermission(); } catch (e) { } plgRender(); }
+function plgChNotify() {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || plgChOpenNow()) return;
+    const ks = Object.keys(PLG.chat.unread).filter(k => PLG.chat.unread[k] > 0), n = plgChTotal(), lab = k => (typeof _rtab === 'function' ? _rtab(k) : k);
+    const nt = new Notification('Planning EDG : ' + n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : ''), { body: ks.map(k => lab(k) + ' (' + PLG.chat.unread[k] + ')').join(' · '), tag: 'plgchat' });
+    nt.onclick = () => { try { window.focus(); switchEspace('planning'); const k = ks[0]; PLG.tile = 'chat'; if (k && k !== PLG.resto && !PLG.dirty) { PLG.resto = k; plgLoad(); } else plgRender(); } catch (e) { } nt.close(); };
+  } catch (e) { }
+}
+function plgChSum() {
+  const R = PLG.resto, n = plgChUnread(R), c = PLG.chat.by[R];
+  if (n) return n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : '');
+  if (c && c.loaded) { if (!c.msgs.length) return 'Aucun message'; const m = c.msgs[c.msgs.length - 1], t = String(m.texte).replace(/\s+/g, ' '); return String(m.auteur_nom).split(' ')[0] + ' : ' + t.slice(0, 26) + (t.length > 26 ? '…' : ''); }
+  return 'Discussion de l\'équipe';
+}
+function plgChDraft(el) { PLG.chat.draft[PLG.resto] = el.value; el.style.height = 'auto'; el.style.height = Math.min(130, el.scrollHeight) + 'px'; }
+function plgChKey(e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); plgChSend(); } }
+async function plgChSend() {
+  const R = PLG.resto, ta = document.getElementById('plgCt'), btn = document.getElementById('plgCs'), er = document.getElementById('plgCe');
+  if (!ta || PLG.chat.sending) return; const t = ta.value.trim(); if (!t) return;
+  PLG.chat.sending = true; if (btn) btn.disabled = true; if (er) er.textContent = '';
+  try {
+    const r = await plgApi('/rest/v1/rpc/planning_chat_post', 'POST', { f: PLG.FR, resto: R, msg: t });
+    if (!r.ok) { const e2 = document.getElementById('plgCe'); if (e2) e2.textContent = '✗ ' + ((r.j && r.j.message) || 'envoi impossible') + ' — ton message est conservé.'; return; }
+    PLG.chat.draft[R] = ''; const t2 = document.getElementById('plgCt'); if (t2 && R === PLG.resto) { t2.value = ''; t2.style.height = ''; }
+    await plgChFetchNew(R); const el = document.getElementById('plgCl'); if (el) el.scrollTop = el.scrollHeight;
+  } finally { PLG.chat.sending = false; const b2 = document.getElementById('plgCs'); if (b2) b2.disabled = false; const t3 = document.getElementById('plgCt'); if (t3) t3.focus(); }
+}
+async function plgChOpen() {                                                    // la tuile vient de s'ouvrir (ou le restaurant a changé alors qu'elle est ouverte)
+  const R = PLG.resto; if (!R || !plgChOn()) return;
+  const c = PLG.chat.by[R] || (PLG.chat.by[R] = { msgs: [], last: 0, loaded: false, seenAtOpen: 0 }); c.seenAtOpen = PLG.chat.seen[R] || 0;
+  await plgChFetchNew(R); plgChMarkSeen(R); plgChPaint(R, true); const ta = document.getElementById('plgCt'); if (ta) ta.focus();
+  plgChBadges();
+}
+function plgChBadges() {                                                        // pastilles sans redessiner la page (tuile, onglets des restaurants, pastille de l'espace)
+  document.querySelectorAll('#plgCard .plg-tabs .tab[data-k]').forEach(t => { const b = t.querySelector('.plg-bg'); if (b) b.remove(); const h = plgChBadge(t.dataset.k); if (h) t.insertAdjacentHTML('beforeend', h); });
+  const tile = document.querySelector('#plgCard .plg-tile[data-k="chat"]');
+  if (tile) { const n = plgChUnread(PLG.resto); tile.classList.toggle('wa', n > 0); const t1 = tile.querySelector('.t1'), t2 = tile.querySelector('.t2'); if (t1) t1.innerHTML = 'Chat' + plgChBadgeHtml(n); if (t2) t2.textContent = plgChSum(); }
+  plgChPill();
+}
+function plgChPill() {
+  const n = plgChOn() ? plgChTotal() : 0;
+  try { const t0 = PLG.chat.t0 || (PLG.chat.t0 = document.title.replace(/^\(\d+\+?\)\s*/, '')); document.title = (n ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + t0; } catch (e) { }       // le nombre de nouveaux messages dans le titre de l'onglet
+  const p = document.getElementById('pillPlanning'); if (!p) return; let b = p.querySelector('.plg-bg');
+  if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'plg-bg'; p.appendChild(b); } b.textContent = n > 99 ? '99+' : String(n);
+}
+function plgChAfter() {                                                         // après chaque dessin de la page
+  plgChBadges();
+  if (PLG.tile === 'chat' && plgChOn()) { const c = PLG.chat.by[PLG.resto]; if (!c || !c.loaded) plgChOpen(); else { const el = document.getElementById('plgCl'); if (el) el.scrollTop = el.scrollHeight; } }
 }
 document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 's' && typeof currentEspace !== 'undefined' && currentEspace === 'planning') { e.preventDefault(); if (PLG.dirty && plgCan()) plgSave(); } });
 window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -11594,7 +11753,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261116-092412';
+const BUILD_VERSION = '20261116-113348';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
