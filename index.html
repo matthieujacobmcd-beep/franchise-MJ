@@ -8638,7 +8638,9 @@ function pcGroup(list) {                                        // anciennes sai
   for (const k of Object.keys(g)) { const a = g[k]; if (a.length >= 2 && a.length === RESTOS.length && new Set(a.map(x => x.restaurant)).size === RESTOS.length) { a.forEach(x => drop.add(x)); out.push(Object.assign({}, a[0], { id: 'grp:' + a.map(x => x.id).join('~'), ids: a.map(x => x.id), restaurant: PC_FR })); } }
   return out.length ? list.filter(e => !drop.has(e)).concat(out) : list;
 }
-const pcAll = () => pcGroup(PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds));
+const pcScoped = () => typeof SB_SCOPE !== 'undefined' && SB_SCOPE;                         // personne limitée à certains restaurants (RESTOS ne contient alors que les siens)
+const pcInScope = e => !pcScoped() || e.restaurant === PC_FR || e.restaurant === PC_NONE || RESTOS.includes(e.restaurant);   // elle ne voit que ses restaurants, les événements de toute la franchise et les événements généraux
+const pcAll = () => pcGroup(PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds)).filter(pcInScope);
 const pcForResto = (e, r) => r === 'ALL' || e.restaurant === r || e.restaurant === PC_FR;   // un événement « franchise » concerne chaque restaurant
 const pcShown = () => pcAll().filter(e => PC.types.has(e.type) && pcForResto(e, PC.resto));
 const pcOn = (e, iso) => e.periode <= iso && (e.fin || e.periode) >= iso;
@@ -8651,10 +8653,12 @@ const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' 
 function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
 function pcRender() {
   const card = document.getElementById('pcCard'); if (!card) return;
+  if (pcScoped() && PC.resto !== 'ALL' && !RESTOS.includes(PC.resto)) PC.resto = 'ALL';          // restaurant choisi hors du périmètre de la personne
+  if (pcScoped() && RESTOS.length === 1) PC.resto = RESTOS[0];                                    // un seul restaurant : c'est lui, sans choix « tous »
   const [Y, M] = PC.ym.split('-').map(Number), view = PC.view || (window.matchMedia && matchMedia('(max-width:700px)').matches ? 'list' : 'cal');
   const monthEv = pcShown().filter(e => e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`), allMonth = pcAll().filter(e => pcForResto(e, PC.resto) && e.periode <= `${PC.ym}-31` && (e.fin || e.periode) >= `${PC.ym}-01`);
   const count = k => allMonth.filter(e => e.type === k).length, showResto = PC.resto === 'ALL', fresh = new Set(monthEv.filter(pcUnseen).map(pcKeyOf));
-  const top = `<div class="pc-top"><select onchange="pcSetResto(this.value)" aria-label="Restaurant"><option value="ALL">Tous les restaurants</option>${RESTOS.map(r => `<option value="${pcEsc(r)}" ${PC.resto === r ? 'selected' : ''}>${pcEsc(restoDisplay(r))}</option>`).join('')}</select>
+  const top = `<div class="pc-top"><select onchange="pcSetResto(this.value)" aria-label="Restaurant">${pcScoped() && RESTOS.length === 1 ? '' : '<option value="ALL">' + (pcScoped() ? 'Tous mes restaurants' : 'Tous les restaurants') + '</option>'}${RESTOS.map(r => `<option value="${pcEsc(r)}" ${PC.resto === r ? 'selected' : ''}>${pcEsc(restoDisplay(r))}</option>`).join('')}</select>
       <span class="pc-nav"><button type="button" onclick="pcMonth(-1)" aria-label="Mois précédent">◀</button><b>${PC_MOIS[M - 1]} ${Y}</b><button type="button" onclick="pcMonth(1)" aria-label="Mois suivant">▶</button><button type="button" onclick="pcToday()">Aujourd'hui</button></span>
       <span class="pc-seg pc-viewseg"><button type="button" class="pc-btn ${view === 'cal' ? 'on' : ''}" onclick="pcView('cal')">Calendrier</button><button type="button" class="pc-btn ${view === 'list' ? 'on' : ''}" onclick="pcView('list')">Liste</button></span>
       <button type="button" class="pc-btn pc-add" onclick="pcNew()">+ Ajouter un événement</button></div>
@@ -11787,7 +11791,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261117-105233';
+const BUILD_VERSION = '20261117-181001';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
