@@ -8639,7 +8639,7 @@ function pcGroup(list) {                                        // anciennes sai
   return out.length ? list.filter(e => !drop.has(e)).concat(out) : list;
 }
 const pcScoped = () => typeof SB_SCOPE !== 'undefined' && SB_SCOPE;                         // personne limitée à certains restaurants (RESTOS ne contient alors que les siens)
-const pcInScope = e => !pcScoped() || e.restaurant === PC_FR || e.restaurant === PC_NONE || RESTOS.includes(e.restaurant);   // elle ne voit que ses restaurants, les événements de toute la franchise et les événements généraux
+const pcInScope = e => !pcScoped() || e.restaurant === PC_FR || RESTOS.includes(e.restaurant);   // elle ne voit que ses restaurants et les événements de toute la franchise (comme le serveur)
 const pcAll = () => pcGroup(PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds)).filter(pcInScope);
 const pcForResto = (e, r) => r === 'ALL' || e.restaurant === r || e.restaurant === PC_FR;   // un événement « franchise » concerne chaque restaurant
 const pcShown = () => pcAll().filter(e => PC.types.has(e.type) && pcForResto(e, PC.resto));
@@ -8764,11 +8764,12 @@ function pcOpen(ev) {
   if (d.detail && !pcFree(ty)) subEl.value = inList ? d.detail : PC_OTHER;
   pcSubChange(); document.getElementById('pcDetail').value = d.detail && (pcFree(ty) || !inList) ? d.detail : '';
   const one = !!e, sel = d.restaurant ? [d.restaurant] : (PC.resto !== 'ALL' ? [PC.resto] : []);
-  document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : 'Restaurant(s) — plusieurs possibles, ou aucun';
-  document.getElementById('pcMRestos').innerHTML = (one ? `<label><input type="radio" name="pcr" value="${PC_FR}" ${sel.includes(PC_FR) ? 'checked' : ''}> <b>Toute la franchise</b></label>` : `<label style="grid-column:1/-1"><input type="checkbox" id="pcFr" onchange="pcFrToggle(this.checked)"> <b>Toute la franchise</b> — un seul événement pour tous les restaurants</label>`) +
-    RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('') +
-    (one ? `<label><input type="radio" name="pcr" value="${PC_NONE}" ${sel.includes(PC_NONE) ? 'checked' : ''}> <b>Aucun restaurant</b></label>` : '') +
-    `<div style="grid-column:1/-1;font-size:.7rem;color:var(--muted);line-height:1.4">Aucun restaurant coché = événement général : il reste dans le Plan de communication (« Tous les restaurants ») et n'apparaît dans aucun planning. Un événement n'apparaît dans le planning d'un restaurant que si ce restaurant (ou toute la franchise) est coché.</div>`;
+  document.getElementById('pcRestoL').textContent = one ? 'Restaurant' : (pcScoped() ? 'Restaurant(s) — plusieurs possibles' : 'Restaurant(s) — plusieurs possibles, ou aucun');
+  const sc = pcScoped();       // personne limitée à certains restaurants : seulement les siens (le serveur refuse les événements « franchise » ou sans restaurant)
+  document.getElementById('pcMRestos').innerHTML = (sc ? '' : one ? `<label><input type="radio" name="pcr" value="${PC_FR}" ${sel.includes(PC_FR) ? 'checked' : ''}> <b>Toute la franchise</b></label>` : `<label style="grid-column:1/-1"><input type="checkbox" id="pcFr" onchange="pcFrToggle(this.checked)"> <b>Toute la franchise</b> — un seul événement pour tous les restaurants</label>`) +
+    RESTOS.map(r => `<label><input type="${one ? 'radio' : 'checkbox'}" name="pcr" value="${pcEsc(r)}" ${sel.includes(r) || (sc && RESTOS.length === 1) ? 'checked' : ''}> ${pcEsc(restoDisplay(r))}</label>`).join('') +
+    (one && !sc ? `<label><input type="radio" name="pcr" value="${PC_NONE}" ${sel.includes(PC_NONE) ? 'checked' : ''}> <b>Aucun restaurant</b></label>` : '') +
+    (sc ? `<div style="grid-column:1/-1;font-size:.7rem;color:var(--muted);line-height:1.4">Tu ne peux ajouter un événement que pour ${RESTOS.length > 1 ? 'tes restaurants' : 'ton restaurant'}. Les événements de toute la franchise sont gérés par l’équipe franchise.</div>` : `<div style="grid-column:1/-1;font-size:.7rem;color:var(--muted);line-height:1.4">Aucun restaurant coché = événement général : il reste dans le Plan de communication (« Tous les restaurants ») et n'apparaît dans aucun planning. Un événement n'apparaît dans le planning d'un restaurant que si ce restaurant (ou toute la franchise) est coché.</div>`);
   document.getElementById('pcStart').value = d.periode || pcIso(new Date()); document.getElementById('pcEnd').value = d.fin || '';
   document.getElementById('pcTime').value = d.heure || ''; document.getElementById('pcPlace').value = d.lieu || ''; document.getElementById('pcNote').value = d.note || '';
   document.getElementById('pcMsg').textContent = ''; document.getElementById('pcMsg').className = 'pc-msg';
@@ -8778,7 +8779,7 @@ function pcOpen(ev) {
 }
 function pcFrToggle(on) { document.querySelectorAll('#pcMRestos input[name=pcr]').forEach(i => { i.disabled = on; if (on) i.checked = false; }); }
 function pcNew(day) { if (day && day < '1970') return; pcOpen(day ? { periode: day } : null); }
-function pcEdit(id) { const e = pcAll().find(x => x.id === id); if (e) pcOpen(e); }
+function pcEdit(id) { const e = pcAll().find(x => x.id === id); if (!e) return; if (pcScoped() && !RESTOS.includes(e.restaurant)) { alert('Cet événement concerne toute la franchise : il est géré par l’équipe franchise (consultation seulement).'); return; } pcOpen(e); }
 function pcClose() { document.getElementById('pcModal').classList.remove('show'); PC.edit = null; }
 function pcMsg(c, t) { const m = document.getElementById('pcMsg'); m.className = 'pc-msg ' + c; m.textContent = t; }
 async function pcPost(body) {
@@ -8791,6 +8792,7 @@ async function pcSave() {
   if (PC.busy) return;
   const type = PC.mType, subSel = document.getElementById('pcSub').value, detail = (pcFree(type) || subSel === PC_OTHER ? document.getElementById('pcDetail').value : subSel).trim(), start = document.getElementById('pcStart').value, end = document.getElementById('pcEnd').value;
   const fr = document.getElementById('pcFr'); let restos = fr && fr.checked ? [PC_FR] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
+  if (!restos.length && pcScoped()) return pcMsg('err', 'Choisis le restaurant concerné.');
   if (!restos.length) restos = [PC_NONE];                       // aucun restaurant : événement général (hors plannings)
   if (!start) return pcMsg('err', 'Indique la date de début.');
   if (end && end < start) return pcMsg('err', 'La date de fin est avant le début.');
@@ -11791,7 +11793,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261117-181001';
+const BUILD_VERSION = '20261117-181723';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
