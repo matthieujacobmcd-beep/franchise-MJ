@@ -5371,7 +5371,7 @@ function eqCard(r) {
     <div class="eq-line">${EQ_PIN}<span>${escH(eqResto(r))}</span></div>
     ${pl ? `<div class="eq-line mut">${EQ_CAL}<span>Planning : ${pl.length ? pl.map(eqNomR).map(escH).join(', ') : '<span style="color:var(--gold)">à définir (tous pour le moment)</span>'}</span></div>` : ''}
     <div class="eq-chips">${(r.modules || []).map(m => `<span>${escH((EQ_MODS.find(x => x[0] === m) || [m, m])[1])}</span>`).join('') || '<span>Aucun accès</span>'}</div>
-    ${cn}${np ? `<div class="eq-perso">${np} accès personnalisé${np > 1 ? 's' : ''}</div>` : ''}
+    ${cn}${(() => { const lp = (EQ.pp || []).find(x => x.email && String(x.email).toLowerCase() === String(r.email).toLowerCase()); return lp ? `<div class="eq-sub ok">Fiche des primes liée : ${escH(EQ_PPOSTE[lp.poste] || lp.poste)} · ${escH(eqNomR(lp.restaurant))}</div>` : ''; })()}${np ? `<div class="eq-perso">${np} accès personnalisé${np > 1 ? 's' : ''}</div>` : ''}
     <div class="eq-foot">${low ? `<button class="btn-save" style="padding:6px 14px;font-size:.8rem" onclick="eqOpen('${r.id}')">Ouvrir la fiche</button>` : '<span class="eq-sub" style="color:var(--muted)">Lecture seule</span>'}</div></article>`;
 }
 function eqListHtml() {
