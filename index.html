@@ -8607,13 +8607,14 @@ function pcBadge() {                                            // pastille roug
 }
 function pcRenderUpcoming() {                                   // bandeau « Prochains rendez-vous » en haut du Pilotage (restaurant affiché + événements franchise, 14 jours)
   const box = document.getElementById('pcUpcoming'); if (!box) return;
+  if (!pcAccess()) { box.innerHTML = ''; return; }
   const today = pcIso(new Date()), lim = pcIso(new Date(Date.now() + 14 * 86400000)), r = typeof currentResto !== 'undefined' ? currentResto : 'FRANCHISE', one = r !== 'FRANCHISE' && r !== '__SEL__';
   const evs = pcAll().filter(e => (e.fin || e.periode) >= today && e.periode <= lim && (!one || pcForResto(e, r))).sort((a, b) => a.periode.localeCompare(b.periode) || a.type.localeCompare(b.type));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = e => { const d = e.periode < today ? today : e.periode; return PC_J[pcDow(d)].toLowerCase() + ' ' + pcFmt(d).slice(0, 5); };
   box.innerHTML = `<div class="pc-up"><b>📅 Prochains rendez-vous</b>${evs.slice(0, PC.upAll ? evs.length : 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}</span>`).join('')}${evs.length > 5 ? `<button type="button" class="pc-more" onclick="PC.upAll = !PC.upAll; pcRenderUpcoming()" title="${PC.upAll ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PC.upAll ? '▲ Réduire' : `+ ${evs.length - 5} autre${evs.length > 6 ? 's' : ''}`}</button>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
 }
-function pcGoPlan() { const r = typeof currentResto !== 'undefined' ? currentResto : 'ALL'; PC.resto = RESTOS.includes(r) ? r : 'ALL'; PC.ym = null; switchEspace('plancom'); }
+function pcGoPlan() { if (!pcAccess()) return; const r = typeof currentResto !== 'undefined' ? currentResto : 'ALL'; PC.resto = RESTOS.includes(r) ? r : 'ALL'; PC.ym = null; switchEspace('plancom'); }
 async function pcPull() {                                       // lecture légère de l'onglet PlanCom seul (le reste du dashboard se synchronise à son rythme)
   const url = (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.apps_script_url) || ''; if (!url) return;
   try { const r = await fetch(url + '?action=plancom&_=' + Date.now()), j = await r.json(); if (j && j.ok && Array.isArray(j.rows)) PLANCOM_SET(j.rows); } catch (e) {}
@@ -8638,6 +8639,7 @@ function pcGroup(list) {                                        // anciennes sai
   for (const k of Object.keys(g)) { const a = g[k]; if (a.length >= 2 && a.length === RESTOS.length && new Set(a.map(x => x.restaurant)).size === RESTOS.length) { a.forEach(x => drop.add(x)); out.push(Object.assign({}, a[0], { id: 'grp:' + a.map(x => x.id).join('~'), ids: a.map(x => x.id), restaurant: PC_FR })); } }
   return out.length ? list.filter(e => !drop.has(e)).concat(out) : list;
 }
+const pcAccess = () => { const r = typeof SB_DASH !== 'undefined' ? SB_DASH : null; return !r || typeof accEspLvl !== 'function' || accEspLvl(r, 'plancom') !== 0; };   // tuile « Plan de communication » à « aucun accès » : ni espace, ni bandeau « Prochains rendez-vous », ni lien
 const pcScoped = () => typeof SB_SCOPE !== 'undefined' && SB_SCOPE;                         // personne limitée à certains restaurants (RESTOS ne contient alors que les siens)
 const pcInScope = e => !pcScoped() || e.restaurant === PC_FR || RESTOS.includes(e.restaurant);   // elle ne voit que ses restaurants et les événements de toute la franchise (comme le serveur)
 const pcAll = () => pcGroup(PC.rows.map(e => PC.over[e.id] || e).filter(e => !PC.dels.has(e.id)).concat(PC.adds)).filter(pcInScope);
@@ -8653,6 +8655,7 @@ const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' 
 function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
 function pcRender() {
   const card = document.getElementById('pcCard'); if (!card) return;
+  if (!pcAccess()) { card.innerHTML = '<div class="pc-note">Tu n’as pas accès au Plan de communication.</div>'; return; }
   if (pcScoped() && PC.resto !== 'ALL' && !RESTOS.includes(PC.resto)) PC.resto = 'ALL';          // restaurant choisi hors du périmètre de la personne
   if (pcScoped() && RESTOS.length === 1) PC.resto = RESTOS[0];                                    // un seul restaurant : c'est lui, sans choix « tous »
   const [Y, M] = PC.ym.split('-').map(Number), view = PC.view || (window.matchMedia && matchMedia('(max-width:700px)').matches ? 'list' : 'cal');
@@ -11793,7 +11796,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261117-181723';
+const BUILD_VERSION = '20261117-181954';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

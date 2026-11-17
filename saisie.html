@@ -4758,6 +4758,7 @@ function pcbHeure(v) {                                           // heure d'un �
 }
 function pcbShow() {
   const box = document.getElementById('pcBanner'); if (!box) return;
+  if (typeof SB_RIGHTS !== 'undefined' && SB_RIGHTS && typeof accLvl === 'function' && accLvl(SB_RIGHTS, 'com') === 0) { box.innerHTML = ''; return; }          // tuile « Plan de communication » à « aucun accès » : pas de bandeau
   if (!curResto) { box.innerHTML = ''; return; }
   const iso = d => d.toISOString().slice(0, 10), today = iso(new Date()), lim = iso(new Date(Date.now() + 14 * 86400000)), J = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
   const evs = PCB.rows.map(e => ({ e, p: String(e.periode || '').slice(0, 10), f: String(e.fin || e.periode || '').slice(0, 10) })).filter(x => x.p && x.f >= today && x.p <= lim && (x.e.restaurant === curResto || x.e.restaurant === 'FRANCHISE')).sort((a, b) => a.p.localeCompare(b.p));
