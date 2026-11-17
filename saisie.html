@@ -3279,7 +3279,7 @@ function bdSharePaint() { wfBarPaint(); }
 .lv-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:baseline; }`;
   document.head.appendChild(st);
 })();
-const LV = { ops: [], rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, stale: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
+const LV = { ops: [], dsig: {}, dat: {}, ddoc: {}, doffer: {}, dchk: {}, draftOff: false, drafting: false, rows: {}, chains: {}, level: null, shown: {}, stash: {}, sig: {}, flash: {}, journal: {}, stale: {}, busy: null, at: 0, backend: null, busyAct: false, edit: {}, reason: {} };
 const LV_NAME = { directeur: 'Directeur', superviseur: 'Superviseur', franchise: 'Franchisé' }, LV_RK = { directeur: 0, superviseur: 1, franchise: 2 };
 const lvK = (r, Y) => r + '|' + Y;
 // Dernière version enregistrée connue de CET appareil pour mon niveau (version + contenu + empreinte de l'écran à ce moment) : sert à fusionner ligne par ligne, sans rien perdre,
@@ -3408,6 +3408,7 @@ async function lvEnter(r, Y) {                                                  
       if (st0) { delete LV.stash[key]; lvApply(r, st0, undefined, lvMy(r)); LV.sig[key] = LV.sig[key]; } else await lvLoadMine(r, Y);
     } else if (LV.sig[key] === undefined && lvRow(r, Y, lvMy(r)) && !wfHasContent(wfCollect(r, Y))) await lvLoadMine(r, Y);    // appareil vide : je reprends ma version enregistrée
     else if (LV.sig[key] === undefined && lvIsOwner(r) && !lvRow(r, Y, lvMy(r)) && !wfHasContent(wfCollect(r, Y))) { const ch = lvChain(r); for (let k = ch.indexOf(lvMy(r)) - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { await lvCopyAsMine(r, Y, ch[k]); break; } }
+    if (!lvIsRO(r, Y)) await lvDraftCheck(r, Y);
   } finally { LV.entering = false; wfBarPaint(); }
 }
 async function lvViewSet(level) {
@@ -3445,7 +3446,7 @@ async function lvSave(silent) {
     let j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r), base_version: m ? m.version : undefined });
     if (j.conflict) { await lvRefresh(true); LV.busyAct = false; if (await lvSync(r, Y)) return false; LV.busyAct = true; if (!confirm("Une version plus récente de ta saisie a été enregistrée depuis un autre appareil.\nL'écraser avec cet écran ?")) { lvMsg(r, Y, 'err', 'Enregistrement annulé : recharge ta version (bouton « Charger ma version enregistrée »).'); return false; } j = await lvCall('save', r, Y, { donnees, salaires: wfEdgSeg(r) }); }
     if (!j.ok) { lvMsg(r, Y, 'err', 'Erreur : ' + j.error); return false; }
-    LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.version, mine);
+    LV.sig[key] = wfSig(r, Y); lvBaseSet(r, Y, my, j.version, mine); lvDraftForget(key);
     const prevDoc = (B0 && B0.doc) || old || lvEmptyDoc();
     const feed = lvFeeder(r) ? await lvFeedMsg(r, Y, prevDoc, mine) : '';
     await lvRefresh(true); lvMsg(r, Y, 'ok', 'Enregistré' + feed + '.'); return true;
@@ -3571,7 +3572,7 @@ async function lvValidate() {
       for (let mth = 1; mth <= 12; mth++) delete PV.drafts[pvKey(r, Y + '-' + pad2(mth))];
       pvDraftPersist(); PV.resto = null; PV.loadedYm = null;
     }
-    LV.sig[lvK(r, Y)] = wfSig(r, Y); LV.view[lvK(r, Y)] = 'mine'; delete LV.shown[lvK(r, Y)]; delete LV.stash[lvK(r, Y)]; delete LV.edit[key]; delete LV.reason[key];
+    lvDraftForget(lvK(r, Y)); LV.sig[lvK(r, Y)] = wfSig(r, Y); LV.view[lvK(r, Y)] = 'mine'; delete LV.shown[lvK(r, Y)]; delete LV.stash[lvK(r, Y)]; delete LV.edit[key]; delete LV.reason[key];
     await lvRefresh(true); lvMsg(r, Y, 'ok', next ? 'Saisie validée et envoyée au ' + LV_NAME[next] + '. Tu es en consultation.' : 'Prévisionnel ' + Y + ' publié dans le Sheet.'); await lvEnter(r, Y);
   } finally { LV.busyAct = false; }
 }
@@ -3601,8 +3602,53 @@ async function lvUnlock(level) {
   await lvRefresh(true); if (self) { LV.view[lvK(r, Y)] = 'mine'; if (lvIsOwner(r)) { LV.edit[lvK(r, Y)] = true; LV.reason[lvK(r, Y)] = 'déblocage par le propriétaire'; } await lvLoadMine(r, Y); } lvMsg(r, Y, 'ok', 'Saisie débloquée.'); await lvEnter(r, Y);
 }
 const lvLoadClick = async () => { const r = curResto, Y = lvYearOf(); if (!confirm('Charger ta version enregistrée ? Ce qui est à l\'écran et non enregistré sera remplacé.')) return; await lvLoadMine(r, Y); lvMsg(r, Y, 'ok', 'Ta version enregistrée est à l\'écran.'); };
+// ── BROUILLON AUTOMATIQUE (serveur, une copie par personne) : ce que tu saisis est conservé toutes les 20 s dans le Sheet (onglet « BrouillonsNiveaux »), SÉPARÉ de la version enregistrée :
+// il ne peut jamais écraser une version. Il disparaît quand tu enregistres ou valides. Si ton écran est perdu ou ancien, le brouillon t'est proposé (jamais repris sans ton clic).
+async function lvDraftCall(act, r, Y, extra) {
+  if (LV.draftOff) return { ok: false, off: true }; const p = lvProf(r); if (!p) return { ok: false };
+  try { const j = await postJson(Object.assign({ action: 'lv_' + act, pwd: p.h, restaurant: r, year: String(Y) }, extra || {})); if (!j.ok && /action inconnue/.test(j.error || '')) LV.draftOff = true; return j; } catch (e) { return { ok: false }; }
+}
+const lvDraftable = (r, Y) => !!r && !!Y && wfInCircuit(r, Y) && lvEditable(r, Y) && lvView(r, Y) === 'mine' && !lvIsOwner(r);
+const lvUnsavedNow = (r, Y) => { const key = lvK(r, Y); try { return LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y); } catch (e) { return false; } };
+const lvDraftAt = (r, Y) => { const key = lvK(r, Y); try { return LV.dat[key] && LV.dsig[key] === wfSig(r, Y) ? LV.dat[key] : null; } catch (e) { return null; } };
+const lvHM = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+function lvDraftForget(key) { delete LV.dsig[key]; delete LV.dat[key]; delete LV.ddoc[key]; delete LV.doffer[key]; }
+async function lvDraftTick() {
+  const r = curResto, Y = lvYearOf(); if (!r || LV.draftOff || LV.drafting || LV.busyAct || LV.entering || LV.syncing || LV.relaying) return false;
+  if (!(curTab === 'budget' || curTab === 'prevca') || !lvDraftable(r, Y)) return false;
+  const key = lvK(r, Y); if (!LV.dchk[key] || LV.doffer[key]) return false;                  // le brouillon déjà sur le serveur a d'abord été examiné ; s'il est proposé, on ne l'écrase pas avant le choix de la personne
+  const sig = wfSig(r, Y); if (LV.sig[key] === sig || LV.dsig[key] === sig) return false;     // rien de nouveau (déjà enregistré, ou déjà conservé en brouillon)
+  const mine = wfCollect(r, Y); if (!wfHasContent(mine)) return false;
+  const last = LV.ddoc[key]; if (last && lvLoss(last, mine).length) return false;              // écran bien plus vide que mon dernier brouillon : on garde le bon
+  const donnees = JSON.stringify(mine); if (donnees.length > 45000) return false;
+  LV.drafting = true;
+  try { const m = lvRow(r, Y, lvMy(r)), B = lvBaseGet(r, Y, lvMy(r)), j = await lvDraftCall('draft_save', r, Y, { donnees, salaires: wfEdgSeg(r), base_version: B ? B.version : (m ? m.version : 0) }); if (j.ok) { LV.dsig[key] = sig; LV.dat[key] = Date.now(); LV.ddoc[key] = mine; } return !!j.ok; } finally { LV.drafting = false; }
+}
+async function lvDraftCheck(r, Y) {                                                          // une fois par ouverture : y a-t-il un brouillon non enregistré, plus récent que ma dernière sauvegarde ?
+  const key = lvK(r, Y); if (LV.dchk[key] || LV.draftOff || !lvDraftable(r, Y)) return; LV.dchk[key] = true;
+  const j = await lvDraftCall('draft_load', r, Y, {}); if (!j.ok || !j.draft) return;
+  const P = wfParse(j.draft.donnees); if (!P) return; LV.ddoc[key] = P;
+  const m = lvRow(r, Y, lvMy(r)), t = Date.parse(j.draft.at); if (m && (+j.draft.base_version || 0) < m.version) return;                // un enregistrement supprime toujours mon brouillon : s'il en reste un, il date d'après ; sauf s'il est bâti sur une version plus ancienne que la mienne (appareil en retard) : jamais proposé
+  if (lvLinesSig(P) === lvLinesSig(wfCollect(r, Y))) { LV.dsig[key] = wfSig(r, Y); LV.dat[key] = isNaN(t) ? Date.now() : t; return; }
+  LV.doffer[key] = j.draft; wfBarPaint();
+}
+async function lvDraftTake() {
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y), d = LV.doffer[key]; if (!d) return; const P = wfParse(d.donnees); if (!P) return;
+  if (!confirm('Reprendre ce brouillon ?\nCe qui est à l\'écran est remplacé (une copie reste gardée de côté sur cet appareil). Rien n\'est enregistré tant que tu ne cliques pas sur « Enregistrer ».')) return;
+  const now = wfCollect(r, Y); if (wfHasContent(now)) wfSafeSave(r, Y, now, P);
+  lvApply(r, P, await lvSals(r, Y, lvMy(r), d.salaires), lvMy(r)); LV.sig[key] = '~'; delete LV.shown[key]; delete LV.stash[key]; delete LV.doffer[key]; LV.ddoc[key] = P; LV.dsig[key] = wfSig(r, Y); LV.dat[key] = Date.now();
+  lvMsg(r, Y, 'ok', 'Brouillon repris : vérifie puis enregistre.');
+}
+async function lvDraftIgnore() {
+  const r = curResto, Y = lvYearOf(), key = lvK(r, Y); if (!LV.doffer[key]) return; if (!confirm('Ignorer ce brouillon ? Il sera supprimé du Sheet de travail (une copie reste dans la sauvegarde de nuit).')) return;
+  await lvDraftCall('draft_clear', r, Y, {}); delete LV.doffer[key]; delete LV.ddoc[key]; wfBarPaint();
+}
+function lvDraftOfferHtml(r, Y) {
+  const d = LV.doffer[lvK(r, Y)]; if (!d) return ''; const P = wfParse(d.donnees), c = P ? lvReal(P) : { c: 0, b: 0, d: 0 };
+  return `<div class="lv-st" style="background:rgba(217,119,6,.10);border-color:#d97706;color:#92400e;flex-wrap:wrap"><span><b>Brouillon non enregistré retrouvé</b> (${wfDate(d.at)} : ${c.c} jours de prévision, ${c.b} hypothèses, ${c.d} lignes de détail).</span><button class="lv-btn p" style="margin:0" onclick="lvDraftTake()">Reprendre ce brouillon</button><button class="lv-btn" style="margin:0" onclick="lvDraftIgnore()">Ignorer</button></div>`;
+}
 // ── Indicateur de mise à jour : une roue + un libellé tant qu'une opération est en cours (chargement, mise à jour de l'écran, enregistrement, validation…) ; sinon « À jour » / « Modifications non enregistrées » en direct ──
-const lvDirtyHtml = u => u ? '<b style="color:#b45309"><span class="lv-dot" style="background:#d97706"></span>Modifications non enregistrées</b>' : '<span style="color:#1e8449"><span class="lv-dot" style="background:#1e8449"></span>À jour</span>';
+const lvDirtyHtml = (u, d) => u ? '<b style="color:#b45309"><span class="lv-dot" style="background:#d97706"></span>Modifications non enregistrées</b>' + (d ? ' <span style="color:var(--muted);font-weight:600">(brouillon conservé automatiquement à ' + lvHM(d) + ')</span>' : '') : '<span style="color:#1e8449"><span class="lv-dot" style="background:#1e8449"></span>À jour</span>';
 function lvStatusHtml() {
   const o = LV.ops.filter(x => x.show).pop();
   if (o) return `<div class="lv-st" role="status" aria-live="polite"><span class="lv-spin"></span>${escH(o.label)}</div>`;
@@ -3637,7 +3683,7 @@ function lvBarHtml(r, Y) {
   else if (ed) {
     const unsaved = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y);
     const pvr = i > 0 ? lvRow(r, Y, ch[i - 1]) : null, bypass = lvIsOwner(r) && i > 0 && !(pvr && (pvr.statut === 'valide' || pvr.statut === 'publie'));
-    head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. <span id="lvDirty">${lvDirtyHtml(unsaved)}</span>`;
+    head = `<b>Ta saisie (${LV_NAME[my]})</b>${lvIsOwner(r) ? ' <span class="hint" style="margin:0">· correction exceptionnelle (motif : ' + escH(LV.reason[key] || '') + ')</span>' : ''} — ${mrow ? 'dernier enregistrement : ' + wfDate(mrow.at) : 'pas encore enregistrée'}. <span id="lvDirty">${lvDirtyHtml(unsaved, unsaved ? lvDraftAt(r, Y) : null)}</span>`;
     if (lvFeeder(r)) head += ` <span class="hint" style="margin:0">· ce que tu enregistres alimente automatiquement le ${ch.slice(0, i).map(n => LV_NAME[n]).join(' et le ')} (jamais ce qui est déjà validé, jamais leurs propres modifications).</span>`;
     let lowK = null; if (bypass && !mrow) for (let k = i - 1; k >= 0; k--) if (lvRow(r, Y, ch[k])) { lowK = ch[k]; break; }
     const canVal = lvPrevOk(r, Y);
@@ -3658,7 +3704,7 @@ function lvBarHtml(r, Y) {
     act += `<button class="lv-btn" onclick="lvOwnerEdit()">Modifier (correction exceptionnelle)</button>`;
   } else head = `<b>En attente de la validation du ${LV_NAME[ch[i - 1]] || 'niveau précédent'}</b> : tu consultes sa saisie ; la tienne démarrera d'une copie dès sa validation.`;
   const msg = fl ? `<span class="save-msg ${fl[0]}">${escH(fl[1])}</span>` : '';
-  return box(LV.ops.some(x => x.show) ? 'busy' : '', `${lvStatusHtml()}${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
+  return box(LV.ops.some(x => x.show) ? 'busy' : '', `${lvStatusHtml()}${view === 'mine' && ed ? lvDraftOfferHtml(r, Y) : ''}${view === 'mine' ? wfSafeHtml(r, Y) : ''}<div class="lv-chips">${chips}</div><div class="lv-line">${head}</div><div class="lv-act">${act}${msg}</div>`);
 }
 function wfBarHtml(r, Y) { return lvBarHtml(r, Y); }
 function wfBarCore(r, Y) { return lvBarHtml(r, Y); }
@@ -3704,6 +3750,9 @@ function renderValid() {
   const so = simSet; simSet = function (k, v) { const x = so.apply(this, arguments); if (k === 'ty') setTimeout(() => lvEnter(curResto, +SIM.ty), 250); return x; };
   setInterval(() => { if (document.visibilityState === 'visible' && curResto && (curTab === 'prevca' || curTab === 'budget')) lvRefresh(true).then(() => lvEnter(curResto, lvYearOf())); }, 60000);
   setTimeout(() => lvRefresh(true).then(() => wfBarPaint()), 1500);
+  setInterval(() => { if (document.visibilityState === 'visible') lvDraftTick(); }, 20000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') lvDraftTick(); });
+  window.addEventListener('beforeunload', e => { try { const r = curResto, Y = lvYearOf(); if (lvDraftable(r, Y) && lvUnsavedNow(r, Y) && !lvDraftAt(r, Y)) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });     // modifications ni enregistrées ni conservées en brouillon : le navigateur prévient avant de quitter
   lvSave = lvOpWrap(lvSave, 'Enregistrement en cours…', true); lvValidate = lvOpWrap(lvValidate, 'Validation en cours…', true);
   lvRequest = lvOpWrap(lvRequest, 'Demande de déblocage en cours…', true); lvUnlock = lvOpWrap(lvUnlock, 'Déblocage en cours…', true);
   lvLoadMine = lvOpWrap(lvLoadMine, 'Chargement de ta version enregistrée…'); lvShow = lvOpWrap(lvShow, 'Chargement de la version…'); lvCopyAsMine = lvOpWrap(lvCopyAsMine, 'Chargement de la version…');
@@ -3711,7 +3760,7 @@ function renderValid() {
   setInterval(() => {                                                                          // « À jour » / « Modifications non enregistrées » suit la saisie en direct (sans repeindre tout le bandeau)
     const el = document.getElementById('lvDirty'); if (!el || document.visibilityState !== 'visible' || !curResto || LV.ops.length) return;
     const r = curResto, Y = lvYearOf(), key = lvK(r, Y); let u; try { u = LV.sig[key] === undefined ? wfHasContent(wfCollect(r, Y)) : LV.sig[key] !== wfSig(r, Y); } catch (e) { return; }
-    const nv = u ? '1' : '0'; if (el.dataset.u !== nv) { el.dataset.u = nv; el.innerHTML = lvDirtyHtml(u); }
+    const d = u ? lvDraftAt(r, Y) : null, nv = (u ? '1' : '0') + (d ? d : ''); if (el.dataset.u !== nv) { el.dataset.u = nv; el.innerHTML = lvDirtyHtml(u, d); }
   }, 1500);
 })();
 // ── Prévisionnel mensuel : le Budget & PNL est la SOURCE d'information (comme les saisies déjà présentes) ──
