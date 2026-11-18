@@ -9718,6 +9718,14 @@ function igGo() {
 #espace-planning .plg-ev{display:block;font-size:.62rem;line-height:1.25;padding:2px 4px;border-radius:4px;margin:2px 0;text-align:left;background:rgba(8,145,178,.14);color:#0e7490;font-weight:700}
 #espace-planning .plg-camp{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:800;padding:4px 10px;border-radius:8px;background:color-mix(in srgb,#ea580c 11%,transparent);color:#9a3412;border-left:4px solid #ea580c;margin:0 6px 6px 0}
 #espace-planning .plg-box{border-radius:10px;padding:8px 12px;font-size:.78rem;margin-top:8px}
+#espace-planning .plg-sf{margin:4px 0 8px;padding:10px 12px;border:1.5px dashed var(--border);border-radius:12px;background:var(--card2)}
+#espace-planning .plg-sfm{font-size:.74rem;color:var(--muted);line-height:1.5;margin-bottom:8px}
+#espace-planning .plg-sfw{overflow-x:auto}
+#espace-planning .plg-sf table{border-collapse:separate;border-spacing:4px 0;min-width:560px;width:100%;table-layout:fixed}
+#espace-planning .plg-sf th{font-size:.68rem;font-weight:800;color:var(--muted);text-align:center;padding:2px 0}
+#espace-planning .plg-sf td{vertical-align:top;padding:2px 0}
+#espace-planning .plg-sf td .plg-in{display:block;width:100%;box-sizing:border-box;margin:0 0 4px;padding:5px 4px;text-align:center;font-size:.76rem}
+#espace-planning .plg-sfb{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
 #espace-planning .plg-alert{background:#fdecea;border:1px solid #f1b0a8;color:#a93226}
 #espace-planning .plg-ok{background:#e8f6ee;border:1px solid #b6e2c8;color:#1e8449}
 #espace-planning .plg-rem{background:var(--card2);border:1px solid var(--border);color:var(--muted)}
@@ -10259,7 +10267,7 @@ function plgRender() {
   h += '<div class="plg-tb">' + defs.map(d => '<button type="button" class="plg-tile ' + d[4] + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '" aria-expanded="' + (PLG.tile === d[0]) + '" title="' + plgE(d[2]) + '" style="' + tst(d) + '" onclick="plgTile(\'' + d[0] + '\')"><span class="ic">' + plgI(d[1]) + '</span><span class="tx"><span class="t1">' + (d[6] || d[2]) + '</span><span class="t2">' + plgE(d[3]) + '</span></span></button>').join('') + '</div>';
   h += defs.map(d => '<div class="plg-tp' + (PLG.tile === d[0] ? ' on' : '') + '" data-k="' + d[0] + '"><div class="plg-tph"><b class="plg-tpt" style="' + tst(d) + '"><span class="ic">' + plgI(d[1]) + '</span>' + d[2] + '</b><button type="button" class="plg-btn" style="padding:2px 10px" onclick="plgTile(\'' + d[0] + '\')" aria-label="Fermer">✕</button></div>' + d[5] + '</div>').join('');
   h += gridH;
-  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">' + (can ? '<button class="plg-btn pri" id="plgSave" onclick="plgSave()" ' + (PLG.dirty ? '' : 'disabled') + '>Enregistrer la semaine</button>' : '<span style="font-size:.76rem;color:var(--muted)">Consultation seulement.</span>') + (can && plgSfOn() ? '<button class="plg-btn" id="plgSfApply" onclick="plgSfApply()" title="Remplit les cases vides de la période affichée avec les shifts fixes de l\'équipe (jamais une case déjà saisie). Rien n\'est enregistré avant « Enregistrer la semaine ».">Appliquer les shifts fixes</button>' : '') + '<button class="plg-btn" id="plgExpOpen" onclick="plgExpOpen()" title="Exporter en Excel ou imprimer / enregistrer en PDF, pour les dates de votre choix">Exporter / Imprimer…</button><span id="plgMsg" style="font-size:.76rem"></span></div>';
   if (PLG.conflict) h += '<div class="plg-box plg-alert">Cette semaine a été enregistrée par quelqu\'un d\'autre pendant que vous la modifiiez. <button class="plg-btn" onclick="plgReload()">Voir sa version</button> <button class="plg-btn" onclick="plgForce()">Garder ma version</button></div>';
   card.innerHTML = h; plgMsg(PLG.msg[0], PLG.msg[1]); plgChAfter();
 }
@@ -10507,8 +10515,9 @@ function plgTeamRow(p, can) {
       + '<span id="plgMfj" style="' + (fj ? '' : 'display:none;') + 'font-size:.76rem;color:var(--muted)">Forfait 218 jours</span>'
       + '<button class="plg-btn pri" onclick="plgTeamSave(\'' + p.id + '\')">Enregistrer</button><button class="plg-btn" onclick="plgTeamEdit(\'\')">Annuler</button></div>';
   }
-  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;font-size:.78rem;padding:5px 0;border-top:1px solid var(--border)"><span><b>' + plgE(p.prenom) + '</b> · ' + plgE(PLG_FN[p.fonction] || p.fonction) + ' · ' + (plgFj(p) ? 'forfait 218 jours' : (p.contrat === 'temps_partiel' ? 'temps partiel ' : 'temps plein ') + plgE(+p.heures_hebdo) + ' h') + '</span>'
-    + (can ? '<span style="display:flex;gap:6px"><button class="plg-btn" style="padding:2px 8px" onclick="plgTeamEdit(\'' + p.id + '\')">Modifier</button><button class="plg-btn" style="padding:2px 8px" onclick="plgTeamOff(\'' + p.id + '\')">Retirer</button></span>' : '') + '</div>';
+  const row = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;font-size:.78rem;padding:5px 0;border-top:1px solid var(--border)"><span><b>' + plgE(p.prenom) + '</b> · ' + plgE(PLG_FN[p.fonction] || p.fonction) + ' · ' + (plgFj(p) ? 'forfait 218 jours' : (p.contrat === 'temps_partiel' ? 'temps partiel ' : 'temps plein ') + plgE(+p.heures_hebdo) + ' h') + '</span>'
+    + (can ? '<span style="display:flex;gap:6px">' + (plgSfOn() ? '<button class="plg-btn" style="padding:2px 8px" onclick="plgSfOpen(\'' + p.id + '\')" title="Horaires qui reviennent chaque semaine : le directeur les pose dans le planning avec « Appliquer les shifts fixes »">Shifts fixes' + (plgSfN(p) ? ' · ' + plgSfN(p) + ' j' : '') + '</button>' : '') + '<button class="plg-btn" style="padding:2px 8px" onclick="plgTeamEdit(\'' + p.id + '\')">Modifier</button><button class="plg-btn" style="padding:2px 8px" onclick="plgTeamOff(\'' + p.id + '\')">Retirer</button></span>' : '') + '</div>';
+  return row + (can && plgSfOn() && PLG.sf && PLG.sf.id === p.id && PLG.sf.resto === PLG.resto ? plgSfEditor(p) : '');
 }
 function plgTeamEdit(id) { PLG.editId = id || null; plgRender(); }
 function plgEdFn() { const fj = plgFj({ fonction: document.getElementById('plgMf').value }); ['plgMk', 'plgMh'].forEach(i => { document.getElementById(i).style.display = fj ? 'none' : ''; }); document.getElementById('plgMfj').style.display = fj ? '' : 'none'; }
@@ -10532,6 +10541,62 @@ async function plgTeamAdd() {
   PLG.team.push((r.j && r.j[0]) || body); plgRender(); plgMsg('✓ ' + n + ' ajouté(e) à l\'équipe.', 'ok');
 }
 async function plgTeamOff(id) { const p = PLG.team.find(x => x.id === id); if (!p || !confirm('Retirer ' + p.prenom + ' de l\'équipe ? Ses plannings passés restent enregistrés.')) return; const r = await plgApi('/rest/v1/equipe?id=eq.' + id, 'PATCH', { actif: false }, { Prefer: 'return=representation' }); if (!r.ok || (Array.isArray(r.j) && !r.j.length)) { plgMsg('Retrait refusé', 'err'); return; } PLG.team = PLG.team.filter(x => x.id !== id); plgRender(); plgMsg('✓ ' + p.prenom + ' retiré(e) de l\'équipe.', 'ok'); }
+// ── Shifts fixes : horaires qui reviennent chaque semaine, définis PAR PERSONNE (colonne « shifts_fixes » de l'équipe : 7 cases, dimanche en premier, écriture d'une case du planning) ──
+// Le directeur les pose lui-même, au moment de construire le planning (bouton « Appliquer les shifts fixes ») : seulement dans les cases VIDES de la période affichée, jamais par-dessus une case saisie ; rien n'est enregistré avant « Enregistrer la semaine ».
+const plgSfOn = () => PLG.team.some(p => 'shifts_fixes' in p);              // la base connaît la colonne (migration_planning_shifts_fixes.sql) ; sinon la fonction reste cachée
+const plgSfOf = p => { const a = p && p.shifts_fixes; return Array.isArray(a) && a.length === 7 ? a.map(x => String(x == null ? '' : x)) : ['', '', '', '', '', '', '']; };
+const plgSfN = p => plgSfOf(p).filter(x => x.trim()).length;
+function plgSfFromL(old, raw) {                                              // même règle qu'une case « lettre » du planning (plgSet), sur une case donnée
+  const codes = plgCodes(), P = plgParts(old), v = String(raw == null ? '' : raw).trim().slice(0, 30);
+  let l = v, h = P.h;
+  if (v && plgRng(v)) { l = P.l && !PLG_ABS.test(P.l) && !PLG_ABSW.test(P.l) ? P.l : ''; h = plgRng(v).norm; }
+  else { const sp = plgSplit(v); if (sp.code && sp.range) { l = sp.code; h = sp.range; } }
+  const k = l && codes.get(l.toUpperCase()), ab = !!(l && (PLG_ABS.test(l) || PLG_ABSW.test(l) || (k && PLG_ABS.test(k.code))));
+  if (ab) h = '';
+  return plgJoin(l, h, P.c, ab ? null : P.p);
+}
+function plgSfFromH(old, raw) { const P = plgParts(old), t = String(raw == null ? '' : raw).trim().slice(0, 56), g = t ? plgRng(t) : null; return plgJoin(P.l, g ? g.norm : t, P.c, P.p); }   // case « horaires » (plgSetH)
+function plgSfEditor(p) {
+  const cells = PLG.sf.cells, ord = Array.from({ length: 7 }, (_, i) => (plgOff() + i) % 7);
+  const th = ord.map(d => '<th>' + PLG_J[d] + '</th>').join('');
+  const td = ord.map(d => { const P = plgParts(cells[d]), g = P.h ? plgRng(P.h) : null, own = P.h ? (g ? plgDisp(g) : P.h) : '';
+    return '<td><input class="plg-in" id="plgSfL' + d + '" list="plgCodes" value="' + plgE(P.l) + '" maxlength="30" placeholder="lettre" onchange="plgSfSetL(' + d + ',this)" aria-label="Lettre ou texte libre, ' + plgE(p.prenom) + ', ' + PLG_JL[d] + '" title="Une lettre du restaurant (O, F, OFF…) ou un texte libre">'
+      + '<input class="plg-in" id="plgSfH' + d + '" value="' + plgE(own) + '" maxlength="56" placeholder="horaires" onchange="plgSfSetH(' + d + ',this)" aria-label="Horaires, ' + plgE(p.prenom) + ', ' + PLG_JL[d] + '" title="Horaires (8h-17h) ; vide = ceux de la lettre"></td>'; }).join('');
+  return '<div class="plg-sf"><div class="plg-sfm">Shifts fixes de <b>' + plgE(p.prenom) + '</b> : les horaires qui reviennent chaque semaine. Laissez vide un jour sans shift fixe. Ils ne se posent dans le planning que sur demande du directeur (bouton « Appliquer les shifts fixes »), dans les cases vides.</div>'
+    + '<div class="plg-sfw"><table><tr>' + th + '</tr><tr>' + td + '</tr></table></div>'
+    + '<div class="plg-sfb"><button class="plg-btn pri" onclick="plgSfSave()">Enregistrer</button><button class="plg-btn" onclick="plgSfWeek()" title="Remplit ces cases avec ce que ' + plgE(p.prenom) + ' a dans la semaine affichée du planning (rien n\'est enregistré avant « Enregistrer »)">Reprendre la semaine affichée</button><button class="plg-btn" onclick="plgSfClear()">Tout effacer</button><button class="plg-btn" onclick="plgSfCancel()">Annuler</button></div></div>';
+}
+function plgSfPaint(d) { const P = plgParts(PLG.sf.cells[d]), g = P.h ? plgRng(P.h) : null, a = document.getElementById('plgSfL' + d), b = document.getElementById('plgSfH' + d); if (a) a.value = P.l; if (b) b.value = P.h ? (g ? plgDisp(g) : P.h) : ''; }
+function plgSfSetL(d, el) { if (!PLG.sf) return; PLG.sf.cells[d] = plgSfFromL(PLG.sf.cells[d], el.value); plgSfPaint(d); }
+function plgSfSetH(d, el) { if (!PLG.sf) return; PLG.sf.cells[d] = plgSfFromH(PLG.sf.cells[d], el.value); plgSfPaint(d); }
+function plgSfOpen(id) { const p = PLG.team.find(x => x.id === id); if (!p || !plgCan()) return; PLG.sf = { id, resto: PLG.resto, cells: plgSfOf(p) }; PLG.tile = 'team'; plgRender(); }
+function plgSfCancel() { PLG.sf = null; plgRender(); }
+function plgSfClear() { if (!PLG.sf) return; PLG.sf.cells = ['', '', '', '', '', '', '']; plgRender(); }
+function plgSfWeek() {                                                       // reprend, dans l'éditeur seulement, la semaine affichée de cette personne
+  if (!PLG.sf) return; if (PLG.sf.cells.some(x => String(x).trim()) && !confirm('Remplacer les shifts fixes en cours de saisie par la semaine affichée ?')) return;
+  for (let i = 0; i < 7; i++) { const day = plgAdd(PLG.ws, i); PLG.sf.cells[plgD(day).getUTCDay()] = String(plgDay(PLG.sf.id, day) || ''); }
+  plgRender();
+}
+async function plgSfSave() {
+  const S = PLG.sf, p = S && PLG.team.find(x => x.id === S.id); if (!p) return;
+  const cells = S.cells.map(x => String(x || '').trim()), empty = !cells.some(Boolean);
+  const r = await plgApi('/rest/v1/equipe?id=eq.' + p.id, 'PATCH', { shifts_fixes: empty ? null : cells }, { Prefer: 'return=representation' });
+  if (!r.ok || (Array.isArray(r.j) && !r.j.length)) { plgMsg('Enregistrement refusé : ' + String((r.j && r.j.message) || 'droit insuffisant').replace(/^équipe : /, ''), 'err'); return; }
+  p.shifts_fixes = empty ? null : cells; PLG.sf = null; plgRender();
+  plgMsg(empty ? '✓ Shifts fixes de ' + p.prenom + ' supprimés.' : '✓ Shifts fixes de ' + p.prenom + ' enregistrés (' + cells.filter(Boolean).length + ' jour' + (cells.filter(Boolean).length > 1 ? 's' : '') + '). Aucun planning déjà saisi n\'est modifié.', 'ok');
+}
+async function plgSfApply() {                                                // pose les shifts fixes dans les cases vides de la période affichée
+  if (!plgCan() || !plgSfOn()) return;
+  if (!PLG.team.some(p => plgSfN(p))) { plgMsg('Aucun shift fixe défini : tuile « Équipe », puis « Shifts fixes » sur la ligne d\'une personne.', 'err'); return; }
+  await plgEnsure();
+  const todo = [];
+  PLG.team.forEach(p => { const sf = plgSfOf(p); for (let i = 0; i < 7 * PLG.nw; i++) { const day = plgAdd(PLG.ws, i), v = sf[plgD(day).getUTCDay()].trim(); if (v && !String(plgDay(p.id, day) || '').trim()) todo.push([p, day, v]); } });
+  if (!todo.length) { plgMsg('Rien à remplir : toutes les cases concernées de la période affichée sont déjà saisies.', 'ok'); return; }
+  const who = new Set(todo.map(x => x[0].id)).size;
+  if (!confirm('Remplir ' + todo.length + ' case' + (todo.length > 1 ? 's' : '') + ' vide' + (todo.length > 1 ? 's' : '') + ' (' + who + ' personne' + (who > 1 ? 's' : '') + ') avec les shifts fixes, du ' + plgFr(PLG.ws) + ' au ' + plgFr(plgAdd(PLG.ws, 7 * PLG.nw - 1)) + ' ?\nLes cases déjà saisies ne sont pas touchées. Rien n\'est enregistré avant « Enregistrer la semaine ».')) return;
+  todo.forEach(([p, day, v]) => plgSetDay(p.id, day, v));
+  plgRender(); plgMsg('✓ ' + todo.length + ' case' + (todo.length > 1 ? 's' : '') + ' remplie' + (todo.length > 1 ? 's' : '') + ' avec les shifts fixes. Vérifiez puis cliquez sur « Enregistrer la semaine ».', 'ok');
+}
 // ── actions ──
 const plgCellGet = (pid, off) => plgDay(pid, plgAdd(PLG.ws, off));
 function plgSetDay(pid, date, v) {                                           // écrit une case par sa date (la semaine enregistrée dimanche → samedi est créée si besoin)
@@ -10652,7 +10717,7 @@ document.addEventListener('wheel', e => {
   if (PLGP.s && PLGP.s.on) return; if (!plgPanStart()) return; e.preventDefault();
   PLGP.dx -= e.deltaX; plgPanApply(); plgPanFlush(); clearTimeout(PLGP.wt); PLGP.wt = setTimeout(plgPanEnd, 150);
 }, { passive: false });
-function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
+function plgSetResto(k) { if (PLG.dirty && !confirm('Des modifications ne sont pas enregistrées. Continuer ?')) return; PLG.dirty = false; PLG.dk.clear(); PLG.editId = null; PLG.sf = null; PLG.resto = k; PLG.def = PLG.def; plgLoad(); }
 async function plgSetMod(v) {
   const r = await plgApi('/rest/v1/rpc/planning_resto_save', 'POST', { f: PLG.FR, resto: PLG.resto, p_modulation: !!v, p_debut: PLG.cfg.debut_cycle, p_seuils: PLG.cfg.seuils || {} });
   if (!r.ok) { plgMsg('Réglage refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^planning : /, ''), 'err'); plgRender(); return; } PLG.cfg.modulation = !!v; plgRender(); plgMsg(v ? '✓ Ce restaurant passe en modulation (cycles de 13 semaines).' : '✓ Ce restaurant passe à 35 h par semaine.', 'ok');
@@ -11796,7 +11861,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261117-181954';
+const BUILD_VERSION = '20261118-090605';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
