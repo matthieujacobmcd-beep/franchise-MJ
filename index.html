@@ -223,7 +223,7 @@ const SBA = (() => {
   // ── APERÇU (« voir le site comme ce profil ») : page ouverte avec ?apercu=1 et les droits simulés dans l'adresse (#apercu=…). LECTURE SEULE : aucune écriture partie vers l'Apps Script ni Supabase,
   //    aucune écriture dans le stockage local (sauf la session, jamais renouvelée ici), ni déconnexion, ni journal de connexion. Les droits simulés remplacent mes_droits ; le serveur, lui, ne voit que le jeton réel.
   const APERCU = (() => { if (!/[?&]apercu=1(&|$)/.test(location.search)) return null; try { return JSON.parse(decodeURIComponent(String(location.hash || '').replace(/^#apercu=/, ''))) || {}; } catch (e) { return {}; } })();
-  const RPC_READ = /\/rest\/v1\/rpc\/(mes_droits|acces_218_liste|connexions_liste|planning_restos|semaine_reglage|primes_frm_personnes)(\?|$)/, READ_POST = /^(read|wf_load|wf_list|bc_load|bc_list|px_load|px_journal|pb_cfg_load|pb_list|pb_load|wf_archives|rv_load|acc_login|acc_list)$/;
+  const RPC_READ = /\/rest\/v1\/rpc\/(mes_droits|acces_218_liste|connexions_liste|planning_restos|securite_restos|semaine_reglage|primes_frm_personnes)(\?|$)/, READ_POST = /^(read|wf_load|wf_list|bc_load|bc_list|px_load|px_journal|pb_cfg_load|pb_list|pb_load|wf_archives|rv_load|acc_login|acc_list)$/;
   const apercuOk = (url, method, body) => { if (!APERCU) return true; method = String(method || 'GET').toUpperCase(); if (method === 'GET' || method === 'HEAD') return true; if (RPC_READ.test(String(url))) return true; let a = ''; try { a = JSON.parse(String(body || '{}')).action || ''; } catch (e) {} return READ_POST.test(a); };
   const APERCU_REFUS = "Aperçu : lecture seule, rien n'est enregistré.";
   let gateRes, refreshing = null, rightsC = null, legacyOk = false;
@@ -473,7 +473,7 @@ const SBA = (() => {
 // Les droits viennent de la base (poste + écarts de la personne, fonction mes_droits : champ « acces »). Une personne sans « acces » (base pas encore migrée) garde le fonctionnement d'avant.
 const ACC_CAT = [
   ['Page de saisie', [['q', 'Quotidien', 'tab:quotidien'], ['h', 'Hebdomadaire', 'tab:hebdomadaire'], ['m', 'Mensuel', 'tab:mensuel'], ['p', 'Ponctuel (visites et audits)', 'tab:ponctuel'], ['pv', 'Prévisionnel', 'tab:previsionnel'], ['pca', 'Prévision CA', 'tab:prevca'], ['bud', 'Budget et PNL', 'tab:budget'], ['val', 'Validation du prévisionnel', 'tab:valid'], ['prix', 'Prix franchise', 'tab:prix|esp:prix'], ['pb', 'Point Business', 'tab:pb|esp:pb'], ['doc', 'Documents', 'tab:documents']]],
-  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['pia', 'Prédiction IA (bannière du Pilotage)', ''], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['pchat', 'Planning · Chat du restaurant', ''],['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
+  ['Dashboard', [['pil', 'Pilotage opérationnel', 'esp:pilotage'], ['pia', 'Prédiction IA (bannière du Pilotage)', ''], ['perf', 'Performance', 'esp:performance'], ['itv', 'Interventions', 'esp:interventions'], ['form', 'Formation', 'esp:formation'], ['mkt', 'Marketing', 'esp:marketing'], ['com', 'Plan de communication', 'esp:plancom'], ['plan', 'Planning EDG', 'esp:planning'], ['sec', 'Registre de sécurité', 'esp:securite'], ['pchat', 'Planning · Chat du restaurant', ''],['act', 'Actualité restaurant', 'esp:actualite'], ['tps', 'Suivi temps de travail', 'tab:tps|esp:ext-pointage'], ['rev', 'Business Review', 'esp:revue'], ['prim', 'Primes (Pilotage)', ''], ['ffoc', 'Évaluations : Focus', ''], ['fcfv', 'Évaluations : CFV (VSC)', ''], ['fcer', 'Évaluations : Certification', '']]],
   ['Administration', [['eq', 'Équipes et accès', 'tab:equipes'], ['sal', 'Salaires par poste', ''], ['ban', 'Bannières', '']]]];
 { const _c = (typeof FRANCHISE_CFG !== 'undefined' ? FRANCHISE_CFG : (typeof CFG !== 'undefined' ? CFG : {})); if (!((_c.modules || {}).primes === 'on')) ACC_CAT.forEach(g => { g[1] = g[1].filter(t => !['prim', 'ffoc', 'fcfv', 'fcer'].includes(t[0])); }); }   // la tuile « Primes » n'existe que pour les franchises dont la config l'active
 const accMax = k => k === 'pia' ? 1 : (k === 'pb' || k === 'ffoc' || k === 'fcfv' || k === 'fcer') ? 3 : 2;   // toutes les tuiles : aucun / consultation / modification (Point Business : 4 niveaux ; « Suivi du temps de travail » : le niveau ne règle que la visibilité, les droits d'écriture sont ceux de l'application forfait jours)
@@ -514,11 +514,12 @@ function dashScope(r) {                                              // personne
 function dashPills(r) {                                             // espaces masqués quand la tuile correspondante est à « aucun accès » (anciens droits : tout reste visible)
   if (!r || !r.acces) return;
   document.querySelectorAll('.espace-pill[data-esp]').forEach(b => { const lv = accEspLvl(r, b.dataset.esp); if (lv === 0) b.style.display = 'none'; });
-  if (accEspLvl(r, currentEspace || 'pilotage') === 0) { const ok = ['pilotage', 'performance', 'interventions', 'formation', 'marketing', 'plancom', 'planning', 'actualite', 'prix', 'pb', 'revue'].find(e => accEspLvl(r, e) !== 0 && document.querySelector('.espace-pill[data-esp="' + e + '"]')); if (ok && typeof switchEspace === 'function') switchEspace(ok); }
+  if (accEspLvl(r, currentEspace || 'pilotage') === 0) { const ok = ['pilotage', 'performance', 'interventions', 'formation', 'marketing', 'plancom', 'planning', 'securite', 'actualite', 'prix', 'pb', 'revue'].find(e => accEspLvl(r, e) !== 0 && document.querySelector('.espace-pill[data-esp="' + e + '"]')); if (ok && typeof switchEspace === 'function') switchEspace(ok); }
 }
 function dashEnter(r) {
   SB_DASH = r; try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
   if (typeof plgOnLogin === 'function') plgOnLogin(r);
+  if (typeof secOnLogin === 'function') secOnLogin(r);
   if (typeof piaOnLogin === 'function') piaOnLogin(r);
   if (typeof rvOnLogin === 'function') rvOnLogin(r);
   try { SBA.note(); } catch (e) {}
@@ -1534,6 +1535,7 @@ window.addEventListener('DOMContentLoaded', () => {
   <button class="espace-pill" data-esp="actualite" style="--e-color:#db2777;--e-bg:rgba(219,39,119,.14)" onclick="switchEspace('actualite')"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z"/></svg></span>Actualité Restaurant</button>
   <button class="espace-pill" data-esp="ext-pointage" style="--e-color:#4f46e5;--e-bg:rgba(79,70,229,.14)" onclick="switchEspace('ext-pointage')" title="Suivi du temps de travail (forfait jours)"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Suivi Temps Travail</button>
   <button class="espace-pill" id="pillPlanning" data-esp="planning" style="display:none;--e-color:#0e7490;--e-bg:rgba(14,116,144,.14)" onclick="switchEspace('planning')" title="Planning de l'équipe de gestion (EDG)"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h3M13 14h3M8 18h3"/></svg></span>Planning EDG</button>
+  <button class="espace-pill" id="pillSecurite" data-esp="securite" style="display:none;--e-color:#dc2626;--e-bg:rgba(220,38,38,.14)" onclick="switchEspace('securite')" title="Registre de sécurité : contrôles périodiques et échéances"><span class="esp-ico-sq"><svg viewBox="0 0 24 24" fill="none" stroke="var(--e-color)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 8.3-8 9-4.8-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>Sécurité</button>
 </div>
 
 <!-- ESPACE : PILOTAGE OPÉRATIONNEL -->
@@ -11198,6 +11200,208 @@ window.addEventListener('beforeunload', e => { if (PLG.dirty) { e.preventDefault
 </script>
 
 <!-- PLANNING_EDG:END -->
+<!-- REGISTRE_SECURITE:START -->
+<style>
+#espace-securite .sec-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+#espace-securite .sec-chip{font-family:inherit;font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap}
+#espace-securite .sec-chip.on{background:var(--card2);color:var(--text);border-color:#dc2626}
+#espace-securite .sec-btn{font-family:inherit;font-size:.78rem;font-weight:700;padding:7px 13px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+#espace-securite .sec-btn.pri{background:#dc2626;border-color:#dc2626;color:#fff}
+#espace-securite .sec-btn:disabled{opacity:.5;cursor:default}
+#espace-securite .sec-in{font-family:inherit;font-size:.82rem;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);box-sizing:border-box;width:100%}
+#espace-securite .sec-sum{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+#espace-securite .sec-pill{border:1.5px solid var(--border);border-radius:12px;padding:8px 12px;background:var(--card);cursor:pointer;font-family:inherit;text-align:left;color:var(--text)}
+#espace-securite .sec-pill b{display:block;font-size:1.25rem;line-height:1.1}
+#espace-securite .sec-pill span{font-size:.7rem;color:var(--muted);font-weight:700}
+#espace-securite .sec-pill.on{border-color:#dc2626;background:var(--card2)}
+#espace-securite table.sec-t{width:100%;border-collapse:collapse;font-size:.8rem}
+#espace-securite table.sec-t th{background:var(--card2);color:var(--muted);font-size:.62rem;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:8px 8px;border-bottom:1.5px solid var(--border);text-align:left;white-space:nowrap}
+#espace-securite table.sec-t td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+#espace-securite .sec-w{overflow-x:auto;border:1.5px solid var(--border);border-radius:12px;background:var(--card)}
+#espace-securite .sec-st{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.68rem;font-weight:800;white-space:nowrap}
+#espace-securite .st-late{background:#fee2e2;color:#991b1b}#espace-securite .st-soon{background:#ffedd5;color:#9a3412}#espace-securite .st-ok{background:#dcfce7;color:#166534}#espace-securite .st-never{background:#e5e7eb;color:#374151}
+body.dark-mode #espace-securite .st-late{background:rgba(220,38,38,.25);color:#fca5a5}body.dark-mode #espace-securite .st-soon{background:rgba(234,88,12,.25);color:#fdba74}body.dark-mode #espace-securite .st-ok{background:rgba(22,163,74,.25);color:#86efac}body.dark-mode #espace-securite .st-never{background:rgba(148,163,184,.25);color:#cbd5e1}
+#espace-securite .sec-sub{font-size:.7rem;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+#espace-securite .sec-act{display:flex;gap:6px;flex-wrap:wrap}
+.sec-bg{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:.66rem;font-weight:800;align-items:center;justify-content:center;margin-left:6px}
+.sec-ov{position:fixed;inset:0;z-index:100002;background:rgba(15,17,23,.55);display:none;align-items:center;justify-content:center;padding:16px}.sec-ov.open{display:flex}
+.sec-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:min(520px,100%);max-height:92vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.4);padding:16px;display:grid;gap:10px;color:var(--text)}
+.sec-box h3{margin:0;font-size:1rem}.sec-box label{font-size:.74rem;font-weight:700;color:var(--muted);display:grid;gap:4px}
+.sec-box .sec-in{font-family:inherit;font-size:.84rem;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--card2);color:var(--text);box-sizing:border-box;width:100%}
+.sec-err{font-size:.74rem;font-weight:700;color:#b45309;min-height:1em}
+.sec-hist{display:flex;flex-wrap:wrap;gap:6px}.sec-hist span{background:var(--card2);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:.74rem;display:inline-flex;gap:6px;align-items:center}.sec-hist button{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:.9rem;line-height:1;padding:0}
+@media (max-width:760px){#espace-securite table.sec-t thead{display:none}#espace-securite table.sec-t,#espace-securite table.sec-t tbody,#espace-securite table.sec-t tr,#espace-securite table.sec-t td{display:block;width:100%}#espace-securite table.sec-t tr{border-bottom:1.5px solid var(--border);padding:8px 4px}#espace-securite table.sec-t td{border:0;padding:3px 8px}#espace-securite table.sec-t td[data-l]::before{content:attr(data-l) " : ";font-size:.64rem;font-weight:800;color:var(--muted);text-transform:uppercase}.sec-ov{padding:0;align-items:stretch}.sec-box{width:100%;max-height:100%;border-radius:0}}
+</style>
+<div id="espace-securite" style="display:none">
+  <div class="main">
+    <div class="esp-page-head">
+      <div class="esp-page-title" style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:rgba(220,38,38,.14);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#dc2626" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 8.3-8 9-4.8-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>Registre de sécurité</div>
+      <div style="font-size:.78rem;color:var(--muted)">Contrôles périodiques obligatoires de chaque restaurant : dernière visite, prochaine échéance (dernière visite + périodicité), alertes en retard ou à venir.</div>
+    </div>
+    <div class="esp-card" id="secCard"><div style="color:var(--muted);font-size:.84rem">Chargement…</div></div>
+  </div>
+</div>
+<div class="sec-ov" id="secOv" onclick="if(event.target===this)secClose()"><div class="sec-box" id="secBox" role="dialog" aria-modal="true"></div></div>
+<script>
+// ══ REGISTRE DE SÉCURITÉ : un contrôle = un dispositif suivi dans un restaurant (société, contact, périodicité en mois, historique des visites) ══
+// Données dans Supabase (table securite_controles), lues et écrites avec le jeton de la personne : droits = tuile « Registre de sécurité » (1 consultation, 2 modification) ET restaurant de son périmètre (contrôlé par la base).
+// Prochaine échéance = dernière visite + périodicité en mois (même règle que le classeur de suivi). Rien n'est jamais supprimé : un contrôle abandonné se désactive.
+const SEC = { rights: null, FR: '', restos: [], resto: null, rows: [], loaded: false, loading: false, filter: 'all', q: '', edit: null, err: '', badge: null };
+const SEC_SOON = 30;                                                           // jours : « bientôt à faire »
+const secLvl = () => (SEC.rights && SEC.rights.acces && typeof SEC.rights.acces === 'object') ? (+SEC.rights.acces.sec || 0) : 0;
+const secCan = () => secLvl() >= 2;
+const secE = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+const secRestoName = k => { const x = (FRANCHISE_CFG.restos || []).find(r => r.key === k); return x ? (x.noms || x.label || k) : k; };
+const secIso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const secToday = () => secIso(new Date());
+const secFmt = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
+const secDays = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
+function secNext(row) {                                                         // prochaine échéance (même règle que le classeur : DATE(année; mois + périodicité; jour))
+  const v = (row.visites || []).slice().sort(); if (!v.length) return null;
+  const l = v[v.length - 1], d = new Date(Date.UTC(+l.slice(0, 4), +l.slice(5, 7) - 1 + (+row.periodicite_mois || 12), +l.slice(8, 10)));
+  return d.toISOString().slice(0, 10);
+}
+function secState(row, today) {                                                 // { k: late|soon|ok|never, n: jours (négatif = retard), next }
+  const next = secNext(row); if (!next) return { k: 'never', n: null, next: null };
+  const n = secDays(today || secToday(), next); return { k: n < 0 ? 'late' : n <= SEC_SOON ? 'soon' : 'ok', n, next };
+}
+const SEC_RANK = { late: 0, never: 1, soon: 2, ok: 3 };
+const SEC_LBL = { late: '🔴 En retard', never: '⚪ Jamais fait', soon: '🟠 Bientôt', ok: '🟢 À jour' };
+const secPer = m => m % 12 === 0 && m >= 12 ? (m / 12 === 1 ? 'tous les ans' : 'tous les ' + (m / 12) + ' ans') : (m === 1 ? 'tous les mois' : 'tous les ' + m + ' mois');
+async function secApi(path, method, body, headers) {
+  const tok = await SBA.token(); if (!tok) return { ok: false, status: 401, j: { message: 'session expirée' } };
+  return SBA.api(path, { method: method || 'GET', tok, body, headers });
+}
+function secOnLogin(r) {                                                        // la pastille n'apparaît que pour les personnes qui ont la tuile « Registre de sécurité »
+  SEC.rights = r; SEC.FR = (FRANCHISE_CFG.auth && FRANCHISE_CFG.auth.franchise) || '';
+  const pill = document.getElementById('pillSecurite'); if (pill) pill.style.display = secLvl() >= 1 ? '' : 'none';
+  if (secLvl() >= 1) setTimeout(secBadgeLoad, 1500);
+}
+async function secScope() {                                                     // restaurants que la personne ouvre (décidé par la base : directeur = son restaurant)
+  const tous = (FRANCHISE_CFG.restos || []).map(x => x.key); let al = null;
+  const x = await secApi('/rest/v1/rpc/securite_restos', 'POST', { f: SEC.FR });
+  if (x.ok && Array.isArray(x.j)) al = x.j.includes('*') ? tous : tous.filter(k => x.j.includes(k));
+  if (!al) { const r = SEC.rights || {}; al = (r.restos || []).includes('*') ? tous : tous.filter(k => (r.restos || []).includes(k)); }       // repli si le script SQL n'est pas encore installé
+  SEC.restos = al; if (!SEC.resto || !al.includes(SEC.resto)) SEC.resto = al[0] || null;
+}
+async function secBadgeLoad() {                                                 // nombre de contrôles en retard ou à venir sur MON périmètre, en pastille sur l'espace
+  if (secLvl() < 1) return;
+  const r = await secApi('/rest/v1/securite_controles?' + 'franchise=eq.' + encodeURIComponent(SEC.FR) + '&actif=eq.true&select=restaurant,periodicite_mois,visites&limit=2000'); if (!r.ok || !Array.isArray(r.j)) return;
+  const t = secToday(); let late = 0, soon = 0; for (const x of r.j) { const s = secState(x, t); if (s.k === 'late') late++; else if (s.k === 'soon') soon++; }
+  SEC.badge = { late, soon }; secPaintBadge();
+}
+function secPaintBadge() {
+  const p = document.getElementById('pillSecurite'); if (!p) return; let b = p.querySelector('.sec-bg'); const n = SEC.badge ? SEC.badge.late : 0;
+  if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'sec-bg'; p.appendChild(b); }
+  b.textContent = n > 99 ? '99+' : String(n); b.title = n + ' contrôle' + (n > 1 ? 's' : '') + ' en retard' + (SEC.badge.soon ? ' · ' + SEC.badge.soon + ' bientôt à faire' : '');
+}
+async function loadSecurite() {
+  const card = document.getElementById('secCard'); if (!card) return;
+  if (secLvl() < 1) { card.innerHTML = '<div class="hint">🔒 Cet espace est réservé aux personnes qui ont l\'accès « Registre de sécurité ».</div>'; return; }
+  await secScope(); await secLoad();
+}
+async function secLoad() {
+  SEC.loading = true; SEC.err = ''; secRender();
+  if (!SEC.resto) { SEC.loading = false; SEC.rows = []; secRender(); return; }
+  const r = await secApi('/rest/v1/securite_controles?' + 'franchise=eq.' + encodeURIComponent(SEC.FR) + '&restaurant=eq.' + encodeURIComponent(SEC.resto) + '&select=*&order=ordre.asc,cree_le.asc');
+  SEC.loading = false;
+  if (!r.ok) { SEC.err = (r.j && r.j.message) || 'lecture impossible'; if (/relation|does not exist|schema cache/i.test(SEC.err)) SEC.err = 'Le registre n\'est pas encore installé dans la base (script SQL « migration_securite.sql »).'; SEC.rows = []; secRender(); return; }
+  SEC.rows = r.j || []; SEC.loaded = true; secRender(); secBadgeLoad();
+}
+function secSetResto(k) { SEC.resto = k; SEC.filter = 'all'; SEC.q = ''; secLoad(); }
+function secSetFilter(f) { SEC.filter = f; secRender(); }
+function secSetQ(v) { SEC.q = String(v || ''); const t = document.getElementById('secList'); if (t) t.innerHTML = secListHtml(); }
+function secListRows() {
+  const t = secToday(), q = SEC.q.toLowerCase().split(/\s+/).filter(Boolean);
+  return SEC.rows.filter(x => x.actif !== false).map(x => ({ x, s: secState(x, t) }))
+    .filter(o => (SEC.filter === 'all' || o.s.k === SEC.filter) && (!q.length || q.every(w => (o.x.dispositif + ' ' + o.x.societe + ' ' + o.x.contact + ' ' + o.x.note).toLowerCase().includes(w))))
+    .sort((a, b) => SEC_RANK[a.s.k] - SEC_RANK[b.s.k] || String(a.s.next || '').localeCompare(String(b.s.next || '')) || (a.x.ordre || 0) - (b.x.ordre || 0));
+}
+function secListHtml() {
+  const rows = secListRows(), can = secCan();
+  if (!rows.length) return '<div class="hint" style="margin:8px 0">' + (SEC.rows.some(x => x.actif !== false) ? 'Aucun contrôle pour ce filtre.' : 'Aucun contrôle enregistré pour ce restaurant' + (can ? ' : ajoutez-en avec « + Ajouter un contrôle ».' : '.')) + '</div>';
+  return '<div class="sec-w"><table class="sec-t"><thead><tr><th>Contrôle</th><th>Société · contact</th><th>Périodicité</th><th>Dernière visite</th><th>Prochaine échéance</th><th></th></tr></thead><tbody>' + rows.map(({ x, s }) => {
+    const v = (x.visites || []).slice().sort(), last = v[v.length - 1] || null;
+    const when = s.k === 'never' ? 'à planifier' : s.n < 0 ? 'en retard de ' + (-s.n) + ' j' : s.n === 0 ? 'aujourd\'hui' : 'dans ' + s.n + ' j';
+    return '<tr><td data-l="Contrôle"><b>' + secE(x.dispositif) + '</b>' + (x.note ? '<div class="sec-sub">' + secE(x.note) + '</div>' : '') + '</td>'
+      + '<td data-l="Société">' + (x.societe ? secE(x.societe) : '<span style="color:var(--muted)">—</span>') + (x.contact ? '<div class="sec-sub">' + secE(x.contact) + '</div>' : '') + '</td>'
+      + '<td data-l="Périodicité">' + secPer(+x.periodicite_mois) + '</td>'
+      + '<td data-l="Dernière visite">' + secFmt(last) + (v.length ? '<div class="sec-sub">' + v.length + ' visite' + (v.length > 1 ? 's' : '') + ' enregistrée' + (v.length > 1 ? 's' : '') + '</div>' : '') + '</td>'
+      + '<td data-l="Échéance"><span class="sec-st st-' + s.k + '">' + SEC_LBL[s.k] + '</span><div class="sec-sub">' + (s.next ? secFmt(s.next) + ' · ' : '') + when + '</div></td>'
+      + '<td class="sec-act">' + (can ? '<button class="sec-btn pri" type="button" onclick="secVisit(\'' + secE(x.id) + '\')" title="Enregistrer une visite">✓ Visite effectuée</button>' : '') + '<button class="sec-btn" type="button" onclick="secHist(\'' + secE(x.id) + '\')">Historique</button>' + (can ? '<button class="sec-btn" type="button" onclick="secEdit(\'' + secE(x.id) + '\')">Modifier</button>' : '') + '</td></tr>';
+  }).join('') + '</tbody></table></div>';
+}
+function secRender() {
+  const card = document.getElementById('secCard'); if (!card) return;
+  if (SEC.err) { card.innerHTML = '<div class="entry-banner err" style="display:block">' + secE(SEC.err) + '</div>'; return; }
+  const chips = SEC.restos.length > 1 ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + SEC.restos.map(k => '<button class="sec-chip' + (k === SEC.resto ? ' on' : '') + '" type="button" onclick="secSetResto(\'' + secE(k) + '\')">' + secE(secRestoName(k)) + '</button>').join('') + '</div>' : '<b>' + secE(secRestoName(SEC.resto || '')) + '</b>';
+  if (!SEC.resto) { card.innerHTML = '<div class="hint">Aucun restaurant dans votre périmètre.</div>'; return; }
+  const t = secToday(), cnt = { late: 0, soon: 0, ok: 0, never: 0 }; SEC.rows.filter(x => x.actif !== false).forEach(x => { cnt[secState(x, t).k]++; });
+  const pill = (k, l, n) => '<button class="sec-pill' + (SEC.filter === k ? ' on' : '') + '" type="button" onclick="secSetFilter(\'' + k + '\')"><b>' + n + '</b><span>' + l + '</span></button>';
+  card.innerHTML = '<div class="sec-bar">' + chips + (secCan() ? '<button class="sec-btn pri" type="button" onclick="secEdit(\'\')">+ Ajouter un contrôle</button>' : '<span style="font-size:.74rem;color:var(--muted)">Consultation seule</span>') + '</div>'
+    + '<div class="sec-sum">' + pill('all', 'Tous', SEC.rows.filter(x => x.actif !== false).length) + pill('late', '🔴 En retard', cnt.late) + pill('soon', '🟠 Dans ' + SEC_SOON + ' j', cnt.soon) + pill('never', '⚪ Jamais fait', cnt.never) + pill('ok', '🟢 À jour', cnt.ok) + '</div>'
+    + '<div style="margin:0 0 10px"><input class="sec-in" id="secQ" type="search" placeholder="Rechercher : contrôle, société, contact" value="' + secE(SEC.q) + '" oninput="secSetQ(this.value)" aria-label="Rechercher un contrôle"></div>'
+    + (SEC.loading ? '<div class="hint">⏳ Chargement…</div>' : '<div id="secList">' + secListHtml() + '</div>')
+    + '<div class="hint" style="margin-top:10px">Échéance = dernière visite + périodicité. « Bientôt » = dans ' + SEC_SOON + ' jours ou moins. Les visites s\'ajoutent (jamais effacées en silence) ; un contrôle abandonné se désactive dans « Modifier ».</div>';
+}
+// ── fenêtres : visite effectuée, historique, ajout / modification ──
+function secOpen(html) { document.getElementById('secBox').innerHTML = html; document.getElementById('secOv').classList.add('open'); }
+function secClose() { SEC.edit = null; document.getElementById('secOv').classList.remove('open'); }
+const secRow = id => SEC.rows.find(x => String(x.id) === String(id));
+function secVisit(id) {
+  const x = secRow(id); if (!x) return; SEC.edit = { id, mode: 'visit' };
+  secOpen('<h3>✓ Visite effectuée</h3><div class="sec-sub" style="font-size:.78rem">' + secE(x.dispositif) + (x.societe ? ' · ' + secE(x.societe) : '') + '</div><label>Date de la visite<input class="sec-in" id="secD" type="date" value="' + secToday() + '" max="' + secIso(new Date(Date.now() + 366 * 864e5)) + '"></label><div class="sec-err" id="secErr"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="sec-btn" type="button" onclick="secClose()">Annuler</button><button class="sec-btn pri" type="button" id="secGo" onclick="secVisitSave()">Enregistrer</button></div>');
+}
+async function secVisitSave() {
+  const x = secRow(SEC.edit && SEC.edit.id), d = (document.getElementById('secD') || {}).value, err = document.getElementById('secErr'); if (!x) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) { err.textContent = 'Indiquez la date de la visite.'; return; }
+  if ((x.visites || []).includes(d)) { err.textContent = 'Cette visite est déjà enregistrée.'; return; }
+  await secPatch(x, { visites: (x.visites || []).concat([d]) }, 'Visite du ' + secFmt(d) + ' enregistrée.');
+}
+function secHist(id) {
+  const x = secRow(id); if (!x) return; const v = (x.visites || []).slice().sort().reverse(), can = secCan(); SEC.edit = { id, mode: 'hist' };
+  secOpen('<h3>Historique des visites</h3><div class="sec-sub" style="font-size:.78rem">' + secE(x.dispositif) + (x.societe ? ' · ' + secE(x.societe) : '') + ' · ' + secPer(+x.periodicite_mois) + '</div>'
+    + (v.length ? '<div class="sec-hist">' + v.map(d => '<span>' + secFmt(d) + (can ? '<button type="button" title="Retirer cette date (erreur de saisie)" onclick="secDelVisit(\'' + d + '\')">✕</button>' : '') + '</span>').join('') + '</div>' : '<div class="hint">Aucune visite enregistrée.</div>')
+    + '<div class="sec-err" id="secErr"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="sec-btn" type="button" onclick="secClose()">Fermer</button></div>');
+}
+async function secDelVisit(d) {
+  const x = secRow(SEC.edit && SEC.edit.id); if (!x || !secCan() || !confirm('Retirer la visite du ' + secFmt(d) + ' ? (à faire seulement pour corriger une erreur de saisie)')) return;
+  await secPatch(x, { visites: (x.visites || []).filter(v => v !== d) }, 'Visite du ' + secFmt(d) + ' retirée.');
+}
+function secEdit(id) {
+  const x = id ? secRow(id) : null; if (id && !x) return; SEC.edit = { id: id || '', mode: 'edit' };
+  const f = (k, d) => secE(x ? (x[k] == null ? d : x[k]) : d), pers = [1, 3, 6, 12, 24, 36, 60, 120], cur = x ? +x.periodicite_mois : 12;
+  secOpen('<h3>' + (x ? 'Modifier le contrôle' : 'Ajouter un contrôle') + ' · ' + secE(secRestoName(SEC.resto)) + '</h3>'
+    + '<label>Contrôle * (ce qui est vérifié)<input class="sec-in" id="secF1" maxlength="160" value="' + f('dispositif', '') + '" placeholder="ex. Vérification des extincteurs"></label>'
+    + '<label>Société<input class="sec-in" id="secF2" maxlength="120" value="' + f('societe', '') + '" placeholder="ex. BIGORRE INCENDIE"></label>'
+    + '<label>Contact (téléphone, e-mail…)<input class="sec-in" id="secF3" maxlength="160" value="' + f('contact', '') + '"></label>'
+    + '<label>Périodicité (en mois) *<span style="display:flex;gap:8px"><select class="sec-in" id="secF4s" onchange="document.getElementById(\'secF4\').value=this.value||document.getElementById(\'secF4\').value">' + pers.map(m => '<option value="' + m + '"' + (m === cur ? ' selected' : '') + '>' + secPer(m) + '</option>').join('') + (pers.includes(cur) ? '' : '<option value="' + cur + '" selected>' + secPer(cur) + '</option>') + '</select><input class="sec-in" id="secF4" type="number" min="1" max="240" value="' + cur + '" style="max-width:90px" aria-label="Mois"></span></label>'
+    + '<label>Précision (n° de série, intervenant…)<input class="sec-in" id="secF5" maxlength="200" value="' + f('note', '') + '"></label>'
+    + (x ? '<label style="display:flex;gap:8px;align-items:center;flex-direction:row"><input type="checkbox" id="secF6" ' + (x.actif === false ? '' : 'checked') + ' style="width:auto"> Contrôle actif (décochez s\'il n\'est plus suivi : il disparaît de la liste, son historique est gardé)</label>' : '')
+    + '<div class="sec-err" id="secErr"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="sec-btn" type="button" onclick="secClose()">Annuler</button><button class="sec-btn pri" type="button" id="secGo" onclick="secEditSave()">Enregistrer</button></div>');
+}
+async function secEditSave() {
+  const g = i => ((document.getElementById(i) || {}).value || '').trim(), err = document.getElementById('secErr'), per = Math.round(+g('secF4'));
+  if (!g('secF1')) { err.textContent = 'Indiquez le contrôle.'; return; } if (!(per >= 1 && per <= 240)) { err.textContent = 'Périodicité : entre 1 et 240 mois.'; return; }
+  const body = { societe: g('secF2'), contact: g('secF3'), dispositif: g('secF1'), periodicite_mois: per, note: g('secF5') }, id = SEC.edit && SEC.edit.id;
+  if (id) { const x = secRow(id); if (!x) return; body.actif = !!(document.getElementById('secF6') || { checked: true }).checked; await secPatch(x, body, 'Contrôle enregistré.'); return; }
+  const btn = document.getElementById('secGo'); btn.disabled = true;
+  const r = await secApi('/rest/v1/securite_controles', 'POST', Object.assign({ franchise: SEC.FR, restaurant: SEC.resto, ordre: (SEC.rows.reduce((m, y) => Math.max(m, y.ordre || 0), 0) + 10) }, body), { Prefer: 'return=representation' });
+  btn.disabled = false; if (!r.ok || !Array.isArray(r.j) || !r.j.length) { err.textContent = 'Non enregistré : ' + String((r.j && r.j.message) || 'accès refusé').replace(/^registre sécurité : /, '') + '.'; return; }
+  SEC.rows.push(r.j[0]); secClose(); secRender(); secBadgeLoad(); secToast('Contrôle ajouté.');
+}
+async function secPatch(x, body, okMsg) {
+  const err = document.getElementById('secErr'), btn = document.getElementById('secGo'); if (btn) btn.disabled = true;
+  const r = await secApi('/rest/v1/securite_controles?id=eq.' + encodeURIComponent(x.id), 'PATCH', body, { Prefer: 'return=representation' });
+  if (btn) btn.disabled = false;
+  if (!r.ok || !Array.isArray(r.j) || !r.j.length) { if (err) err.textContent = 'Non enregistré : ' + String((r.j && r.j.message) || 'accès refusé').replace(/^registre sécurité : /, '') + '.'; return false; }
+  Object.assign(x, r.j[0]); secClose(); secRender(); secBadgeLoad(); secToast(okMsg); return true;
+}
+function secToast(t) { let e = document.getElementById('secToast'); if (!e) { e = document.createElement('div'); e.id = 'secToast'; e.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#166534;color:#fff;padding:9px 16px;border-radius:12px;font-size:.82rem;font-weight:700;z-index:100003;box-shadow:0 8px 24px rgba(0,0,0,.3)'; document.body.appendChild(e); } e.textContent = '✓ ' + t; e.style.display = 'block'; clearTimeout(e._t); e._t = setTimeout(() => { e.style.display = 'none'; }, 2600); }
+document.addEventListener('keydown', e => { const ov = document.getElementById('secOv'); if (ov && ov.classList.contains('open') && e.key === 'Escape') secClose(); });
+</script>
+
+<!-- REGISTRE_SECURITE:END -->
 <!-- ════════ ESPACE : PRIX FRANCHISE (consultation) ════════ -->
 <style>
 .px-chips { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; } .px-chips button { border:1.5px solid var(--border); background:var(--card); border-radius:999px; padding:7px 14px; font:inherit; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--text); }
@@ -11935,7 +12139,7 @@ body.dark-mode .search-kpi-pick .skp.on { color:#fff; }
 let currentEspace = 'pilotage';
 function switchEspace(name) {
   currentEspace = name;
-  ['pilotage','interventions','formation','marketing','actualite','performance','plancom','planning','prix','pb','ext-pointage'].forEach(e => {
+  ['pilotage','interventions','formation','marketing','actualite','performance','plancom','planning','securite','prix','pb','ext-pointage'].forEach(e => {
     const el = document.getElementById('espace-' + e);
     if (el) el.style.display = (e === name) ? '' : 'none';
   });
@@ -11945,7 +12149,7 @@ function switchEspace(name) {
   const bE = document.getElementById('btnExporter'); if (bE) bE.style.display = (name === 'pilotage' || name === 'performance') ? '' : 'none';
   const bI = document.getElementById('btnIndices'); if (bI) bI.style.display = (name === 'pilotage') ? '' : 'none';
   // Libellé de l'en-tête selon l'espace
-  const LBL = { 'ext-pointage':"Suivi Temps Travail", pb:'Point Business', prix:'Prix franchise', pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication', planning:'Planning EDG' };
+  const LBL = { 'ext-pointage':"Suivi Temps Travail", pb:'Point Business', prix:'Prix franchise', pilotage:'Pilotage Opérationnel', interventions:'Interventions', formation:'Formation', marketing:'Marketing', actualite:'Actualité Restaurant', performance:'Performance', plancom:'Plan de communication', planning:'Planning EDG', securite:'Registre de sécurité' };
   const lblEl = document.getElementById('espaceLabel');
   if (lblEl) lblEl.textContent = LBL[name] || '';
   // La date « Données au… » ne concerne que le Pilotage
@@ -11962,6 +12166,7 @@ function switchEspace(name) {
   if (name === 'ext-pointage') fjMount(document.getElementById('fjBox-pointage'), "forfait/");
   if (name === 'plancom') loadPlanCom();
   if (name === 'planning') loadPlanning();
+  if (name === 'securite') loadSecurite();
   try { if (typeof esbOpen === 'function') esbOpen(name); } catch (e) {}
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
 }
@@ -11983,7 +12188,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-222837';
+const BUILD_VERSION = '20261124-224305';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
