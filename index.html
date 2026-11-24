@@ -5752,6 +5752,7 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
         const p = `${m} ${y}`; const row = {};
         for (const s of STORES) row[s] = val(opts.table || MEN, p, s, sheetKey);
         const brow = base[m];
+        if (opts.fillBase && brow) for (const s of STORES) if (!isNum(row[s]) && isNum(brow[s])) row[s] = brow[s];      // case vide dans le Sheet : on garde la valeur de l'import intégré au site (le Sheet l'emporte dès qu'il a une valeur)
         if (opts.transform) for (const s of STORES) row[s] = opts.transform(row[s], s, m, y);
         const vals = STORES.map(s => row[s]).filter(isNum);
         const diff = STORES.filter(s => !same(row[s], brow ? brow[s] : null));
@@ -5804,7 +5805,7 @@ loadBanners(); // charge depuis GitHub puis appelle renderBanners()
           return (r != null && a) ? r / a : null;
         },
       });
-      Y.ecart_rendement_monthly = monthlyTable(y, 'ecart_rendement_monthly', 'ecart_rendement', wAlim(y), { filter: y === PYs ? 'any' : 'none' });
+      Y.ecart_rendement_monthly = monthlyTable(y, 'ecart_rendement_monthly', 'ecart_rendement', wAlim(y), { filter: y === PYs ? 'any' : 'none', fillBase: true });
       // Pertes (% du CA alim) : Σ pertes quotidiennes ÷ CA alim
       Y.pertes_monthly = monthlyTable(y, 'pertes_monthly', '__none__', wAlim(y), {
         filter: 'none',
@@ -11865,7 +11866,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-090811';
+const BUILD_VERSION = '20261124-101248';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
