@@ -3945,6 +3945,81 @@ function bcDismiss() { const x = BC.byKey[bcKey(curResto, +SIM.ty)]; if (!x) ret
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bcEnsure(true); });
   setTimeout(() => bcEnsure(true), 2000);
 })();
+// ══ BUDGET & PNL — VISION FRANCHISE : tous les restaurants côte à côte (année complète), une fois les budgets finalisés ══
+// Lecture seule : aucune écriture, aucun brouillon touché. Pour chaque restaurant de MON périmètre on lit la version du circuit par niveaux (lv_load) :
+//   • « finalisé » = la version du franchisé est PUBLIÉE ; sinon on affiche la version la plus avancée du circuit, marquée « provisoire » (le total Franchise l'est alors aussi) ;
+//   • le compte de résultat est recalculé avec le même moteur que l'onglet (bdCompute) à partir du contenu de la version (hypothèses + prévision de CA jour par jour) et des salaires auxquels j'ai droit.
+const BDF = { on: false, loading: false, data: null, year: null, err: '', mode: (() => { try { return localStorage.getItem('fpy_bdf_mode') || 'ep'; } catch (e) { return 'ep'; } })() };
+const bdfLvlName = { directeur: 'directeur', superviseur: 'superviseur', franchise: 'franchisé' };
+function bdfAvail() { try { return typeof lvCall === 'function' && typeof lvRefresh === 'function' && LV.backend !== false && RESTOS.length > 1 && RESTOS.some(x => lvCanView(x[0])); } catch (e) { return false; } }
+function bdfOpen() { BDF.on = true; renderBudget(); }
+function bdfClose() { BDF.on = false; renderBudget(); }
+function bdfMode(m) { BDF.mode = m; try { localStorage.setItem('fpy_bdf_mode', m); } catch (e) {} bdfRender(); }
+function bdfBar() {                                                         // sélecteur « Budget du restaurant | Vision Franchise » en tête de l'onglet
+  const pn = document.getElementById('panel'); if (!pn || !bdfAvail() || pn.querySelector('#bdfBar')) return;
+  pn.insertAdjacentHTML('afterbegin', `<div id="bdfBar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0" type="button" onclick="bdfOpen()" title="Tous les restaurants côte à côte, sur l'année">🏢 Vision Franchise</button></span></div>`);
+}
+async function bdfCompute(r, Y, level, j) {                                 // compte de résultat annuel d'une version (même moteur que l'onglet, sans rien écrire)
+  const P = wfParse(j.record.donnees); if (!P) throw new Error('version illisible');
+  const bud = JSON.parse(JSON.stringify(P.bud)); bdMig(bud);
+  const sal = await lvSals(r, Y, level, j.record.salaires), top = wfTopSeg(sal);
+  if (top && accCan('edg', r)) bud.edg = { on: top.on !== false, rows: JSON.parse(JSON.stringify(top.rows || [])) };
+  if (top && !accCan('edg', r) && top.on !== false && Array.isArray(top.momg)) bud.edgMomg = top.momg.map(Number); else delete bud.edgMomg;
+  const alim = Array(12).fill(0); for (let m = 1; m <= 12; m++) { const arr = (P.cal || {})[Y + '-' + pad2(m)]; if (arr) alim[m - 1] = arr.reduce((a, v) => a + (v || 0), 0); }
+  const L = bdCompute(bud, alim), T = {}; for (const x of BD_LINES) T[x.k] = L[x.k].reduce((a, b) => a + b, 0);
+  return { T, at: j.record.at, by: j.record.by, version: j.record.version };
+}
+async function bdfLoad(Ty) {
+  const Y = String(Ty); BDF.loading = true; BDF.err = '';
+  try {
+    await lvRefresh(true);
+    const out = [];
+    for (const [r, nm] of RESTOS) {
+      const rec = { r, nm, state: 'none', level: null, T: null, err: '' }; out.push(rec);
+      if (!lvCanView(r)) { rec.state = 'lock'; continue; }
+      const ch = lvChain(r); let lvl = null; for (let i = ch.length - 1; i >= 0; i--) if (lvRow(r, Y, ch[i])) { lvl = ch[i]; break; }
+      if (!lvl) continue;
+      rec.level = lvl; const row = lvRow(r, Y, lvl); rec.state = (lvl === 'franchise' && row.statut === 'publie') ? 'final' : 'prov';
+      try { const j = await lvCall('load', r, Y, { niveau: lvl }); if (!j.ok || !j.record) throw new Error(j.error || 'aucune version'); const c = await bdfCompute(r, Y, lvl, j); rec.T = c.T; rec.at = c.at; rec.by = c.by; rec.version = c.version; }
+      catch (e) { rec.state = 'err'; rec.err = String((e && e.message) || e); }
+    }
+    BDF.data = out; BDF.year = Y;
+  } catch (e) { BDF.err = String((e && e.message) || e); }
+  BDF.loading = false;
+  if (BDF.on && (typeof curTab === 'undefined' || curTab === 'budget')) bdfRender();
+}
+function bdfRender() {
+  const pn = document.getElementById('panel'); if (!pn) return;
+  const Ty = +SIM.ty, head = `<div class="panel-head"><div class="panel-title">Budget & PNL · Vision Franchise ${Ty}</div></div>`;
+  const tog = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px" type="button" onclick="bdfClose()">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">🏢 Vision Franchise</button></span></div>`;
+  if (BDF.loading || !BDF.data || BDF.year !== String(Ty)) {
+    pn.innerHTML = tog + head + `<div class="hint">⏳ Lecture des budgets de chaque restaurant…</div>`;
+    if (!BDF.loading) bdfLoad(Ty);
+    return;
+  }
+  if (BDF.err) { pn.innerHTML = tog + head + `<div class="entry-banner err" style="display:block">Lecture impossible : ${escH(BDF.err)}</div><div class="foot"><button class="btn-save" onclick="BDF.data=null;renderBudget()">Réessayer</button></div>`; return; }
+  const D = BDF.data, withT = D.filter(x => x.T), nFinal = D.filter(x => x.state === 'final').length, nTot = D.filter(x => x.state !== 'lock').length, allFinal = nTot > 0 && nFinal === nTot;
+  const tot = {}; for (const x of BD_LINES) tot[x.k] = withT.reduce((a, d) => a + (d.T[x.k] || 0), 0);
+  const mode = BDF.mode, fmtC = (n, a) => { const pc = a ? bdP(n / a) : '—'; return mode === 'e' ? bdE(n) : mode === 'p' ? pc : `${bdE(n)}<span class="bd-pc">${pc}</span>`; };
+  const badge = x => x.state === 'final' ? '<span style="color:#15803d;font-weight:800">✅ Finalisé</span>' : x.state === 'prov' ? `<span style="color:#b45309;font-weight:800" title="Version la plus avancée du circuit : ${bdfLvlName[x.level] || x.level}">🟠 Provisoire · ${bdfLvlName[x.level] || x.level}</span>` : x.state === 'lock' ? '<span style="color:var(--muted)">🔒 hors accès</span>' : x.state === 'err' ? `<span style="color:var(--red)" title="${escH(x.err)}">⚠ illisible</span>` : '<span style="color:var(--muted)">— aucune saisie</span>';
+  const cols = D.map(x => `<th style="min-width:118px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">${escH(x.nm)}</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${badge(x)}</span></th>`).join('');
+  const rows = BD_LINES.map(x => { const cls = x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : '';
+    return `<tr class="${cls}"><td>${x.l}</td>${D.map(d => `<td>${d.T ? fmtC(d.T[x.k], d.T.alim) : '—'}</td>`).join('')}<td><b>${withT.length ? fmtC(tot[x.k], tot.alim) : '—'}</b></td></tr>`; }).join('');
+  const banner = allFinal ? `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#dcfce7;color:#166534;border:1.5px solid #86efac">✅ Les ${nFinal} budgets ${Ty} sont finalisés (publiés par le franchisé) : la vision Franchise est définitive.</div>`
+    : `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#fef3c7;color:#92400e;border:1.5px solid #fcd34d">🟠 Vision <b>provisoire</b> : ${nTot - nFinal} restaurant${nTot - nFinal > 1 ? 's' : ''} sur ${nTot} ${nTot - nFinal > 1 ? 'n\'ont' : 'n\'a'} pas encore de budget finalisé (version la plus avancée du circuit affichée). Le total Franchise est définitif quand tous sont ✅.</div>`;
+  const sw = (m, l, rd) => `<button class="step" style="border-radius:${rd};${mode === m ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" type="button" onclick="bdfMode('${m}')">${l}</button>`;
+  pn.innerHTML = tog + head + banner + `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex">${sw('e', '€', '8px 0 0 8px')}${sw('ep', '€ + %', '0')}${sw('p', '% du CA alim.', '0 8px 8px 0')}</span><button class="step" type="button" onclick="BDF.data=null;renderBudget()" title="Relire les budgets">↻ Actualiser</button><button class="step" type="button" onclick="window.print()">🖨 Imprimer</button></div>
+    <div style="overflow-x:auto;border:1.5px solid var(--border);border-radius:12px"><table class="bd" style="min-width:${260 + 118 * (D.length + 1)}px"><thead><tr><th>Année ${Ty}</th>${cols}<th style="min-width:130px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">Franchise</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${allFinal ? '<span style="color:#15803d;font-weight:800">✅ Définitif</span>' : '<span style="color:#b45309;font-weight:800">🟠 Provisoire</span>'}</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="hint" style="margin-top:8px">Montants annuels du compte de résultat prévisionnel de chaque restaurant (mêmes formules que l'onglet « Un restaurant »). % = part du CA alimentaire. Les salaires par poste ne sont pris en compte que si ton accès y donne droit ; sinon le coût mensuel des managers saisi par l'échelon qui y a droit est repris. Lecture seule : rien n'est enregistré ici.</div>`;
+}
+const __renderBudgetFr = renderBudget;
+renderBudget = function () {
+  if (BDF.on && bdfAvail()) return bdfRender();
+  BDF.on = false;
+  const r = __renderBudgetFr.apply(this, arguments);
+  try { bdfBar(); } catch (e) {}
+  return r;
+};
 // ── Prix franchise : couleurs du modèle (une teinte par rubrique) et IMPRESSION « comme le modèle » : une page A4 paysage, rubriques côte à côte, noms et codes sur fond foncé, prix sur fond clair ──
 // Partagé par la saisie (modification) et le dashboard (consultation) ; couleurs relevées dans « Prix Franchise 2026.xlsx » (t = titre, d = foncé, l = clair, c = catégorie).
 const PXP_TH = [
@@ -5571,7 +5646,7 @@ function eqFormP() {
         <label style="font-size:.78rem;color:var(--muted)">Prénom et initiale<input id="eqNom" style="${inp}" value="${escH(e.nom || '')}" maxlength="60" placeholder="Camille D."></label>
         <label style="font-size:.78rem;color:var(--muted)">E-mail professionnel<input id="eqMail" type="email" style="${inp}" value="${escH(e.email || '')}" placeholder="prenom@entreprise.fr"></label>
         <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
-      ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}</section>
+      ${isNew ? '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">L\'adresse e-mail crée le compte de connexion de la personne : elle est obligatoire. Pour quelqu\'un qui doit seulement figurer au planning, sans accès à l\'application : Planning EDG › « Équipe du restaurant » (pas d\'e-mail).</div>' : '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}</section>
     <section class="eq-sec"><h4>Restaurants <span style="text-transform:none;letter-spacing:0;font-weight:500">(propres à cette personne, pas au poste)</span></h4>
       <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${eqDeleg() && !eqMesRestos().includes('*') ? (all ? '<label style="font-size:.84rem"><input type="checkbox" id="eqAll" checked disabled> <b>Tous</b> <span style="color:var(--muted)">(défini par le franchisé, non modifiable ici)</span></label>' : '') : `<label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked);eqRefRefresh()"> <b>Tous</b></label>`}
         ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="eqRefRefresh()"> ${escH(n)}</label>`).join('')}</div>
@@ -5676,6 +5751,7 @@ function eqRead() {
 async function eqSave() {
   const e = EQ.edit, o = EQ.postes ? eqReadP() : eqRead(), b = document.getElementById('eqGo');
   if (!o.nom) return eqSet('Indiquez le prénom et l\'initiale', 'err');
+  if (!o.email) return eqSet('Adresse e-mail obligatoire : elle crée le compte de connexion de la personne. Pour quelqu\'un qui doit seulement figurer au planning (sans accès à l\'application), utilisez Planning EDG › « Équipe du restaurant » : pas d\'e-mail à saisir.', 'err');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return eqSet('Adresse e-mail invalide', 'err');
   if (!o.restos.length && o.role !== 'collab') return eqSet('Choisissez au moins un restaurant', 'err');
   if (!o.modules.length) return eqSet('Choisissez au moins un accès', 'err');

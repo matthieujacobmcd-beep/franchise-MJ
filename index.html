@@ -6351,7 +6351,7 @@ let weekOffset = 0;
 let weekMode = 'w';                       // 'w' = vue semaine, 'm' = vue mois
 const _MOIS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const _JOURS_LONG = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-const _wkU = () => ({ w: ['Semaine précédente', 'Semaine suivante', 'Semaine en cours'], m: ['Mois précédent', 'Mois suivant', 'Mois en cours'], d: ['Jour précédent', 'Jour suivant', 'Dernier jour saisi'] }[weekMode]);
+const _wkU = () => ({ w: ['Semaine précédente', 'Semaine suivante', 'Semaine en cours'], m: ['Mois précédent', 'Mois suivant', 'Mois en cours'], y: ['Année précédente', 'Année suivante', 'Année en cours'], d: ['Jour précédent', 'Jour suivant', 'Dernier jour saisi'] }[weekMode]);
 const _wkWd = d => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][(new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7];
 const _WD = 86400000;
 const _wkIso = t => new Date(t).toISOString().slice(0, 10);
@@ -6379,6 +6379,7 @@ function _wkMonday(off) {
 // Première semaine navigable : celle qui contient le 1er janvier de l'année en cours
 function _wkMinOffset() {
   const last = _wkLastDay(); if (!last) return 0;
+  if (weekMode === 'y') { const ys = Object.keys(DASHBOARD_DATA.daily || {}).map(Number).filter(Boolean); return ys.length ? -Math.max(0, +last.slice(0, 4) - Math.min(...ys)) : 0; }   // jusqu'à la plus ancienne année saisie au quotidien
   if (weekMode === 'm') return -(+last.slice(5, 7) - 1);
   if (weekMode === 'd') return -Math.round((Date.parse(last + 'T00:00:00Z') - Date.UTC(+last.slice(0, 4), 0, 1)) / _WD);
   const jan1 = Date.UTC(+last.slice(0, 4), 0, 1), dow = (new Date(jan1).getUTCDay() + 6) % 7;
@@ -6387,7 +6388,13 @@ function _wkMinOffset() {
 function buildWeek(off) {
   const last = _wkLastDay(); if (!last || !DASHBOARD_DATA.daily) return false;
   let mon, days, daysN1, daysEq, n1eq = true;
-  if (weekMode === 'm') {
+  if (weekMode === 'y') {                                // vue Année : 1er janvier → 31 décembre (365/366 jours) ; la tuile = cumul des jours écoulés, comparé aux jours équivalents de l'an passé (année en cours) ou à la même année N-1 (année complète)
+    const yr = +last.slice(0, 4) + off, t = Date.UTC(yr, 0, 1), n = Math.round((Date.UTC(yr + 1, 0, 1) - t) / _WD);
+    mon = t; days = [...Array(n)].map((_, i) => _wkIso(t + i * _WD));
+    daysEq = days.map(d => _wkIso(Date.parse(d + 'T00:00:00Z') - 364 * _WD));
+    n1eq = days[days.length - 1] > last;
+    daysN1 = n1eq ? daysEq : days.map(d => (+d.slice(0, 4) - 1) + d.slice(4));
+  } else if (weekMode === 'm') {
     const ld = new Date(Date.parse(last + 'T00:00:00Z')), t = Date.UTC(ld.getUTCFullYear(), ld.getUTCMonth() + off, 1);
     mon = t; const n = new Date(Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 0)).getUTCDate();
     days = [...Array(n)].map((_, i) => _wkIso(t + i * _WD));
@@ -6456,7 +6463,7 @@ function buildWeek(off) {
   const missing = days.map(d => d <= last ? RESTOS.filter(r => _wkVal(d, r, 'ca') == null && !(OPEN[r] && d < OPEN[r])) : []);   // restaurants non saisis ce jour-là
   const partial = nEl < days.length, n1Last = daysN1[Math.max(nEl, 1) - 1];
   const nw = {
-    label: weekMode === 'd' ? `${_JOURS_LONG[(new Date(mon).getUTCDay() + 6) % 7]} ${new Date(mon).getUTCDate()} ${_MOIS_FR[new Date(mon).getUTCMonth()].toLowerCase()} ${days[0].slice(0, 4)}` : (weekMode === 'm' ? `${_MOIS_FR[new Date(mon).getUTCMonth()]} ${days[0].slice(0, 4)}` : `Semaine ${_wkIsoWeek(mon)} · du ${_wkFmt(days[0])} au ${_wkFmt(days[6])}/${days[6].slice(0, 4)}`) + (partial ? ` · en cours (au ${_wkFmt(last)})` : ''),
+    label: weekMode === 'y' ? `Année ${days[0].slice(0, 4)}${partial ? ' · du ' + _wkFmt(days[0]) + ' au ' + _wkFmt(last) : ''}` : weekMode === 'd' ? `${_JOURS_LONG[(new Date(mon).getUTCDay() + 6) % 7]} ${new Date(mon).getUTCDate()} ${_MOIS_FR[new Date(mon).getUTCMonth()].toLowerCase()} ${days[0].slice(0, 4)}` : (weekMode === 'm' ? `${_MOIS_FR[new Date(mon).getUTCMonth()]} ${days[0].slice(0, 4)}` : `Semaine ${_wkIsoWeek(mon)} · du ${_wkFmt(days[0])} au ${_wkFmt(days[6])}/${days[6].slice(0, 4)}`) + (partial ? ` · en cours (au ${_wkFmt(last)})` : ''),
     label_n1: weekMode === 'd' ? `${_wkWd(daysN1[0]).toLowerCase()} ${_wkFmt(daysN1[0])}/${daysN1[0].slice(0, 4)}` : `du ${_wkFmt(daysN1[0])} au ${_wkFmt(n1Last)}/${n1Last.slice(0, 4)}`,
     days, days_n1: daysN1, days_eq: daysEq, n1eq, missing, kpis: kp, prev, partial, offset: off, mode: weekMode,
     yearCur: days[0].slice(0, 4), yearN1: daysN1[0].slice(0, 4),
@@ -6482,6 +6489,7 @@ buildWeek(weekOffset);
 // Météo & commentaires saisis au quotidien
 const METEO_ICO = { soleil: '☀️', nuageux: '⛅', pluie: '🌧️', orage: '⛈️', neige: '❄️', brouillard: '🌫️', canicule: '🥵', vent: '💨', froid: '🥶', chaud: '🌡️' };
 function weekComments(r) {
+  if (weekMode === 'y') return [];                              // vue Année : pas de remarques jour par jour
   const C = DASHBOARD_DATA.comments || {}, out = [];
   (WEEK.days || []).forEach((d, i) => {
     const byR = C[d] || {};
@@ -6511,7 +6519,7 @@ function renderWeekComments(r) {
 
 // Restaurants non saisis, jour par jour (vue Franchise uniquement)
 function renderWeekMissing(r) {
-  if (r !== 'FRANCHISE' || !WEEK.missing) return '';
+  if (r !== 'FRANCHISE' || !WEEK.missing || weekMode === 'y') return '';
   const rows = WEEK.days.map((d, i) => ({ d, m: WEEK.missing[i] })).filter(x => x.m.length);
   if (!rows.length) return `<div class="wk-comments" style="margin-top:10px"><div class="wk-com">✅ Tous les restaurants sont saisis sur la période.</div></div>`;
   const line = x => `<div class="wk-com"><b>${_wkWd(x.d)} ${_wkFmt(x.d)}</b> — ${x.m.length === RESTOS.length ? 'aucun restaurant' : x.m.map(restoShort).join(', ')}</div>`;
@@ -6590,6 +6598,52 @@ function weekChuteHtml(r, id) {
   const v = weekChuteVals(r, id); if (!v) return '';
   const { chute, d, manque, estR, lib } = v;
   return `<div class="wk-chute" title="Réalisé à date + prévision journalière des jours restants (${lib})${estR.size ? ' · ≈ : pour ' + estR.size + ' restaurant(s) sans prévision journalière, prévisionnel mensuel réparti selon le profil de l\'an passé' : ''}">Chute du mois (${lib}) <b>${estR.size ? '≈ ' : ''}${fmt(chute, 'euros')}</b>${d == null ? '' : ` <span class="${d >= 0 ? 'wk-up' : 'wk-down'}">${d >= 0 ? '▲ +' : '▼ '}${Math.abs(d).toFixed(1)}%</span> <span>vs N-1</span>`}${estR.size ? ` <span>· dont estimation pour ${estR.size} restaurant${estR.size > 1 ? 's' : ''}</span>` : ''}${manque > 0 ? ` <span>· ${manque} j sans prévision</span>` : ''}</div>`;
+}
+
+// ── Vue Année : détail MOIS PAR MOIS (la tuile reste le cumul de l'année) ──
+function weekAggIdx(id, side, resto, idx) {                 // comme weekAgg, sur une partie des jours seulement (indices de WEEK.days)
+  const R = WEEK_RATIO[id];
+  if (R) { const n = weekAggIdx(R[0], side, resto, idx), d = weekAggIdx(R[1], side, resto, idx); return (n != null && d) ? n / d : null; }
+  if (id === 'vphe') { const a = weekAggIdx('alim_h', side, resto, idx), h = weekAggIdx('heures_a', side, resto, idx); return (a && h) ? a / h : null; }
+  if (id === 'perte') { const pe = weekAggIdx('perte_p', side, resto, idx), a = weekAggIdx('alim_pp', side, resto, idx); return (pe != null && a) ? pe / a : null; }
+  const arr = WEEK.kpis[id]?.[side]?.[resto]; if (!arr) return null;
+  let s = 0, any = false; for (const i of idx) { const v = arr[i]; if (v != null) { s += v; any = true; } }
+  return any ? s : null;
+}
+function renderYearDetail(box, k0) {
+  const k = k0.amt ? Object.assign({}, k0, { id: k0.amt, fmt: 'euros' }) : k0, r = weekResto || 'FRANCHISE';
+  const side = WEEK.n1eq ? 'n1d' : 'n1';                     // année en cours : jours équivalents ; année complète : même année N-1 (comme le total)
+  const goodCls = d => d == null ? 'var(--muted)' : ((k.invert ? d < 0 : d >= 0) ? 'var(--green)' : 'var(--red)');
+  const rows = [];
+  for (let m = 0; m < 12; m++) {
+    const idx = WEEK.days.map((d, i) => (+d.slice(5, 7) - 1 === m ? i : -1)).filter(i => i >= 0);
+    const v = weekAggIdx(k.id, 'cur', r, idx), p = weekAggIdx(k.id, side, r, idx);
+    if (v == null && p == null) continue;                     // mois à venir : pas de ligne
+    rows.push({ m, v, p, delta: (v != null && p) ? (v - p) / p * 100 : null, nj: idx.filter(i => WEEK.kpis.ca_total.cur[r] && WEEK.kpis.ca_total.cur[r][i] != null).length, nt: idx.length });
+  }
+  const tot = weekAgg(k.id, 'cur', r), totp = weekAgg(k.id, 'n1', r), dt = (tot != null && totp) ? (tot - totp) / totp * 100 : null;
+  const dl = d => d == null ? '—' : (d >= 0 ? '▲ +' : '▼ ') + d.toFixed(1) + '%';
+  const body = rows.map(x => `<tr><td>${_MOIS_FR[x.m]}${x.nj && x.nj < x.nt ? ` <span style="color:var(--muted);font-size:.68rem">(${x.nj} jour${x.nj > 1 ? 's' : ''} saisi${x.nj > 1 ? 's' : ''})</span>` : ''}</td><td>${fmt(x.v, k.fmt)}</td><td>${fmt(x.p, k.fmt)}</td><td class="delta" style="color:${goodCls(x.delta)}">${dl(x.delta)}</td></tr>`).join('');
+  box.innerHTML = `<div class="week-detail">
+    <div class="week-detail-title">${k.label} — détail mois par mois · ${r === 'FRANCHISE' ? 'Vue Franchise' : r}</div>
+    <div style="height:230px;margin-bottom:12px"><canvas id="weekChartCanvas"></canvas></div>
+    <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Mois</th><th>${WEEK.yearCur}</th><th>${WEEK.yearN1} (${WEEK.n1eq ? 'jours équivalents' : 'même mois'})</th><th class="delta">Δ</th></tr></thead>
+      <tbody>${body}<tr style="font-weight:800;border-top:2px solid var(--border)"><td>Total année${WEEK.partial ? ' (cumul au ' + _wkFmt(_wkLastDay()) + ')' : ''}</td><td>${fmt(tot, k.fmt)}</td>
+        <td>${fmt(totp, k.fmt)}</td><td class="delta" style="color:${goodCls(dt)}">${dl(dt)}</td></tr></tbody></table></div>
+    <div style="font-size:.7rem;color:var(--muted);margin-top:6px">Chaque mois est comparé aux jours équivalents de l'an passé (même jour de la semaine) pour les seuls jours saisis cette année${WEEK.n1eq ? '' : ' ; année complète : le total est comparé à la même année N-1, d\'où une somme des lignes légèrement différente'}.</div></div>`;
+  if (weekChartInst) { try { weekChartInst.destroy(); } catch (e) {} weekChartInst = null; }
+  const canvas = document.getElementById('weekChartCanvas');
+  if (canvas && typeof Chart !== 'undefined') {
+    weekChartInst = new Chart(canvas, {
+      type: 'bar',
+      data: { labels: rows.map(x => _MOIS_FR[x.m].slice(0, 4) + '.'), datasets: [
+        { label: WEEK.yearCur, data: rows.map(x => x.v), backgroundColor: 'rgba(139,92,246,.75)', borderRadius: 4 },
+        { label: WEEK.yearN1, data: rows.map(x => x.p), backgroundColor: 'rgba(59,130,246,.45)', borderRadius: 4 } ] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#6b7280', font: { size: 11 }, boxWidth: 12 } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, k.fmt)}` } } },
+        scales: { x: { grid: { display: false }, ticks: { color: '#6b7280', font: { size: 10 } } }, y: { grid: { color: '#e8eaed' }, ticks: { color: '#6b7280', font: { size: 10 }, callback: v => fmt(v, k.fmt) } } } }
+    });
+  }
 }
 // ══ Prédiction IA : chute du mois prédite (CA net total et CA net alimentaire) ══
 // Modèle statistique appris sur l'historique du restaurant (aucune donnée ne sort de la page) :
@@ -6853,14 +6907,14 @@ function renderWeekStrip() {
   const r = weekResto || 'FRANCHISE';
   const minOff = _wkMinOffset();
   const nav = `<span class="wk-nav">
-      <span style="display:inline-flex;gap:0;margin-right:8px"><button onclick="setWeekMode('d')" style="${weekMode === 'd' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:8px 0 0 8px">Jour</button><button onclick="setWeekMode('w')" style="${weekMode === 'w' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:0">Semaine</button><button onclick="setWeekMode('m')" style="${weekMode === 'm' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:0 8px 8px 0">Mois</button></span>
+      <span style="display:inline-flex;gap:0;margin-right:8px"><button onclick="setWeekMode('d')" style="${weekMode === 'd' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:8px 0 0 8px">Jour</button><button onclick="setWeekMode('w')" style="${weekMode === 'w' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:0">Semaine</button><button onclick="setWeekMode('m')" style="${weekMode === 'm' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:0">Mois</button><button onclick="setWeekMode('y')" style="${weekMode === 'y' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : ''}border-radius:0 8px 8px 0">Année</button></span>
       <button onclick="weekNav(-1)" ${weekOffset > minOff ? '' : 'disabled'} title="${_wkU()[0]}">◀</button>
       <button onclick="weekNav(1)" ${weekOffset < 0 ? '' : 'disabled'} title="${_wkU()[1]}">▶</button>
       ${weekOffset < 0 ? `<button class="wk-now" onclick="weekNav(0,true)">${_wkU()[2]}</button>` : ''}
     </span>`;
   let h = `<div class="week-strip"><div class="week-strip-head">
     <span class="week-strip-title" style="display:inline-flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> ${WEEK.label}</span>
-    <span class="week-strip-sub">vs ${{ d: 'jour équivalent', m: (WEEK.n1eq ? 'jours équivalents' : 'même mois'), w: 'semaine équivalente' }[weekMode]} ${WEEK.yearN1} (${WEEK.label_n1})</span>
+    <span class="week-strip-sub">vs ${{ d: 'jour équivalent', m: (WEEK.n1eq ? 'jours équivalents' : 'même mois'), w: 'semaine équivalente', y: (WEEK.n1eq ? 'jours équivalents' : 'même année') }[weekMode]} ${WEEK.yearN1} (${WEEK.label_n1})</span>
     ${nav}
   </div>
   ${restoCarousel(weekResto, 'weekNavResto', '#8b5cf6', 'wkCar')}
@@ -6896,6 +6950,7 @@ function renderWeekDetail() {
   const k0 = WEEK_KPIS.find(x => x.id === weekOpenKpi);
   if (!box || !k0) return;
   if (weekMode === 'd') return renderDayDetail(box, k0);                       // vue Jour : tableau par restaurant
+  if (weekMode === 'y') return renderYearDetail(box, k0);                      // vue Année : tableau mois par mois
   const k = k0.amt ? Object.assign({}, k0, { id: k0.amt, fmt: 'euros' }) : k0;   // détail en euros pour pertes, remb., promo, écart
   const r = weekResto || 'FRANCHISE';
   const cur = weekDayArr(k.id, 'cur', r);
@@ -7009,7 +7064,7 @@ function weekRestoTable() {
   const frRow = `<tr class="wkt-fr"><td>Franchise</td>${WEEK_KPIS.map(k => td(k, 'FRANCHISE')).join('')}</tr>`;
   const rows = list.map(r => `<tr><td onclick="weekPickResto('${r}')" title="Voir les cartes de ${restoDisplay(r).replace(/'/g, '’')}">${restoShort(r)}</td>${WEEK_KPIS.map(k => td(k, r)).join('')}</tr>`).join('');
   return `<div class="wkt-wrap"><table class="wkt"><thead><tr><th>Restaurant</th>${head}</tr></thead><tbody>${frRow}${rows}</tbody></table></div>
-    <div class="wkt-note">${WEEK.label} · variation vs ${{ d: 'jour équivalent', m: 'même mois', w: 'semaine équivalente' }[weekMode]} ${WEEK.yearN1}. Un titre de colonne classe les restaurants ; un clic sur un restaurant affiche ses cartes.</div>`;
+    <div class="wkt-note">${WEEK.label} · variation vs ${{ d: 'jour équivalent', m: 'même mois', w: 'semaine équivalente', y: (WEEK.n1eq ? 'jours équivalents' : 'même année') }[weekMode]} ${WEEK.yearN1}. Un titre de colonne classe les restaurants ; un clic sur un restaurant affiche ses cartes.</div>`;
 }
 
 // Ajoute le sélecteur « Cartes | Par restaurant » à la bannière et remplace les cartes par le tableau quand il est actif
@@ -7611,7 +7666,7 @@ function renderAutoSummary() {
   const caM  = (p) => move(p, 'bondit de', 'progresse de', 'chute de', 'recule de', 'reste stable');
 
   const ca = dw('ca_total'), vphe = dw('vphe');
-  let body = `<b>${nom}</b> : le chiffre d'affaires ${caM(ca)} sur ${{ d: 'le jour équivalent', m: (WEEK.n1eq ? 'les jours équivalents' : 'la même période'), w: 'la même semaine' }[weekMode]} ${YEAR_PREV}`;
+  let body = `<b>${nom}</b> : le chiffre d'affaires ${caM(ca)} sur ${{ d: 'le jour équivalent', m: (WEEK.n1eq ? 'les jours équivalents' : 'la même période'), w: 'la même semaine', y: (WEEK.n1eq ? 'les jours équivalents' : 'la même année') }[weekMode]} ${YEAR_PREV}`;
   const vM = move(vphe, 'bondit de', 'progresse de', 'chute de', 'recule de', 'reste stable');
   body += `, la productivité horaire (VPHE) ${vM}.`;
 
@@ -7630,7 +7685,7 @@ function renderAutoSummary() {
     const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
     const cur = WEEK.kpis.ca_total.cur[r] || [], n1 = WEEK.kpis.ca_total.n1[r] || [];
     const days = [];
-    for (let i = 0; i < WEEK.days.length; i++) if (cur[i] != null && n1[i]) days.push({ j: weekMode === 'm' ? 'le ' + WEEK.days[i].slice(8, 10) + '/' + WEEK.days[i].slice(5, 7) : JOURS[i], d: (cur[i] - n1[i]) / n1[i] * 100 });
+    for (let i = 0; i < WEEK.days.length; i++) if (cur[i] != null && n1[i]) days.push({ j: (weekMode === 'm' || weekMode === 'y') ? 'le ' + WEEK.days[i].slice(8, 10) + '/' + WEEK.days[i].slice(5, 7) : JOURS[i], d: (cur[i] - n1[i]) / n1[i] * 100 });
     if (days.length >= 2) {
       days.sort((a, b) => b.d - a.d);
       const hi = days[0], lo = days[days.length - 1];
@@ -10597,13 +10652,13 @@ async function plgTeamSave(id) {
 }
 function plgTeamBox(can) {
   let h = PLG.team.length ? PLG.team.map(p => plgTeamRow(p, can)).join('') : '<div style="font-size:.78rem;color:var(--muted)">Personne pour le moment.</div>';
-  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgNp" maxlength="40" placeholder="Prénom et initiale" style="width:150px"><select class="plg-in" id="plgNf2" onchange="plgFnChg()">' + Object.entries(PLG_FN).map(([k, n]) => '<option value="' + k + '" ' + (k === 'manager' ? 'selected' : '') + '>' + n + '</option>').join('') + '</select><select class="plg-in" id="plgNk" onchange="document.getElementById(\'plgNh\').value=this.value==\'temps_partiel\'?24:35"><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select><input class="plg-in" id="plgNh" type="number" min="1" max="48" step="0.5" value="35" style="width:70px" title="Heures par semaine du contrat"><span id="plgNfj" style="display:none;font-size:.76rem;color:var(--muted);align-self:center">Forfait 218 jours</span><button class="plg-btn" onclick="plgTeamAdd()">Ajouter</button></div><div style="font-size:.7rem;color:var(--muted);margin-top:4px">Prénom et initiale seulement, jamais le nom complet. Une personne retirée disparaît de la grille ; ses plannings passés restent enregistrés.</div>';
+  if (can) h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="plg-in" id="plgTp" maxlength="40" placeholder="Prénom et initiale" style="width:150px"><select class="plg-in" id="plgTf" onchange="plgFnChg()">' + Object.entries(PLG_FN).map(([k, n]) => '<option value="' + k + '" ' + (k === 'manager' ? 'selected' : '') + '>' + n + '</option>').join('') + '</select><select class="plg-in" id="plgTk" onchange="document.getElementById(\'plgTh\').value=this.value==\'temps_partiel\'?24:35"><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select><input class="plg-in" id="plgTh" type="number" min="1" max="48" step="0.5" value="35" style="width:70px" title="Heures par semaine du contrat"><span id="plgTfj" style="display:none;font-size:.76rem;color:var(--muted);align-self:center">Forfait 218 jours</span><button class="plg-btn" onclick="plgTeamAdd()">Ajouter</button></div><div style="font-size:.7rem;color:var(--muted);margin-top:4px">Prénom et initiale seulement, jamais le nom complet. Une personne retirée disparaît de la grille ; ses plannings passés restent enregistrés.</div>';
   return h;
 }
-function plgFnChg() { const fj = plgFj({ fonction: document.getElementById('plgNf2').value }); ['plgNk', 'plgNh'].forEach(i => { const e = document.getElementById(i); if (e) e.style.display = fj ? 'none' : ''; }); const m = document.getElementById('plgNfj'); if (m) m.style.display = fj ? '' : 'none'; }
+function plgFnChg() { const fj = plgFj({ fonction: document.getElementById('plgTf').value }); ['plgTk', 'plgTh'].forEach(i => { const e = document.getElementById(i); if (e) e.style.display = fj ? 'none' : ''; }); const m = document.getElementById('plgTfj'); if (m) m.style.display = fj ? '' : 'none'; }
 async function plgTeamAdd() {
-  const n = document.getElementById('plgNp').value.trim(); if (!n) { document.getElementById('plgNp').focus(); return; }
-  const body = { franchise: PLG.FR, restaurant: PLG.resto, prenom: n, fonction: document.getElementById('plgNf2').value, contrat: plgFj({ fonction: document.getElementById('plgNf2').value }) ? 'temps_plein' : document.getElementById('plgNk').value, heures_hebdo: plgFj({ fonction: document.getElementById('plgNf2').value }) ? 35 : (+document.getElementById('plgNh').value || 35), ordre: PLG.team.length };
+  const n = document.getElementById('plgTp').value.trim(); if (!n) { plgMsg('Indiquez le prénom et l\'initiale de la personne à ajouter (l\'adresse e-mail n\'est pas nécessaire ici).', 'err'); document.getElementById('plgTp').focus(); return; }
+  const body = { franchise: PLG.FR, restaurant: PLG.resto, prenom: n, fonction: document.getElementById('plgTf').value, contrat: plgFj({ fonction: document.getElementById('plgTf').value }) ? 'temps_plein' : document.getElementById('plgTk').value, heures_hebdo: plgFj({ fonction: document.getElementById('plgTf').value }) ? 35 : (+document.getElementById('plgTh').value || 35), ordre: PLG.team.length };
   const r = await plgApi('/rest/v1/equipe', 'POST', body, { Prefer: 'return=representation' }); if (!r.ok) { plgMsg('Ajout refusé : ' + ((r.j && r.j.message) || 'erreur').replace(/^équipe : /, ''), 'err'); return; }
   PLG.team.push((r.j && r.j[0]) || body); plgRender(); plgMsg('✓ ' + n + ' ajouté(e) à l\'équipe.', 'ok');
 }
@@ -11928,7 +11983,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-220514';
+const BUILD_VERSION = '20261124-222837';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
