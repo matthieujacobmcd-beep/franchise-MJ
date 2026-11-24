@@ -167,7 +167,7 @@
 </style>
 
 <script>
-const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "on"}, "superviseurs": {}, "formation_links": [{"resto": "Lourdes", "platform": "Crew Academy", "sous_titre": "Suivi des formations & polyvalence", "url": "https://matthieujacobmcd-beep.github.io/crew-academy-mj/"}], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "indices": {"oepe": 300, "r2p": 300, "analyses": 0.97, "hello": 0.9, "reseaux": 3.3, "oph": 50, "turnover": 1.0}, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}};
+const FRANCHISE_CFG = {"id": "mj", "title": "Franchise MJ", "restos": [{"key": "LOURDES", "name": "Lourdes", "short": "Lourdes", "tab": "Lourdes", "chip": "LOURDES", "noms": "Lourdes", "label": "Lourdes", "bg": "#e3f2fd", "color": "#1565c0", "perf": "LOURDES"}, {"key": "POUZAC", "name": "Pouzac", "short": "Pouzac", "tab": "Pouzac", "chip": "POUZAC", "noms": "Pouzac", "label": "Pouzac", "bg": "#e8f5e9", "color": "#15803d", "perf": "POUZAC"}], "open": {}, "markets": {}, "modules": {"interventions": "soon", "formation": "soon"}, "superviseurs": {}, "formation_links": [], "apps_script_url": "https://script.google.com/macros/s/AKfycbyM-L10erj2_PTgXVxXGU2mI_PlU-ZTFfnhVcJVam65MVPvwYxouLYVBQlMbNFzQZrp/exec", "files": {"dashboard": "index.html", "saisie": "saisie.html", "apps_script": "AppsScript_MJ.gs"}, "indices": {"oepe": 300, "r2p": 300, "analyses": 0.97, "hello": 0.9, "reseaux": 3.3, "oph": 50, "turnover": 1.0}, "auth": {"supabase_url": "https://xbxusmdcimlhhdacbobf.supabase.co", "supabase_key": "sb_publishable_Jr_2AQXQgq4a8Q_s6By8CA_eFpIxKF3", "franchise": "MJ", "mode": "both", "redirect": "https://matthieujacobmcd-beep.github.io/franchise-MJ/"}};
 // Hash SHA-256 du mot de passe (mot de passe jamais stocké en clair)
 const PWD_HASH = '69297568920297b5aef347d6db5e549c79e50e7bf880c4a8203eeff3a53c5c58';
 const SESSION_KEY = 'fmj_auth';
@@ -11866,7 +11866,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-101248';
+const BUILD_VERSION = '20261124-215158';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

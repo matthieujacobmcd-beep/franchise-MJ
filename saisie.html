@@ -3738,7 +3738,7 @@ function renderValid() {
   const key = lvK(r, Y), me = accProfiles().find(p => accCovers(p, r)) || null, jk = LV.journal[key];
   if (!jk || Date.now() - jk.at > 30000) { LV.journal[key] = { at: Date.now(), rows: jk ? jk.rows : [] }; const my = lvMy(r); if (my) lvCall('load', r, Y, { niveau: my }).then(j => { if (j.ok) { LV.journal[key] = { at: Date.now(), rows: j.journal || [], sum: null }; if (curTab === 'valid') renderValid(); } }); }
   const J = (LV.journal[key] || {}).rows || [];
-  const T = { lv_save: 'a enregistré (version précédente archivée)', lv_feed: 'a alimenté la version de ce niveau (version précédente conservée)', lv_validate: 'a validé', lv_request: 'a demandé le déblocage', lv_unlock: 'a débloqué', lv_reset: 'a remis à zéro', open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: 'a déverrouillé', comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', restore: 'a restauré une version' };
+  const T = { lv_save: 'a enregistré (version précédente archivée)', lv_feed: 'a alimenté la version de ce niveau (version précédente conservée)', lv_fill: 'a vu ses cases vides complétées par la version validée du niveau précédent (version précédente conservée)', lv_relay: 'a repris la version validée du niveau précédent (copie non touchée, version précédente conservée)', lv_validate: 'a validé', lv_request: 'a demandé le déblocage', lv_unlock: 'a débloqué', lv_reset: 'a remis à zéro', open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: 'a déverrouillé', comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', restore: 'a restauré une version' };
   const hist = J.filter(x => x.action !== 'comment' || x.comment).slice().reverse().slice(0, 40).map(x => `<li><b>${escH(x.by)}</b> ${T[x.action] || escH(x.action)}${x.from && /^lv_/.test(x.action) ? ' (' + escH(LV_NAME[x.from] || x.from) + ')' : ''} <small>· ${wfDate(x.at)}</small>${x.comment ? `<i>${escH(x.comment)}</i>` : ''}</li>`).join('');
   const ov = RESTOS.length > 1 ? `<details class="sim-d"><summary>Tous les dossiers ${Y} de mon périmètre</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:520px"><thead><tr><th class="l">Restaurant</th>${['directeur', 'superviseur', 'franchise'].map(n => `<th>${LV_NAME[n]}</th>`).join('')}</tr></thead><tbody>${RESTOS.map(x => `<tr><td class="l">${escH(x[1])}</td>${['directeur', 'superviseur', 'franchise'].map(n => { const v = lvRow(x[0], Y, n); return `<td>${!lvChain(x[0]).includes(n) ? '—' : !v ? '<span style="color:var(--muted)">—</span>' : (v.statut === 'publie' ? 'Publié' : v.statut === 'valide' ? 'Validé' : 'En cours') + (v.demande ? ' (déblocage demandé)' : '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div></details>` : '';
   pn.innerHTML = head + `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div><div id="lvVal">${lvBarHtml(r, Y)}</div>` + `<div class="hint" style="margin:6px 0 10px">Pour modifier ou consulter le détail d'une saisie : ouvre « Prévision CA » ou « Budget &amp; PNL » (l'écran affiche la version choisie ci-dessus).</div>` + ov + `<div class="sim-h">Historique</div>${hist ? `<ul class="wf-log">${hist}</ul>` : '<div class="hint">Aucune action pour le moment.</div>'}`;
@@ -5276,7 +5276,10 @@ const EQ_DEF = {                                                           // dr
   franchise:   { modules: ['dashboard', 'saisie', 'revue', 'planning', 'utilisateurs'], can: ['sim', 'budget', 'valid', 'edg'], tous: true },
   collab:      { modules: ['saisie'], can: ['budget'], tous: true },
 };
-const eqRolesFor = () => ['franchise', 'collab', 'superviseur', 'directeur'].filter(k => EQ_RANK[k] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0));
+const eqDeleg = () => !!(SB_RIGHTS && SB_RIGHTS.role === 'superviseur' && ((SB_RIGHTS.rang) || 0) < 1 && SB_RIGHTS.acces && (+SB_RIGHTS.acces.eq || 0) >= 2);   // superviseur dont la tuile « Équipes et accès » est en modification : gère les directeurs de SES restaurants (même règle côté base)
+const eqMesRestos = () => (SB_RIGHTS && SB_RIGHTS.restos) || [];
+const eqDansPerim = k => !eqDeleg() || eqMesRestos().includes('*') || eqMesRestos().includes(k);
+const eqRolesFor = () => eqDeleg() ? ['directeur'] : ['franchise', 'collab', 'superviseur', 'directeur'].filter(k => EQ_RANK[k] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0));
 const eqMods = () => EQ_MODS.filter(([k]) => k !== 'revue' || CFG.id === 'py');
 function eqSet(t, k) { EQ.msg = [k || '', t || '']; const m = document.getElementById('eqMsg'); if (m) { m.className = 'save-msg ' + (k || ''); m.textContent = t || ''; } }
 async function eqCall(path, method, body, headers) {
@@ -5293,12 +5296,13 @@ async function renderEquipes() {
   EQ.postes = d.ok && Array.isArray(d.j) && d.j.length ? d.j : null;                                // null = postes pas encore installés côté base : l'écran d'avant s'affiche
   if (!a.ok) { p.innerHTML = `<div class="entry-banner err" style="display:block">Impossible de charger les équipes${a.j && a.j.message ? ' : ' + escH(a.j.message) : ''}.</div>`; return; }
   EQ.rows = a.j || []; EQ.hasRef = EQ.rows.some(x => 'resto_ref' in x); EQ.journal = (b.ok && b.j) || []; EQ.edit = null; if (EQ.postes && !eqPoste(EQ.pid)) { EQ.pid = (eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[0] || EQ.postes[0]).id; EQ.pd = null; EQ.pnew = null; }
-  EQ.f218 = c.ok && Array.isArray(c.j) ? Object.fromEntries(c.j.map(x => [String(x.email).toLowerCase(), x])) : null;     // null = lien avec le 218 jours pas encore installé côté base
+  EQ.f218 = !eqDeleg() && c.ok && Array.isArray(c.j) ? Object.fromEntries(c.j.map(x => [String(x.email).toLowerCase(), x])) : null;     // null = lien avec le 218 jours pas encore installé côté base
   EQ.pp = [];                                                                                       // personnes des primes (managers, responsables de zone, hôtesses… sans compte) : même principe de choix d'accès
   if (CFG.modules && CFG.modules.primes === 'on' && eqRolesFor().length) {
     const [pa, po] = await Promise.all([eqCall('/rest/v1/primes_personnes?franchise=eq.' + fr + '&select=id,restaurant,nom,email,actif&order=restaurant,ordre&limit=1000'), eqCall('/rest/v1/primes_organigramme?annee=gte.2026&select=personne_id,annee,mois,poste,contrat&order=annee.desc,mois.desc&limit=1000')]);
     if (pa.ok && Array.isArray(pa.j) && po.ok && Array.isArray(po.j)) { const dern = {}; po.j.forEach(o => { if (!dern[o.personne_id] && +o.contrat > 0) dern[o.personne_id] = o; }); EQ.pp = pa.j.filter(x => x.actif !== false && dern[x.id]).map(x => Object.assign({ poste: dern[x.id].poste }, x)); }
   }
+  if (eqDeleg()) EQ.pp = (EQ.pp || []).filter(x => eqDansPerim(x.restaurant));
   eqPaint();
 }
 const eqLabel = k => (ACC_ROLE && ACC_ROLE[k]) || k;
@@ -5341,6 +5345,7 @@ const EQ_PIN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stro
 const ACC_ICO = { 0: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>', 1: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>', 2: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>' };
 const eqTiles = () => ACC_CAT.map(([g, L]) => [g, L.filter(([k]) => k !== 'rev' || CFG.id === 'py')]);
 const eqPoste = id => (EQ.postes || []).find(x => x.id === id) || null;
+const eqPostesPick = () => eqDeleg() ? (EQ.postes || []).filter(x => x.role === 'directeur') : eqPostesFor();                 // postes qu'on peut attribuer (un superviseur délégué : ceux de directeur)
 const eqPostesFor = () => (EQ.postes || []).filter(x => EQ_RANK[x.role] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0));          // seuls les postes d'un échelon inférieur au mien se modifient
 const eqEff = (po, over) => Object.assign({}, po ? po.acces : {}, over || {});
 const eqRoleOf = e => { const po = EQ.postes && eqPoste(e.poste_id); return po ? po.role : e.role; };
@@ -5412,7 +5417,7 @@ const eqCanLine = r => {                                                      //
 const eqPosteNom = r => (EQ.postes && eqPoste(r.poste_id) ? eqPoste(r.poste_id).nom : eqLabel(r.role));
 const eqMatch = (r, q) => { if (!q) return true; const t = (r.nom + ' ' + r.email + ' ' + eqPosteNom(r) + ' ' + eqResto(r)).toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every(x => t.includes(x)); };
 function eqCard(r) {
-  const st = eqState(r), me = SB_RIGHTS && String(r.email).toLowerCase() === String(SB_RIGHTS.email).toLowerCase(), low = EQ_RANK[r.role] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0) && !me, c218 = eq218(r), nom = eqPosteNom(r), col = eqColOf(eqRoleOf(r), nom), np = EQ.postes ? eqNPerso(r) : 0;
+  const st = eqState(r), me = SB_RIGHTS && String(r.email).toLowerCase() === String(SB_RIGHTS.email).toLowerCase(), low = (EQ_RANK[r.role] < ((SB_RIGHTS && SB_RIGHTS.rang) || 0) || (eqDeleg() && r.role === 'directeur')) && !me, c218 = eq218(r), nom = eqPosteNom(r), col = eqColOf(eqRoleOf(r), nom), np = EQ.postes ? eqNPerso(r) : 0;
   const pl = r.role === 'directeur' && (r.modules || []).includes('planning') ? (r.restos_planning || []) : null;
   const cn = (r.modules || []).includes('saisie') ? (() => { const c = sbEffCan(r), lab = { sim: 'Prévision CA', budget: 'Budget & PNL', valid: 'Validation', edg: 'Salaires' }, have = ['sim', 'budget', 'valid', 'edg'].filter(k => c.includes(k)); return have.length ? '<div class="eq-sub ok">Enregistre : ' + have.map(k => lab[k]).join(' · ') + '</div>' : '<div class="eq-sub warn">Attention : ne peut enregistrer ni prévision, ni budget, ni validation</div>'; })() : '';
   return `<article class="eq-card${r.actif ? '' : ' off'}" style="--c:${col}">
@@ -5436,7 +5441,7 @@ function eqListHtml() {
 const EQ_PPOSTE = { directeur: 'Directeur', adjoint: 'Directeur adjoint', assistant: 'Assistant de direction', manager: 'Manager', rz: 'Responsable de zone', adm: 'Assistant administratif', hotesse: 'Hôtesse principale' };
 function eqPrimesSansAcces() { const m = new Set((EQ.rows || []).map(r => String(r.email).toLowerCase())); return (EQ.pp || []).filter(p => !(p.email && m.has(String(p.email).toLowerCase()))); }
 function eqCardPrimes(p) {
-  const nom = EQ_PPOSTE[p.poste] || p.poste, col = eqColOf('directeur', nom), po = eqPostesFor().find(x => x.nom === nom), can = eqRolesFor().length > 0;
+  const nom = EQ_PPOSTE[p.poste] || p.poste, col = eqColOf('directeur', nom), po = eqPostesPick().find(x => x.nom === nom), can = eqRolesFor().length > 0;
   return `<article class="eq-card off" style="--c:${col}"><div class="eq-top"><div class="eq-av">${escH(eqIni(p.nom))}<i class="eq-dot" style="background:#94a3b8" title="Pas d'accès"></i></div><div class="eq-id"><b>${escH(p.nom)}</b><span class="eq-mail">Pas de compte</span></div></div>
     <div class="eq-badges"><span class="eq-b eq-poste">${escH(nom)}</span><span class="eq-b" style="color:#94a3b8">Aucun accès</span></div>
     <div class="eq-line">${EQ_PIN}<span>${escH(eqNomR(p.restaurant))}</span></div>
@@ -5445,7 +5450,7 @@ function eqCardPrimes(p) {
 }
 function eqOpenPrimes(id) {                                               // même formulaire que « + Ajouter une personne », prérempli avec la fiche des primes
   const p = (EQ.pp || []).find(x => x.id === id); if (!p) return; const nom = EQ_PPOSTE[p.poste] || 'Directeur';
-  const po = eqPostesFor().find(x => x.nom === nom) || eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[0] || null, ok = (CFG.restos || []).some(c => c.key === p.restaurant);
+  const po = eqPostesPick().find(x => x.nom === nom) || eqPostesPick().find(x => x.nom === 'Directeur') || eqPostesPick()[0] || null, ok = (CFG.restos || []).some(c => c.key === p.restaurant);
   EQ.edit = { id: '', role: po ? po.role : 'directeur', poste_id: po ? po.id : null, acces: {}, isNew: true, nom: p.nom, email: '', restos: ok ? [p.restaurant] : [], restos_planning: ok && po && po.role === 'directeur' ? [p.restaurant] : [], _primes: p.id };
   eqSet(po && po.nom === nom ? '' : 'Le poste « ' + nom + ' » n\'existe pas encore : choisissez un poste provisoire ou créez-le d\'abord.', po && po.nom === nom ? '' : 'err'); EQ.y = window.scrollY; eqPaint(); window.scrollTo(0, 0);
 }
@@ -5462,7 +5467,7 @@ function eqPaint() {
     eqForm(); return;
   }
   const jr = EQ.journal.map(x => `<li>${escH(eqWhen(x.quand))} · ${escH(x.par || '')} · ${escH(x.cible || '')} : ${escH({ INSERT: 'ajouté', UPDATE: 'modifié', DELETE: 'supprimé' }[x.action] || x.action)}</li>`).join('');
-  p.innerHTML = `<div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.</div>${banner}
+  p.innerHTML = `<div class="sim-note" style="margin-bottom:10px">Équipes de <b>${escH(CFG.title)}</b> : chaque personne a son propre accès (e-mail + mot de passe personnel). « Désactiver » coupe tout en moins d'une minute.${eqDeleg() ? '<br>Vous gérez ici <b>les directeurs de vos restaurants</b> : vous ne pouvez pas donner plus d\'accès que vous n\'en avez ni sortir de vos restaurants.' : ''}</div>${banner}
     <div class="eq-bar">${can ? '<button class="btn-save" onclick="eqOpen(\'\')">+ Ajouter une personne</button>' : ''}<input id="eqQ" class="eq-q" type="search" placeholder="Rechercher : nom, e-mail, poste, restaurant" value="${escH(EQ.q || '')}" oninput="eqFilter(this.value)" aria-label="Rechercher une personne"><span class="eq-sum">${escH(eqSumTxt())}</span></div>
     <div class="save-msg ${EQ.msg[0]}" id="eqMsg" style="margin:0 0 6px">${escH(EQ.msg[1])}</div>
     <div id="eqList">${eqListHtml()}</div>
@@ -5491,7 +5496,7 @@ function eqCxPaint() {
 }
 
 function eqOpen(id) {
-  const dp = eqPostesFor().find(x => x.nom === 'Directeur') || eqPostesFor()[eqPostesFor().length - 1] || null;
+  const dp = eqPostesPick().find(x => x.nom === 'Directeur') || eqPostesPick()[eqPostesPick().length - 1] || null;
   EQ.edit = id === '' ? { id: '', role: dp ? dp.role : (eqRolesFor().slice(-1)[0] || 'directeur'), poste_id: dp ? dp.id : null, acces: {}, isNew: true } : (EQ.rows.find(r => r.id === id) ? Object.assign({}, EQ.rows.find(r => r.id === id), { acces: Object.assign({}, EQ.rows.find(r => r.id === id).acces || {}) }) : null);
   eqSet(''); EQ.y = window.scrollY; eqPaint(); window.scrollTo(0, 0);
 }
@@ -5552,10 +5557,10 @@ function eqSync() {                                                         // r
 }
 function eqFormP() {
   const e = EQ.edit, f = document.getElementById('eqForm'); if (!f || !e) return; const y = window.scrollY;
-  const po = eqPoste(e.poste_id), isNew = !!e.isNew, has = (a, k) => (a || []).includes(k), allR = CFG.restos.map(c => [c.key, c.label]);
+  const po = eqPoste(e.poste_id), isNew = !!e.isNew, has = (a, k) => (a || []).includes(k), allR = CFG.restos.map(c => [c.key, c.label]).filter(([k]) => eqDansPerim(k));
   if (!e.restos) e.restos = po && EQ_DEF[po.role] && EQ_DEF[po.role].tous ? ['*'] : [];
   const all = has(e.restos, '*'), inp = 'padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;width:100%;box-sizing:border-box;background:var(--card);color:var(--text)';
-  const opts = eqPostesFor(); if (po && !opts.some(x => x.id === po.id)) opts.unshift(po);
+  const opts = eqPostesPick().slice(); if (po && !opts.some(x => x.id === po.id)) opts.unshift(po);
   const eff = eqEff(po, e.acces), nPerso = Object.keys(e.acces || {}).length;
   const col = po ? eqColOf(po.role, po.nom) : '#64748b', st = isNew ? null : eqState(e), c218 = isNew ? null : eq218(e);
   const hero = `<div class="eq-hero" style="--c:${col}"><div class="eq-av lg">${escH(isNew && !e.nom ? '+' : eqIni(e.nom))}${st ? `<i class="eq-dot" style="background:${st[1]}" title="${escH(st[0])}"></i>` : ''}</div>
@@ -5568,7 +5573,7 @@ function eqFormP() {
         <label style="font-size:.78rem;color:var(--muted)">Poste<select id="eqPoste" style="${inp}" onchange="eqPosteChanged(this.value)">${opts.map(x => `<option value="${escH(x.id)}" ${x.id === e.poste_id ? 'selected' : ''}>${escH(x.nom)}</option>`).join('')}</select></label></div>
       ${isNew ? '' : '<div style="font-size:.74rem;color:var(--muted);margin-top:8px">Changer l\'adresse : ' + (e.user_id ? 'la personne s\'est déjà connectée, son ancien compte perdra l\'accès et elle devra utiliser « Première connexion » avec la nouvelle adresse (invitation envoyée automatiquement).' : 'l\'invitation est renvoyée automatiquement à la nouvelle adresse.') + '</div>'}</section>
     <section class="eq-sec"><h4>Restaurants <span style="text-transform:none;letter-spacing:0;font-weight:500">(propres à cette personne, pas au poste)</span></h4>
-      <div style="display:flex;flex-wrap:wrap;gap:6px 14px"><label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked);eqRefRefresh()"> <b>Tous</b></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${eqDeleg() && !eqMesRestos().includes('*') ? (all ? '<label style="font-size:.84rem"><input type="checkbox" id="eqAll" checked disabled> <b>Tous</b> <span style="color:var(--muted)">(défini par le franchisé, non modifiable ici)</span></label>' : '') : `<label style="font-size:.84rem"><input type="checkbox" id="eqAll" ${all ? 'checked' : ''} onchange="document.querySelectorAll('.eqR').forEach(c=>c.disabled=this.checked);eqRefRefresh()"> <b>Tous</b></label>`}
         ${allR.map(([k, n]) => `<label style="font-size:.84rem"><input type="checkbox" class="eqR" value="${escH(k)}" ${has(e.restos, k) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="eqRefRefresh()"> ${escH(n)}</label>`).join('')}</div>
       ${eqRefHtml(e, inp)}
       ${eqRoleOf(e) === 'directeur' ? `<div style="font-size:.78rem;color:var(--muted);margin:14px 0 4px">Restaurant du planning <span style="font-weight:400">(un directeur voit les KPI de ses restaurants mais n'ouvre que son planning ; les autres postes ouvrent tous les plannings)</span></div>
@@ -5599,7 +5604,7 @@ function eqReadP() {
 }
 // ── Postes : modèles d'accès (création, modification, alerte sur les personnalisations) ──
 function eqPostesHtml() {
-  if (!EQ.postes) return '';
+  if (!EQ.postes || eqDeleg()) return '';
   const po = eqPoste(EQ.pid) || EQ.postes[0], mine = eqPostesFor().some(x => x.id === po.id), draft = EQ.pd || (EQ.pd = Object.assign({}, po.acces)), users = EQ.rows.filter(r => r.poste_id === po.id);
   const pills = EQ.postes.map(x => `<button type="button" class="${x.id === po.id && !EQ.pnew ? 'on' : ''}" onclick="eqPSel('${x.id}')">${escH(x.nom)}</button>`).join('') + (eqRolesFor().length ? `<button type="button" class="${EQ.pnew ? 'on' : ''}" style="border-style:dashed" onclick="eqPNewOpen()">+ Nouveau poste</button>` : '');
   const nw = EQ.pnew ? `<div style="border:1.5px solid var(--border);border-radius:12px;padding:12px;margin:0 0 12px;background:var(--card)"><div style="font-weight:800;margin-bottom:8px">Nouveau poste</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:10px">
@@ -5646,7 +5651,8 @@ async function eqPDel() {
   if (!r.ok || (Array.isArray(r.j) && !r.j.length)) return eqSet(((r.j && r.j.message) || 'Suppression refusée').replace(/^postes : /, ''), 'err');
   EQ.pid = ''; EQ.pd = null; await renderEquipes(); eqSet('✓ Poste supprimé.', 'ok');
 }
-function eq218Block(e) {                                                  // accès à l'application « Suivi du forfait 218 jours » (comptes et fiches gérés dans cette appli)
+function eq218Block(e) {
+  if (eqDeleg()) return '<div style="margin-bottom:12px"><div style="font-size:.82rem;color:var(--muted)">Le suivi du forfait 218 jours est géré par les gestionnaires de l\'application.</div></div>';                                                  // accès à l'application « Suivi du forfait 218 jours » (comptes et fiches gérés dans cette appli)
   const lien = CFG.id === 'mj' ? 'onglet « Temps de travail »' : `<a href="${EQ_218_URL}" target="_blank" rel="noopener" style="color:var(--gold)">Ouvrir l'application 218 jours</a>`, ttl = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Application 218 jours (suivi du forfait jours)</div>';
   if (e.isNew) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Si la personne est au forfait jours, sa fiche se crée dans l'application 218 jours (${lien}) ; elle apparaîtra ici ensuite.</div></div>`;
   if (!EQ.f218) return `<div style="margin-bottom:12px">${ttl}<div style="font-size:.82rem;color:var(--muted)">Lien avec le 218 jours pas encore activé.</div></div>`;
@@ -5687,7 +5693,7 @@ async function eqSave() {
   const r = e.isNew ? await eqCall('/rest/v1/droits', 'POST', body, { Prefer: 'return=representation' }) : await eqCall('/rest/v1/droits?id=eq.' + e.id, 'PATCH', body, { Prefer: 'return=representation' });
   if (b) b.disabled = false;
   if (r.ok && !e.isNew && Array.isArray(r.j) && !r.j.length) return eqSet('Modification refusée : vous ne pouvez pas modifier cette personne', 'err');
-  if (!r.ok) return eqSet(r.status === 409 ? 'Cette adresse a déjà un accès' : ((r.j && r.j.message) || 'Enregistrement refusé : vous ne pouvez pas accorder ce niveau').replace(/^droits : /, ''), 'err');
+  if (!r.ok) return eqSet(r.status === 409 ? 'Cette adresse a déjà un accès' : (r.j && /row-level security/.test(String(r.j.message || '')) ? (eqDeleg() ? 'Enregistrement refusé : vous ne gérez que les directeurs de vos restaurants (poste de directeur, restaurants parmi les vôtres).' : 'Enregistrement refusé : vous ne pouvez pas accorder ce niveau') : ((r.j && r.j.message) || 'Enregistrement refusé : vous ne pouvez pas accorder ce niveau').replace(/^droits : /, '')), 'err');
   let note = '';
   if (e.isNew && e._primes) { const lk = await eqCall('/rest/v1/primes_personnes?id=eq.' + encodeURIComponent(e._primes), 'PATCH', { email: o.email }); note += lk.ok ? ' Fiche des primes liée à ce compte.' : ' (Fiche des primes non liée : ' + (((lk.j && lk.j.message) || 'refusé')) + ')'; }
   if (inv) { const s = await SBA.sendLink(o.email); note = s.ok ? ' Invitation envoyée par e-mail.' : ' Invitation non envoyée (' + s.error + ') : utilisez « Renvoyer l\'invitation ».'; }
