@@ -10131,12 +10131,14 @@ function plgOF(p, codes) {                                                   // 
   return [o, f];
 }
 const plgDec = x => (+x.toFixed(1)).toString().replace('.', ',');
+const plgPl = (nm, v) => v > 1 ? (nm === 'vendredi soir' ? 'vendredis soir' : nm + 's') : nm;
+const plgSoir = x => x.shift === 'fermeture' || (x.f != null && x.f >= 20);                 // un « vendredi soir » : vendredi travaillé avec une fermeture, ou une fin de service à 20 h ou plus
 function plgWE(codes) {                                                       // samedis et dimanches TRAVAILLÉS par personne sur le cycle de 13 semaines affiché (semaines déjà planifiées comprises), moyenne de l'équipe et alertes d'équilibre
   const cy = plgCycleStart(PLG.ws), a = cy.start, z = plgAdd(a, 90), by = new Map(), A = plgCfgA(), al = [];
-  PLG.team.forEach(p => { let s = 0, d = 0, w = 0; for (let i = 0; i < 91; i++) { const day = plgAdd(a, i), v = plgDay(p.id, day); if (!v) continue; const x = plgInfo(v, codes); if (!x.work) continue; w++; const g = plgD(day).getUTCDay(); if (g === 6) s++; else if (g === 0) d++; } by.set(p.id, { s, d, w }); });
-  const act = PLG.team.filter(p => by.get(p.id).w > 0), n = act.length, avgS = n ? act.reduce((q, p) => q + by.get(p.id).s, 0) / n : 0, avgD = n ? act.reduce((q, p) => q + by.get(p.id).d, 0) / n : 0;
-  if (n > 1 && A.ecart > 0) act.forEach(p => { const b = by.get(p.id); [['samedi', b.s, avgS], ['dimanche', b.d, avgD]].forEach(([nm, v, av]) => { if (Math.abs(v - av) > A.ecart + 1e-9) al.push({ t: p.prenom, x: (v > av ? v + ' ' + nm + (v > 1 ? 's' : '') + ' travaillé' + (v > 1 ? 's' : '') : 'Seulement ' + v + ' ' + nm + (v > 1 ? 's' : '') + ' travaillé' + (v > 1 ? 's' : '')) + ' sur le cycle (moyenne de l\'équipe : ' + plgDec(av) + ') : à rééquilibrer' }); }); });
-  return { a, z, by, avgS, avgD, n, al, ecart: A.ecart };
+  PLG.team.forEach(p => { let s = 0, d = 0, vs = 0, w = 0; for (let i = 0; i < 91; i++) { const day = plgAdd(a, i), v = plgDay(p.id, day); if (!v) continue; const x = plgInfo(v, codes); if (!x.work) continue; w++; const g = plgD(day).getUTCDay(); if (g === 6) s++; else if (g === 0) d++; else if (g === 5 && plgSoir(x)) vs++; } by.set(p.id, { s, d, vs, w }); });
+  const act = PLG.team.filter(p => by.get(p.id).w > 0), n = act.length, avgS = n ? act.reduce((q, p) => q + by.get(p.id).s, 0) / n : 0, avgD = n ? act.reduce((q, p) => q + by.get(p.id).d, 0) / n : 0, avgV = n ? act.reduce((q, p) => q + by.get(p.id).vs, 0) / n : 0;
+  if (n > 1 && A.ecart > 0) act.forEach(p => { const b = by.get(p.id); [['vendredi soir', b.vs, avgV], ['samedi', b.s, avgS], ['dimanche', b.d, avgD]].forEach(([nm, v, av]) => { if (Math.abs(v - av) > A.ecart + 1e-9) al.push({ t: p.prenom, x: (v > av ? v + ' ' + plgPl(nm, v) + ' travaillé' + (v > 1 ? 's' : '') : 'Seulement ' + v + ' ' + plgPl(nm, v) + ' travaillé' + (v > 1 ? 's' : '')) + ' sur le cycle (moyenne de l\'équipe : ' + plgDec(av) + ') : à rééquilibrer' }); }); });
+  return { a, z, by, avgS, avgD, avgV, n, al, ecart: A.ecart };
 }
 function plgDayCount(date, codes) {                                           // pour une date : nombre de personnes au travail / en ouverture / en fermeture / sur un autre shift / par lettre saisie
   const c = { w: 0, o: 0, f: 0, a: 0, L: {} };
@@ -10171,18 +10173,18 @@ function plgCoverage(codes, from, n) {                                        //
 function plgMsg(t, k) { PLG.msg = [t || '', k || '']; const m = document.getElementById('plgMsg'); if (m) { m.textContent = t || ''; m.style.color = k === 'err' ? '#c0392b' : (k === 'ok' ? '#1e8449' : 'var(--muted)'); } }
 function plgWeBadge(p, WK) {                                                  // pastille « Sam 3 · Dim 2 » : samedis et dimanches travaillés sur le cycle, couleur selon l'écart à la moyenne de l'équipe
   const b = WK.by.get(p.id); if (!b || !b.w) return '';
-  const dv = Math.max(Math.abs(b.s - WK.avgS), Math.abs(b.d - WK.avgD)), thr = WK.ecart, col = !thr || WK.n < 2 ? ['#eef2f7', '#475569'] : (dv > thr + 1e-9 ? ['#fdecea', '#a93226'] : (dv > thr / 2 ? ['#fdf3e1', '#b9770e'] : ['#e8f6ee', '#1e8449']));
-  return '<span class="plg-bal" style="margin:0 4px 0 0;background:' + col[0] + ';color:' + col[1] + '" title="Sur le cycle du ' + plgFr(WK.a) + ' au ' + plgFr(WK.z) + ' : ' + b.s + ' samedi(s) et ' + b.d + ' dimanche(s) travaillé(s). Moyenne de l\'équipe : ' + plgDec(WK.avgS) + ' samedi(s), ' + plgDec(WK.avgD) + ' dimanche(s).">Sam ' + b.s + ' · Dim ' + b.d + '</span>';
+  const dv = Math.max(Math.abs(b.s - WK.avgS), Math.abs(b.d - WK.avgD), Math.abs(b.vs - WK.avgV)), thr = WK.ecart, col = !thr || WK.n < 2 ? ['#eef2f7', '#475569'] : (dv > thr + 1e-9 ? ['#fdecea', '#a93226'] : (dv > thr / 2 ? ['#fdf3e1', '#b9770e'] : ['#e8f6ee', '#1e8449']));
+  return '<span class="plg-bal" style="margin:0 4px 0 0;background:' + col[0] + ';color:' + col[1] + '" title="Sur le cycle du ' + plgFr(WK.a) + ' au ' + plgFr(WK.z) + ' : ' + b.vs + ' vendredi(s) soir, ' + b.s + ' samedi(s) et ' + b.d + ' dimanche(s) travaillé(s). Moyenne de l\'équipe : ' + plgDec(WK.avgV) + ' vendredi(s) soir, ' + plgDec(WK.avgS) + ' samedi(s), ' + plgDec(WK.avgD) + ' dimanche(s).">Ven ' + b.vs + ' · Sam ' + b.s + ' · Dim ' + b.d + '</span>';
 }
-function plgWeTable(WK) {                                                     // visibilité des samedis et dimanches travaillés (cycle de 13 semaines) pour garder un équilibre dans l'équipe
+function plgWeTable(WK) {                                                     // visibilité des vendredis soir, samedis et dimanches travaillés (cycle de 13 semaines) pour garder un équilibre dans l'équipe
   if (!WK || !PLG.team.length) return '';
   const thr = WK.ecart, rows = PLG.team.map(p => {
-    const b = WK.by.get(p.id) || { s: 0, d: 0, w: 0 }, ds = b.s - WK.avgS, dd = b.d - WK.avgD, bad = b.w > 0 && WK.n > 1 && thr > 0 && (Math.abs(ds) > thr + 1e-9 || Math.abs(dd) > thr + 1e-9), ec = (b.s + b.d) - (WK.avgS + WK.avgD), sg = x => (x >= 0.05 ? '+' : (x <= -0.05 ? '−' : '')) + plgDec(Math.abs(x));
-    return '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td><td>' + b.s + '</td><td>' + b.d + '</td><td><b>' + (b.s + b.d) + '</b></td><td style="color:' + (!b.w ? 'var(--muted)' : (bad ? '#c0392b' : '#1e8449')) + '">' + (b.w ? sg(ec) + (bad ? ' ' + plgI('alert', 12) : '') : '—') + '</td></tr>';
+    const b = WK.by.get(p.id) || { s: 0, d: 0, vs: 0, w: 0 }, dv = b.vs - WK.avgV, ds = b.s - WK.avgS, dd = b.d - WK.avgD, bad = b.w > 0 && WK.n > 1 && thr > 0 && (Math.abs(dv) > thr + 1e-9 || Math.abs(ds) > thr + 1e-9 || Math.abs(dd) > thr + 1e-9), tot = b.vs + b.s + b.d, ec = tot - (WK.avgV + WK.avgS + WK.avgD), sg = x => (x >= 0.05 ? '+' : (x <= -0.05 ? '−' : '')) + plgDec(Math.abs(x));
+    return '<tr><td class="n"><b>' + plgE(p.prenom) + '</b></td><td>' + b.vs + '</td><td>' + b.s + '</td><td>' + b.d + '</td><td><b>' + tot + '</b></td><td style="color:' + (!b.w ? 'var(--muted)' : (bad ? '#c0392b' : '#1e8449')) + '">' + (b.w ? sg(ec) + (bad ? ' ' + plgI('alert', 12) : '') : '—') + '</td></tr>';
   }).join('');
-  return '<div style="margin-top:14px;font-weight:800;font-size:.8rem">Samedis et dimanches travaillés · cycle du ' + plgFr(WK.a) + ' au ' + plgFr(WK.z) + '/' + WK.z.slice(0, 4) + '</div><div class="plg-wrap"><table class="plg plg-sum" style="min-width:440px;margin-top:6px"><thead><tr><th style="text-align:left;width:120px">Personne</th><th>Samedis</th><th>Dimanches</th><th>Total</th><th>Écart à la moyenne</th></tr></thead><tbody>' + rows
-    + '<tr><td class="n"><i>Moyenne de l\'équipe</i></td><td>' + plgDec(WK.avgS) + '</td><td>' + plgDec(WK.avgD) + '</td><td>' + plgDec(WK.avgS + WK.avgD) + '</td><td></td></tr></tbody></table></div>'
-    + '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Jours réellement travaillés (repos, congés et absences ne comptent pas), sur les semaines déjà planifiées du cycle. ' + (thr ? 'Alerte au-delà de ' + thr + ' de différence avec la moyenne de l\'équipe (réglable dans « Alertes du restaurant »).' : 'Alerte désactivée (réglable dans « Alertes du restaurant »).') + '</div>';
+  return '<div style="margin-top:14px;font-weight:800;font-size:.8rem">Vendredis soir, samedis et dimanches travaillés · cycle du ' + plgFr(WK.a) + ' au ' + plgFr(WK.z) + '/' + WK.z.slice(0, 4) + '</div><div class="plg-wrap"><table class="plg plg-sum" style="min-width:520px;margin-top:6px"><thead><tr><th style="text-align:left;width:120px">Personne</th><th>Vendredis soir</th><th>Samedis</th><th>Dimanches</th><th>Total</th><th>Écart à la moyenne</th></tr></thead><tbody>' + rows
+    + '<tr><td class="n"><i>Moyenne de l\'équipe</i></td><td>' + plgDec(WK.avgV) + '</td><td>' + plgDec(WK.avgS) + '</td><td>' + plgDec(WK.avgD) + '</td><td>' + plgDec(WK.avgV + WK.avgS + WK.avgD) + '</td><td></td></tr></tbody></table></div>'
+    + '<div style="font-size:.7rem;color:var(--muted);margin-top:6px">Jours réellement travaillés (repos, congés et absences ne comptent pas), sur les semaines déjà planifiées du cycle. Un vendredi soir = un vendredi travaillé avec une fermeture ou une fin de service à 20 h ou plus. ' + (thr ? 'Alerte au-delà de ' + thr + ' de différence avec la moyenne de l\'équipe (réglable dans « Alertes du restaurant »).' : 'Alerte désactivée (réglable dans « Alertes du restaurant »).') + '</div>';
 }
 function plgGridHtml(codes, evs, WK, COV, alerts, rems, can, mod) {         // grille : N blocs de 7 jours (N = 1 : le défilement habituel), même colonnes pour tous
   const N = PLG.nw, T = PLG.team, today = plgIso(new Date()), dd = (a, b) => Math.round((plgD(b) - plgD(a)) / 864e5), A = plgCfgA(), covOn = A.om > 0 || A.fm > 0, ofs = new Map(), list = [...codes.values()].sort((a, b) => a.ordre - b.ordre);
@@ -10406,7 +10408,7 @@ function plgAlertBox() {                                                      //
     + ts(plgI('moon'), 'Fermetures', num('plgAf', A.fm, 0, 9) + '<div class="plg-tx">minimum par jour</div>')
     + ts(plgI('cal'), 'Jours contrôlés', days(A.jours, 'plgAJ') + '<label class="plg-tx" style="margin-top:4px"><input type="checkbox" id="plgAn" ' + (A.nofer ? 'checked' : '') + dis + '> Ne pas contrôler les jours fériés</label>', ' plg-w2') + '</div>';
   h += '<h4 class="plg-h4">Équilibre des week-ends</h4><div class="plg-tg">'
-    + ts(plgI('scale'), 'Écart à la moyenne', num('plgAw', A.ecart, 0, 13) + '<div class="plg-tx">samedi(s) ou dimanche(s) d\'écart maximum avec la moyenne de l\'équipe, sur le cycle</div>', ' plg-w2') + '</div>';
+    + ts(plgI('scale'), 'Écart à la moyenne', num('plgAw', A.ecart, 0, 13) + '<div class="plg-tx">vendredi(s) soir, samedi(s) ou dimanche(s) d\'écart maximum avec la moyenne de l\'équipe, sur le cycle</div>', ' plg-w2') + '</div>';
   h += '<h4 class="plg-h4">Règles sociales</h4><div class="plg-tg">' + Object.keys(PLG_SEUILS_N).map(k => { const mod = plgSeuil(k) !== PLG_SEUILS[k]; return ts(plgI(PLG_SEUILS_I[k]), PLG_SEUILS_N[k][0], num('plgS_' + k, plgSeuil(k), 1, 99, 0.5) + '<div class="plg-tx">' + plgE(PLG_SEUILS_N[k][1]) + (mod ? ' · <b style="color:#b9770e">modifié</b>' : '') + '</div>'); }).join('') + '</div>';
   if (ok) h += '<div class="plg-ma" style="margin-top:10px"><button class="plg-btn pri" onclick="plgAlertSave()">Enregistrer ces réglages</button><button class="plg-btn" onclick="plgAlertReset()" title="Retour aux valeurs habituelles (Code du travail, 1 ouverture et 1 fermeture par jour)">Valeurs habituelles</button></div>';
   h += '<h4 class="plg-h4">Mes alertes</h4><div class="plg-mm" style="margin:0 0 4px">Créez vos propres alertes de présence : par exemple « le samedi, au moins 3 personnes au travail » ou « le vendredi, 2 fermetures ».</div><div class="plg-tg">';
@@ -11863,7 +11865,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261118-193908';
+const BUILD_VERSION = '20261124-090811';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

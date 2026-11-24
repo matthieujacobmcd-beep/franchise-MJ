@@ -4038,7 +4038,7 @@ function pxpRules(doc, nameOf, opt) {
 // Un seul document partagé dans le Sheet (Apps Script, actions px_*), enregistré avec un contrôle de version : jamais d'écrasement silencieux.
 //   • exception = prix différent pour UN restaurant sur UN produit (cadre orange) ; effacer la case revient au modèle ;
 //   • « Uber » et « Deliveroo » : prix du restaurant + majoration (28 % au départ, arrondi à 0,1 €), sauf prix fixé à la main (cadre bleu) ; codes propres à chaque canal.
-const PX = { doc: null, base: null, version: 0, can: false, state: 'idle', err: '', view: '', viewSet: false, canal: 'restaurant', bloc: 0, q: '', at: '', by: '', conflict: null, saving: false, flash: null, journal: null, guard: null, note: '', dev: [], devMap: {}, alertOpen: false };
+const PX = { doc: null, base: null, version: 0, can: false, state: 'idle', err: '', view: '', viewSet: false, canal: 'restaurant', bloc: 0, q: '', at: '', by: '', conflict: null, saving: false, flash: null, journal: null, guard: null, note: '', dev: [], devMap: {}, alertOpen: false, sim: { open: false, pct: '', step: 0.05, scope: '', all: false, own: {} } };
 const PX_CANAUX = [['restaurant', 'Restaurant'], ['uber', 'Uber'], ['deliveroo', 'Deliveroo'], ['repas', 'Repas']];
 const PX_UD = [['uber', 'Uber'], ['deliveroo', 'Deliveroo']];
 const pxClone = o => JSON.parse(JSON.stringify(o));
@@ -4439,6 +4439,55 @@ function pxRepasHtml() {
   return rules + add + (Object.keys(g).map((k, gi) => { const th = pxpTh(groups.indexOf(k));
     return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="nm">${escH(x.produit)}${!have.has(pxNm(x.produit)) ? ' <small style="color:#fdba74" title="Ce produit n\'est plus (ou pas) au tarif">· hors tarif</small>' : ''}${PX.can ? `<button type="button" class="pxd" title="Retirer de la politique de repas" aria-label="Retirer ${escH(x.produit)}" onclick="pxDelRepas(${i})">×</button>` : ''}</td><td class="p">${PX.can ? `<input class="pxi" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : pxF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
 }
+// ── Simulation en pourcentage : une variation générale (ou propre à un produit) appliquée aux prix du restaurant (modèle global ou restaurant affiché). On voit « avant → après » AVANT d'appliquer ; rien n'est modifié tant qu'on n'a pas cliqué sur « Appliquer », puis « Enregistrer les prix » garde ses contrôles habituels ──
+const pxSimPct = t => { t = String(t == null ? '' : t).replace(/[%\s]/g, '').replace(',', '.'); if (t === '') return null; const n = +t; return isFinite(n) ? n : null; };
+const pxSimRound = (v, step) => step > 0 ? pxR2(Math.round(v / step + 1e-9) * step) : pxR2(v);
+function pxSimCalc() {
+  const S = PX.sim, step = +S.step || 0.05, g = pxSimPct(S.pct), rows = []; let nP = 0, nL = 0, sum = 0;
+  PX.doc.modele.forEach((b, bi) => { if (S.scope && b.titre !== S.scope) return; b.cats.forEach((c, ci) => c.lignes.forEach((l, li) => {
+    const key = pxKey(b, c, l), o = pxSimPct(S.own[key]), pct = o !== null ? o : g, cur = {}, nxt = {};
+    for (const v of b.variantes) { const p = pxPrice('restaurant', PX.view, key, l, v.k).v; if (p !== undefined && p !== null) cur[v.k] = p; }
+    const rl = k => (!S.all && (l.auto || []).includes(k)) ? pxRuleOf(b, k) : null;                      // un format calculé (Best Of, Maxi Best Of) suit sa règle, sauf si on demande le pourcentage pour lui aussi
+    const calc = k => { if (nxt[k] !== undefined) return nxt[k]; const r = rl(k); nxt[k] = (r && cur[r.de] !== undefined) ? pxR2(calc(r.de) + (+r.plus || 0)) : (!pct ? cur[k] : pxSimRound(cur[k] * (1 + pct / 100), step)); return nxt[k]; };
+    Object.keys(cur).forEach(calc);
+    const ch = Object.keys(cur).filter(k => Math.abs(nxt[k] - cur[k]) > 0.004);
+    ch.forEach(k => { if (cur[k] > 0) sum += nxt[k] / cur[k] - 1; });
+    if (ch.length) { nL++; nP += ch.length; }
+    rows.push({ bi, ci, li, b, c, l, key, pct, cur, nxt, ch, own: o !== null });
+  })); });
+  return { rows, nL, nP, step, g, moy: nP ? sum / nP : 0 };
+}
+function pxSimOutHtml() {
+  const R = pxSimCalc(), S = PX.sim, sg = x => (x > 0.00005 ? '+' : x < -0.00005 ? '−' : '') + (Math.abs(Math.round(x * 1000) / 10)).toLocaleString('fr-FR') + ' %';
+  const lab = r => r.b.variantes.filter(v => r.cur[v.k] !== undefined).map(v => { const ch = r.ch.includes(v.k); return `<span style="white-space:nowrap${ch ? ';font-weight:800' : ';color:var(--muted)'}">${escH(v.l)} ${pxpEur(r.cur[v.k])}${ch ? ' → <span style="color:' + (r.nxt[v.k] > r.cur[v.k] ? '#b45309' : '#15803d') + '">' + pxpEur(r.nxt[v.k]) + '</span>' : ''}</span>`; }).join(' · ');
+  const where = PX.view ? `les prix de <b>${escH((RESTOS.find(x => x[0] === PX.view) || [0, PX.view])[1])}</b> (les prix modifiés deviennent des exceptions orange)` : 'le <b>modèle global</b> (les exceptions par restaurant ne changent pas)';
+  let h = `<div class="hint" style="margin:8px 0">Appliqué à ${where}. ${S.all ? 'Le pourcentage s\'applique aussi aux formats calculés.' : 'Les formats calculés (Best Of, Maxi Best Of) suivent leur règle à partir du prix à l\'unité.'} Prix Uber et Deliveroo : ils se recalculent (+${pxF(PX.doc.canaux.uber.taux)} % / +${pxF(PX.doc.canaux.deliveroo.taux)} %), sauf les prix fixés à la main.</div>`;
+  h += R.nP ? `<div class="bd-sh warn" style="margin:6px 0"><b>${R.nP} prix modifiés</b> sur ${R.nL} produit${R.nL > 1 ? 's' : ''} · variation moyenne ${sg(R.moy)} · arrondi à ${pxpEur(R.step)}</div>` : `<div class="hint">Saisis un pourcentage général ou un pourcentage propre à un produit : les nouveaux prix s'affichent ici avant d'être appliqués.</div>`;
+  h += `<div style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:.76rem"><thead><tr style="position:sticky;top:0;background:var(--card2);text-align:left"><th style="padding:6px 8px">Produit</th><th style="padding:6px 4px;white-space:nowrap">% propre</th><th style="padding:6px 8px">Prix (avant → après)</th></tr></thead><tbody>` +
+    R.rows.map(r => `<tr style="border-top:1px solid var(--border);${r.ch.length ? '' : 'opacity:.75'}"><td style="padding:4px 8px"><b>${escH(r.l.produit)}</b><div class="hint" style="margin:0;font-size:.64rem">${escH(r.b.titre)} › ${escH(r.c.cat)}</div></td><td style="padding:4px"><input type="text" inputmode="decimal" style="width:58px" placeholder="${S.pct !== '' ? escH(S.pct) : '—'}" value="${escH(S.own[r.key] === undefined ? '' : S.own[r.key])}" onchange="pxSimOwn(${r.bi},${r.ci},${r.li},this.value)" aria-label="Pourcentage propre à ${escH(r.l.produit)}"></td><td style="padding:4px 8px">${lab(r) || '<span class="hint">aucun prix</span>'}</td></tr>`).join('') + `</tbody></table></div>`;
+  return h;
+}
+function pxSimHtml() {
+  if (!PX.can || PX.canal !== 'restaurant') return '';
+  const S = PX.sim, o = (v, l, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`;
+  return `<details class="sim-d" style="margin:0 0 10px" ${S.open ? 'open' : ''} ontoggle="PX.sim.open=this.open"><summary>Simulation : modifier les prix en pourcentage</summary><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0;font-size:.8rem;font-weight:700">` +
+    `<label>Variation générale <input type="text" inputmode="decimal" id="pxSimPct" style="width:70px" placeholder="ex. 3" value="${escH(S.pct)}" oninput="pxSimSet('pct',this.value)"> %</label>` +
+    `<label>Arrondi <select onchange="pxSimSet('step',this.value)">${o(0.05, 'à 0,05 €', S.step)}${o(0.1, 'à 0,10 €', S.step)}${o(0.01, 'au centime', S.step)}</select></label>` +
+    `<label>Portée <select onchange="pxSimSet('scope',this.value)">${o('', 'toute la carte', S.scope)}${PX.doc.modele.map(b => o(escH(b.titre), escH(b.titre), S.scope)).join('')}</select></label>` +
+    `<label style="font-weight:600"><input type="checkbox" ${S.all ? 'checked' : ''} onchange="pxSimSet('all',this.checked)"> aussi sur les formats calculés (Best Of, Maxi Best Of)</label></div>` +
+    `<div id="pxSimOut">${pxSimOutHtml()}</div><div class="foot" style="margin-top:8px"><button class="btn-save" onclick="pxSimApply()">Appliquer ces prix</button><button class="step" onclick="pxSimReset()">Réinitialiser</button><span class="hint" style="margin-left:8px">Rien n'est enregistré : tu vérifies, puis « Enregistrer les prix ».</span></div></details>`;
+}
+function pxSimSet(k, v) { PX.sim[k] = k === 'step' ? +v : k === 'all' ? !!v : v; clearTimeout(PX.sim.t); PX.sim.t = setTimeout(() => { const el = document.getElementById('pxSimOut'); if (el) el.innerHTML = pxSimOutHtml(); }, k === 'pct' ? 180 : 0); }
+function pxSimOwn(bi, ci, li, v) { const b = PX.doc.modele[bi], c = b && b.cats[ci], l = c && c.lignes[li]; if (!l) return; const key = pxKey(b, c, l); if (String(v).trim() === '') delete PX.sim.own[key]; else PX.sim.own[key] = v; const el = document.getElementById('pxSimOut'); if (el) el.innerHTML = pxSimOutHtml(); }
+function pxSimReset() { PX.sim = Object.assign(PX.sim, { pct: '', own: {}, all: false, scope: '' }); renderPrix(); }
+function pxSimApply() {
+  if (!PX.can) return; const R = pxSimCalc();
+  if (!R.nP) { PX.flash = ['err', 'Aucun prix ne change : saisis un pourcentage (général ou propre à un produit).']; return renderPrix(); }
+  if (!confirm('Appliquer ' + R.nP + ' nouveaux prix sur ' + R.nL + ' produit' + (R.nL > 1 ? 's' : '') + ' ?\nRien n\'est enregistré : tu vérifieras puis tu cliqueras sur « Enregistrer les prix ».')) return;
+  R.rows.filter(r => r.ch.length).forEach(r => { r.ch.forEach(k => pxSetRest(r.l, r.key, k, r.nxt[k])); if (!PX.view) r.ch.forEach(k => pxRuleFlag(r.b, r.l, k, r.nxt[k])); });      // toutes les valeurs d'abord, puis le suivi des règles (un format qui tombe juste reste « calculé »)
+  PX.sim = Object.assign(PX.sim, { pct: '', own: {}, all: false, open: false }); PX.flash = ['ok', R.nP + ' prix modifiés (variation moyenne ' + ((R.moy >= 0 ? '+' : '−') + Math.abs(Math.round(R.moy * 1000) / 10).toLocaleString('fr-FR')) + ' %). Vérifie-les puis clique sur « Enregistrer les prix ».'];
+  renderPrix();
+}
 function renderPrix() {
   const p = document.getElementById('panel');
   if (!pwdHash()) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prix franchise</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec ton compte.</div>`; return; }
@@ -4462,7 +4511,7 @@ function renderPrix() {
   const flash = PX.flash ? `<div class="bd-sh ${PX.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PX.flash[1])}</div>` : '';
   const bar = PX.can ? `<div class="bd-sh ${dirty.length ? 'warn' : ''} px-save">${PX.saving ? '⏳ Enregistrement…' : dirty.length ? `<b>● ${dirty.length} modification${dirty.length > 1 ? 's' : ''} non enregistrée${dirty.length > 1 ? 's' : ''}</b> <button class="btn-save" onclick="pxSave()">Enregistrer les prix</button><button class="step" onclick="pxCancel()">Annuler</button> <span class="loc">${escH(dirty.slice(0, 3).join(' ; '))}${dirty.length > 3 ? ' …' : ''}</span>` : `Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. Rien à enregistrer.`}</div>` : `<div class="bd-sh"><span class="loc">Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. ${nExc ? nExc + ' exception' + (nExc > 1 ? 's' : '') + ' par restaurant.' : ''}</span></div>`;
   const admin = PX.can ? `<details class="sim-d"><summary>Administration : remplacer le modèle par un fichier</summary><div class="hint" style="margin:6px 0 8px">Pour la mise à jour annuelle : un fichier .json préparé à partir du classeur « Prix Franchise ». Il remplace le modèle global ; les exceptions par restaurant sont conservées et l'ancienne version reste dans le journal.</div><input type="file" accept=".json,application/json" onchange="pxImport(this)"></details>` : '';
-  p.innerHTML = head + conflict + flash + alertH + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}${pxDevBdg(PX.dev.filter(d => d.canal === k && pxDevShown(d)).length)}</button>`).join('')}</div>` +
+  p.innerHTML = head + conflict + flash + alertH + pxSimHtml() + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}${pxDevBdg(PX.dev.filter(d => d.canal === k && pxDevShown(d)).length)}</button>`).join('')}</div>` +
     `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}<button type="button" class="step" onclick="pxPrintNow()" title="Une page A4 paysage, comme le modèle">Imprimer</button></div>` +
     (canal === 'repas' ? '' : `<div class="hint" style="margin:0 0 10px">${what}</div>`) + bloc + leg + (canal === 'repas' ? pxRepasHtml() : pxBlocHtml(canal)) +
     bar + pxGuardHtml() + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">⏳ Chargement…</div>'}</div></details>` + admin;
