@@ -8997,6 +8997,12 @@ async function crewPolyRender() {
 .svc-send { background:#0d9488; color:#fff; border:none; border-radius:12px; padding:10px 16px; font-weight:800; font-size:.8rem; cursor:pointer; font-family:inherit; }
 .svc-send:disabled { opacity:.55; cursor:wait; }
 .svc-note { font-size:.64rem; color:var(--muted); line-height:1.4; } .svc-err { font-size:.7rem; font-weight:700; color:#b45309; }
+/* réactivation d'une demande traitée */
+.suivi-react-btn { background:transparent; color:#b45309; border:1.5px solid #d97706; border-radius:8px; padding:5px 10px; font-size:.68rem; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; } .suivi-react-btn:hover { background:rgba(217,119,6,.12); }
+.svr-badge { display:inline-block; margin-top:5px; background:#ffedd5; color:#9a3412; border-radius:999px; padding:2px 9px; font-size:.64rem; font-weight:800; white-space:nowrap; } body.dark-mode .svr-badge { background:rgba(234,88,12,.25); color:#fdba74; } .svr-badge.past { background:var(--card2); color:var(--muted); font-weight:700; }
+.svr-line { margin-top:7px; padding:6px 9px; border-left:3px solid #ea580c; background:rgba(234,88,12,.08); border-radius:0 8px 8px 0; font-size:.7rem; line-height:1.4; color:var(--text); overflow-wrap:anywhere; } .svr-line b { color:#9a3412; } body.dark-mode .svr-line b { color:#fdba74; } .svr-line.past { border-left-color:var(--border); background:transparent; color:var(--muted); } .svr-line.past b { color:var(--muted); }
+.svr-box { height:auto; max-height:92vh; width:min(460px,100%); }
+@media (max-width:760px){ .suivi-react-btn { width:100%; padding:9px; font-size:.78rem; } .svr-box { height:auto; max-height:100%; } }
 @media (max-width:760px){ .svc-ov { padding:0; align-items:stretch; } .svc-box { width:100%; height:100%; border-radius:0; } #svcWho { width:120px; } .svc-add { width:100%; padding:9px; font-size:.78rem; } }
 </style>
 <div class="svc-ov" id="svcOv" onclick="if(event.target===this)svcClose()">
@@ -9008,6 +9014,18 @@ async function crewPolyRender() {
       <div class="svc-row"><textarea class="svc-in" id="svcTxt" maxlength="600" rows="2" placeholder="Écris un commentaire…"></textarea><button type="button" class="svc-send" id="svcSend" onclick="svcSend()">Envoyer</button></div>
       <div class="svc-err" id="svcErr"></div>
       <div class="svc-note">🔒 Les commentaires s'ajoutent à la suite : ils ne peuvent être ni modifiés ni supprimés.</div>
+    </div>
+  </div>
+</div>
+<div class="svc-ov" id="svrOv" onclick="if(event.target===this)svrClose()">
+  <div class="svc-box svr-box" role="dialog" aria-modal="true" aria-label="Réactiver la demande">
+    <div class="svc-head"><div><b>↩ Réactiver cette demande</b><small id="svrSub"></small></div><button type="button" class="svc-x" onclick="svrClose()" aria-label="Fermer">✕</button></div>
+    <div class="svc-compose" style="border-top:0;gap:10px">
+      <div class="svc-note">La demande repasse « En attente » et reste signalée comme réactivée (qui, quand, pourquoi). Son historique et ses commentaires sont conservés.</div>
+      <input class="svc-in" id="svrWho" maxlength="30" placeholder="Ton prénom *" autocomplete="given-name">
+      <textarea class="svc-in" id="svrTxt" maxlength="300" rows="3" style="resize:vertical" placeholder="Indication * : pourquoi la réactiver ? (ex. le problème est revenu, réparation incomplète…)"></textarea>
+      <div class="svc-err" id="svrErr"></div>
+      <div class="svc-row" style="justify-content:flex-end"><button type="button" class="svc-send" style="background:transparent;color:var(--text);border:1.5px solid var(--border)" onclick="svrClose()">Annuler</button><button type="button" class="svc-send" id="svrGo" style="background:#d97706" onclick="svrSend()">Réactiver</button></div>
     </div>
   </div>
 </div>
@@ -9038,12 +9056,13 @@ function svxBuild(items) {                                     // classeur prêt
     const cs = (i.comments || []).filter(c => c && String(c.texte || '').trim()), last = cs[cs.length - 1];
     return [txt(i.id), dt(i.date), txt(i.restaurant), txt(i.demandeur), txt(i.description, true), txt(i.urgence), txt(i.techniciens), txt(i.superviseur),
       txt(String(i.statut) === 'Traité' ? 'Traité' : 'En attente'), txt(String(i.statut) === 'Traité' ? i.valide_par : ''), dt(i.date_validation), i.photos ? { t: 's', v: 'Voir les photos', l: { Target: String(i.photos), Tooltip: 'Ouvrir les photos de la demande' }, s: { font: { color: { rgb: '0563C1' }, underline: true }, alignment: { vertical: 'top' } } } : txt(''),
-      { t: 'n', v: cs.length, s: { alignment: { vertical: 'top', horizontal: 'center' } } }, txt(last ? `${last.auteur || ''} (${svxDateTime(last.date)}) : ${last.texte}` : '', true)];
+      { t: 'n', v: cs.length, s: { alignment: { vertical: 'top', horizontal: 'center' } } }, txt(last ? `${last.auteur || ''} (${svxDateTime(last.date)}) : ${last.texte}` : '', true),
+      { t: 'n', v: +i.reactive_nb || 0, s: { alignment: { vertical: 'top', horizontal: 'center' } } }, txt(+i.reactive_nb ? `${svxDateTime(i.reactive_le)} par ${i.reactive_par || ''} : ${i.reactive_motif || ''}` : '', true)];
   });
   const crow = [];
   items.forEach(i => (i.comments || []).filter(c => c && String(c.texte || '').trim()).forEach(c => crow.push([txt(i.id), txt(i.restaurant), dt(i.date), txt(String(i.description || '').slice(0, 140), true), txt(svxDateTime(c.date)), txt(c.auteur), txt(c.texte, true)])));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet(['N°', 'Date de la demande', 'Restaurant', 'Demandeur', 'Demande', 'Urgence', 'Intervenant(s)', 'Superviseur', 'Statut', 'Traité par', 'Date de traitement', 'Photos', 'Commentaires', 'Dernier commentaire'], rows, [16, 14, 18, 18, 52, 14, 20, 18, 12, 16, 14, 28, 12, 52]), 'Interventions');
+  XLSX.utils.book_append_sheet(wb, sheet(['N°', 'Date de la demande', 'Restaurant', 'Demandeur', 'Demande', 'Urgence', 'Intervenant(s)', 'Superviseur', 'Statut', 'Traité par', 'Date de traitement', 'Photos', 'Commentaires', 'Dernier commentaire', 'Réactivations', 'Dernière réactivation'], rows, [16, 14, 18, 18, 52, 14, 20, 18, 12, 16, 14, 28, 12, 52, 13, 52]), 'Interventions');
   XLSX.utils.book_append_sheet(wb, sheet(['N° demande', 'Restaurant', 'Date de la demande', 'Demande', 'Date du commentaire', 'Auteur', 'Commentaire'], crow, [16, 18, 14, 44, 18, 16, 70]), 'Commentaires');
   return wb;
 }
@@ -9070,10 +9089,10 @@ const svcDayLbl = d => { const t = svcDate(d); if (!t) return ''; const k = svcD
 const svcMe = () => { try { return (localStorage.getItem(SVC_NAME) || '').trim(); } catch (e) { return ''; } };
 // cellule « Demande » du tableau : bouton ou résumé du fil
 function suiviComCell(i, done) {
-  const cs = i.comments || [], id = svcEsc(String(i.id));
-  if (!cs.length) return `<div><button type="button" class="svc-add" onclick="svcOpen('${id}')">💬 Ajouter un commentaire</button></div>`;
+  const cs = i.comments || [], id = svcEsc(String(i.id)), ra = suiviReactLine(i, done);
+  if (!cs.length) return ra + `<div><button type="button" class="svc-add" onclick="svcOpen('${id}')">💬 Ajouter un commentaire</button></div>`;
   const l = cs[cs.length - 1], tx = String(l.texte || ''), cut = tx.length > 70 ? tx.slice(0, 70) + '…' : tx;
-  return `<div class="svc-blk"><button type="button" class="svc-chip" onclick="svcOpen('${id}')">💬 ${cs.length} commentaire${cs.length > 1 ? 's' : ''}</button><div class="svc-last"><b>${svcEsc(l.auteur || '')}</b> · ${svcEsc(svcDayLbl(l.date))} ${svcEsc(svcTime(l.date))} — ${svcEsc(cut)}</div></div>`;
+  return ra + `<div class="svc-blk"><button type="button" class="svc-chip" onclick="svcOpen('${id}')">💬 ${cs.length} commentaire${cs.length > 1 ? 's' : ''}</button><div class="svc-last"><b>${svcEsc(l.auteur || '')}</b> · ${svcEsc(svcDayLbl(l.date))} ${svcEsc(svcTime(l.date))} — ${svcEsc(cut)}</div></div>`;
 }
 function svcRender(toEnd) {
   const it = svcItem(SVC.id), th = document.getElementById('svcThread'); if (!it || !th) return;
@@ -9129,6 +9148,49 @@ async function svcSend() {
   }
   tx.focus();
 }
+// ── Réactiver une demande traitée (« archivée ») : elle repasse « En attente », avec une INDICATION obligatoire (qui, quand, pourquoi) ──
+// Écrite dans le Sheet du suivi (colonnes reactive_*) et ajoutée au fil des commentaires par l'Apps Script du suivi (action reactivate) ; rien n'est effacé.
+const SVR = { id: null, busy: false };
+const svrNb = i => +(i && i.reactive_nb) || 0;
+const svrDay = d => { const t = new Date(d); return isNaN(t) ? '' : t.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+function suiviReactBtn(i) { return `<button type="button" class="suivi-react-btn" onclick="svrOpen('${svcEsc(String(i.id))}')" title="Remettre cette demande en attente, avec une indication">↩ Réactiver</button>`; }
+function suiviReactBadge(i, done) {
+  const n = svrNb(i); if (!n) return '';
+  return done ? `<br><span class="svr-badge past" title="Cette demande a déjà été réactivée ${n} fois">↺ réactivée ${n}×</span>` : `<br><span class="svr-badge" title="Demande réactivée après avoir été traitée">🔁 Réactivée${i.reactive_le ? ' le ' + svcEsc(svrDay(i.reactive_le)) : ''}</span>`;
+}
+function suiviReactLine(i, done) {
+  const n = svrNb(i); if (!n) return '';
+  return `<div class="svr-line${done ? ' past' : ''}">🔁 <b>${done ? 'Avait été réactivée' : 'Réactivée'}</b>${i.reactive_le ? ' le ' + svcEsc(svrDay(i.reactive_le)) : ''} par <b>${svcEsc(i.reactive_par || '')}</b>${n > 1 ? ' (' + n + 'ᵉ fois)' : ''} : « ${svcEsc(i.reactive_motif || '')} »</div>`;
+}
+function svrOpen(id) {
+  const it = svcItem(id); if (!it) return; SVR.id = String(id);
+  const d = String(it.date || ''), fd = d.length >= 10 ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d, desc = String(it.description || '');
+  document.getElementById('svrSub').textContent = `${it.restaurant || ''} · ${fd} — ${desc.length > 120 ? desc.slice(0, 120) + '…' : desc}`;
+  document.getElementById('svrWho').value = svcMe(); document.getElementById('svrTxt').value = ''; document.getElementById('svrErr').textContent = '';
+  document.getElementById('svrOv').classList.add('open');
+  setTimeout(() => { const w = document.getElementById('svrWho'); (w.value ? document.getElementById('svrTxt') : w).focus(); }, 60);
+}
+function svrClose() { SVR.id = null; document.getElementById('svrOv').classList.remove('open'); }
+async function svrSend() {
+  if (SVR.busy || !SVR.id) return;
+  const it = svcItem(SVR.id), who = document.getElementById('svrWho'), tx = document.getElementById('svrTxt'), err = document.getElementById('svrErr'), btn = document.getElementById('svrGo');
+  const name = who.value.trim().replace(/\s+/g, ' '), txt = tx.value.trim().replace(/\s+/g, ' '); err.textContent = '';
+  if (!it) return; if (!name) { err.textContent = 'Indique ton prénom.'; who.focus(); return; } if (txt.length < 3) { err.textContent = 'Écris l\'indication : pourquoi réactiver cette demande ?'; tx.focus(); return; }
+  const nm = name.charAt(0).toUpperCase() + name.slice(1); try { localStorage.setItem(SVC_NAME, nm); } catch (e) {}
+  SVR.busy = true; btn.disabled = true; btn.textContent = 'Envoi…';
+  let j = null;
+  try { j = await (await fetch(SUIVI_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'reactivate', id: String(it.id), par: nm, motif: txt }) })).json(); }
+  catch (e) { j = { ok: false, error: 'connexion impossible' }; }
+  SVR.busy = false; btn.disabled = false; btn.textContent = 'Réactiver';
+  if (j && j.ok === true && (j.reactivated === true || j.already === true)) {
+    it.statut = j.statut || 'En attente';
+    if (j.nb != null) { it.reactive_nb = j.nb; it.reactive_le = j.le || it.reactive_le; it.reactive_par = j.par || it.reactive_par; it.reactive_motif = j.motif || it.reactive_motif; }
+    if (j.reactivated === true && !(it.comments || []).some(c => c.cid === j.cid)) it.comments = (it.comments || []).concat([{ cid: j.cid, auteur: j.par || nm, texte: '↩ Réactivée : ' + (j.motif || txt), date: j.le || new Date().toISOString() }]);
+    svrClose(); try { renderSuivi(); } catch (e) {} try { if (typeof esbSet === 'function' && typeof esbPending === 'function') esbSet('interventions', esbPending(suiviItems)); } catch (e) {}
+    setTimeout(() => { try { loadSuivi(); } catch (e) {} }, 2500);
+  } else err.textContent = j && j.error && j.error !== 'action inconnue' ? 'Non enregistré : ' + j.error + '.' : 'L\'Apps Script du suivi doit être mis à jour (nouvelle version) pour réactiver une demande.';
+}
+document.addEventListener('keydown', e => { const ov = document.getElementById('svrOv'); if (ov && ov.classList.contains('open') && e.key === 'Escape') svrClose(); });
 document.addEventListener('keydown', e => {
   const ov = document.getElementById('svcOv'); if (!ov || !ov.classList.contains('open')) return;
   if (e.key === 'Escape') svcClose();
@@ -11630,8 +11692,8 @@ function renderSuivi() {
       <td data-label="Demande" style="max-width:230px">${esc(i.description)}${i.photos ? ` <a href="${esc(i.photos)}" target="_blank" style="color:#0d9488;font-weight:700;white-space:nowrap">📷 photo(s)</a>` : ''}<br><span style="color:var(--muted);font-size:.68rem">→ ${esc(i.techniciens)}${i.superviseur ? ' · '+esc(i.superviseur) : ''}</span>${suiviComCell(i, done)}</td>
       <td data-label="Urgence" class="${/URGENT/i.test(urg)?'suivi-urg-high':''}">${esc(urg)}</td>
       <td data-label="Traité par" style="font-size:.72rem;color:var(--muted)">${done ? esc(i.valide_par||'') : '—'}</td>
-      <td data-label="Statut"><span class="suivi-badge ${done?'sb-done':'sb-wait'}">${done?'✅ Traité':'🟠 En attente'}</span></td>
-      <td data-label="" class="suivi-act-cell">${done ? '' : `<button class="suivi-done-btn" onclick="markSuiviDone('${esc(i.id)}')">Marquer traité</button>`}</td>
+      <td data-label="Statut"><span class="suivi-badge ${done?'sb-done':'sb-wait'}">${done?'✅ Traité':'🟠 En attente'}</span>${suiviReactBadge(i, done)}</td>
+      <td data-label="" class="suivi-act-cell">${done ? suiviReactBtn(i) : `<button class="suivi-done-btn" onclick="markSuiviDone('${esc(i.id)}')">Marquer traité</button>`}</td>
     </tr>`;
   }
   h += `</tbody></table>`;
@@ -11866,7 +11928,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-215158';
+const BUILD_VERSION = '20261124-220514';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
