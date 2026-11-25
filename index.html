@@ -4173,7 +4173,7 @@ let intervPhotos = [];
 function resetInterventionForm() {
   const form = document.getElementById('intervForm'); if (!form) return;
   form.style.display = 'flex';
-  const succ = document.getElementById('intervSuccess'); if (succ) succ.classList.remove('show');
+  const succ = document.getElementById('intervSuccess'); if (succ) succ.classList.remove('show'); try { intervShowResend(false); INTERV_LAST = null; } catch (e) {}
   const foot = document.getElementById('intervFooter'); if (foot) foot.style.display = 'flex';
   ['iPrenom','iNom','iDesc'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   const d = document.getElementById('iDate'); if (d) d.valueAsDate = new Date();
@@ -4283,6 +4283,25 @@ function renderIntervPhotos() {
     `<div class="interv-photo-thumb"><img src="${p.data}"><button class="interv-photo-remove" onclick="removeIntervPhoto(${i})">&#x2715;</button></div>`
   ).join('');
 }
+// Un seul envoi EmailJS par demande (« À » = équipe maintenance + superviseur du restaurant, séparés par une virgule). Si l'adresse multiple est refusée (autre cause que le quota), repli sur la seule équipe maintenance : la boîte principale reçoit toujours.
+const intervQuotaErr = e => /quota|limit|429|too many/i.test(String((e && (e.text || e.message)) || '') + ' ' + String((e && e.status) || ''));
+async function intervMail(params, toEmails) {
+  const one = to => emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, Object.assign({}, params, { to_email: to, to_name: 'Équipe Maintenance PY' }));
+  try { return await one(toEmails); }
+  catch (e) { if (intervQuotaErr(e) || toEmails === MAINTENANCE_EMAIL) throw e; const r = await one(MAINTENANCE_EMAIL); try { r.partial = true; } catch (x) {} return r; }
+}
+let INTERV_LAST = null;
+function intervShowResend(on) {
+  let b = document.getElementById('intervResend'); const m = document.getElementById('intervSuccessMsg');
+  if (!on) { if (b) b.remove(); return; }
+  if (!b && m) { b = document.createElement('button'); b.id = 'intervResend'; b.type = 'button'; b.style.cssText = 'margin-top:12px;background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-family:inherit'; b.textContent = "Renvoyer l'e-mail"; b.onclick = intervMailRetry; m.insertAdjacentElement('afterend', b); }
+}
+async function intervMailRetry() {
+  const b = document.getElementById('intervResend'), m = document.getElementById('intervSuccessMsg'); if (!INTERV_LAST || !b) return;
+  b.disabled = true; b.textContent = 'Envoi…';
+  try { await intervMail(INTERV_LAST.params, INTERV_LAST.toEmails); INTERV_LAST = null; intervShowResend(false); if (m) m.textContent = "E-mail envoyé à l'équipe maintenance. La demande est dans le suivi."; setTimeout(resetInterventionForm, 4000); }
+  catch (e) { b.disabled = false; b.textContent = "Renvoyer l'e-mail"; if (m) m.textContent = "L'e-mail n'a toujours pas pu partir" + (intervQuotaErr(e) ? " (quota d'envoi EmailJS atteint : il se renouvelle en début de mois)" : '') + ". La demande reste enregistrée dans le suivi : prévenez l'équipe maintenance."; }
+}
 async function sendInterventionEmail() {
   const resto  = document.getElementById('iResto').value;
   const prenom = document.getElementById('iPrenom').value.trim();
@@ -4306,13 +4325,11 @@ async function sendInterventionEmail() {
   }
   const photoNote = up.ko > 0 ? '\n\n[' + up.ko + ' photo' + (up.ko > 1 ? 's' : '') + ' sur ' + intervPhotos.length + ' non transmise' + (up.ko > 1 ? 's' : '') + ' : merci de les redemander au demandeur]' : '';
   btn.textContent = 'Envoi...';
-  // Destination unique = équipe maintenance ; superviseur du restaurant + gérant EN COPIE.
-  // (Map = déduplication par email, au cas où une adresse se répète.)
+  // UN SEUL envoi : équipe maintenance + superviseur du restaurant (plus de copie au gérant). Map = déduplication par e-mail.
   const recipMap = new Map();
   recipMap.set(MAINTENANCE_EMAIL, 'Équipe Maintenance PY');
   if (sup) recipMap.set(sup.email, sup.name);
-  recipMap.set(OWNER_EMAIL, 'Matthieu Jacob');
-  const recipients = [...recipMap].map(([email, name]) => ({ email, name }));
+  const toEmails = [...recipMap.keys()].join(', ');
   const params = {
     from_name: prenom+' '+nom,
     from_email:'matthieu.jacob.mcd@gmail.com',
@@ -4328,26 +4345,29 @@ async function sendInterventionEmail() {
     reply_to:'matthieu.jacob.mcd@gmail.com',
   };
   try {
-    await Promise.all(recipients.map(r =>
-      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...params, to_email:r.email, to_name:r.name})
-    ));
-    // Enregistrement dans le suivi partagé (Google Sheet) : réponse lue, 3 essais (le script ignore un doublon du même identifiant)
+    // 1) la demande est ENREGISTRÉE d'abord (réponse lue, 3 essais ; le script ignore un doublon du même identifiant) : un e-mail refusé (quota…) ne la perd plus
     const rowRes = await intervPost({ id:reqId, date:params.date_demande, restaurant:resto,
       demandeur:prenom+' '+nom, description:params.description, urgence:params.urgence,
       techniciens:techNames, superviseur: sup ? sup.name : '', photos: params.photos_url }, 3, j => j && j.ok, 30000);
+    // 2) UN SEUL envoi EmailJS
+    let mailErr = null, mailPartial = false; try { const mr = await intervMail(params, toEmails); mailPartial = !!(mr && mr.partial); } catch (e) { mailErr = e; }
+    if (mailErr && !rowRes.ok) throw mailErr;                                  // ni enregistrée ni envoyée : on reste sur le formulaire (même identifiant au prochain essai)
+    INTERV_LAST = mailErr ? { params, toEmails } : null;
     window.onbeforeunload = null;
     document.getElementById('intervForm').style.display='none';
     document.getElementById('intervFooter').style.display='none';
     document.getElementById('intervSuccess').classList.add('show');
     document.getElementById('intervSuccessMsg').textContent =
-      `Demande transmise à l'équipe maintenance${sup ? ' (copie : ' + sup.name + ' + gérant)' : ' (copie : gérant)'} — intervenant noté : ${techNames} · ${resto}.`
+      (mailErr ? "Demande ENREGISTRÉE dans le suivi, mais l'e-mail à l'équipe maintenance n'a pas pu partir" + (intervQuotaErr(mailErr) ? " (quota d'envoi EmailJS atteint)" : '') + " : utilisez « Renvoyer l'e-mail » ou prévenez l'équipe."
+        : `Demande transmise à l'équipe maintenance${sup && !mailPartial ? ' (avec ' + sup.name + ')' : ''} — intervenant noté : ${techNames} · ${resto}.` + (mailPartial ? " Attention : l'e-mail n'est parti qu'à la maintenance (l'envoi groupé a été refusé) : prévenez " + (sup ? sup.name : 'le superviseur') + '.' : ''))
       + (up.ok ? ` ${up.ok} photo${up.ok > 1 ? 's' : ''} enregistrée${up.ok > 1 ? 's' : ''}.` : '')
       + (rowRes.ok ? '' : " Attention : la demande est partie par e-mail mais n'a pas pu être ajoutée au suivi (réseau) : prévenez l'équipe.");
+    intervShowResend(!!mailErr);
     setTimeout(() => { loadSuivi(); }, 1500);   // la demande apparaît dans le suivi
-    setTimeout(resetInterventionForm, 3500);     // formulaire prêt pour la suivante
+    if (!mailErr) setTimeout(resetInterventionForm, 3500);     // formulaire prêt pour la suivante (sinon on laisse le bouton « Renvoyer l'e-mail »)
   } catch(err) {
     window.onbeforeunload = null;
-    alert('Erreur envoi : ' + (err.text || JSON.stringify(err)));
+    alert('Erreur envoi : ' + (intervQuotaErr(err) ? "quota d'envoi EmailJS atteint (il se renouvelle en début de mois) et la demande n'a pas pu être enregistrée (réseau) : réessayez." : (err.text || JSON.stringify(err))));
     btn.disabled=false; btn.textContent='Envoyer';
   }
 }
@@ -12188,7 +12208,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261124-224305';
+const BUILD_VERSION = '20261125-191645';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
