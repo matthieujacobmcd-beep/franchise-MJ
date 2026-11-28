@@ -11502,16 +11502,41 @@ td.nm, th.nm { font-weight: 700; font-size: 8px; padding: 2px 3px; overflow: hid
 td.p { text-align: center; font-weight: 800; font-size: 7.8px; padding: 2px 0; white-space: nowrap; letter-spacing: -.2px; } td.k { text-align: center; font-size: 6.2px; padding: 2px 0; overflow: hidden; }
 </style></head><body><div class="fit" id="fit"><div class="hd"><span><b>${pxpEsc(o.title)}</b>${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><span>${pxpEsc(o.meta || '')}</span></div>${rules}<div class="grid">${bl.map(x => x.html).join('')}</div></div></body></html>`;
 }
-function pxpPrint(o) {                                                              // une page A4 paysage : la mise en page est réduite pour tout tenir, comme le modèle
-  const f = document.createElement('iframe'); f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
-  f.onload = () => {
-    try {
-      const d = f.contentDocument, el = d.getElementById('fit'), W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / el.scrollHeight, W / el.scrollWidth);
-      el.style.transform = 'scale(' + s + ')';
-      f.contentWindow.focus(); setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 250);
-    } catch (e) { f.remove(); }
-  };
-  document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
+// Aperçu plein écran de la feuille (une page A4 paysage, comme le modèle) avec « Imprimer / Enregistrer en PDF » : on imprime la PAGE ELLE-MÊME (méthode qui marche dans tous les navigateurs, y compris Safari et iPad),
+// et non plus un cadre invisible de 1 pixel (échec silencieux selon le navigateur). La feuille est isolée dans un « shadow DOM » : ses styles n'affectent pas l'application et inversement.
+function pxpClose() {
+  const h = document.getElementById('pxpOv'); if (h) h.remove();
+  const c = document.getElementById('pxpCss'); if (c) c.remove();
+  document.body.classList.remove('pxp-on'); document.removeEventListener('keydown', pxpKey);
+}
+function pxpKey(e) { if (e.key === 'Escape') pxpClose(); }
+function pxpPrint(o) {
+  pxpClose();
+  const dom = new DOMParser().parseFromString(pxpPageHtml(o), 'text/html'), css = [...dom.querySelectorAll('style')].map(x => x.textContent).join('\n');
+  const host = document.createElement('div'); host.id = 'pxpOv';
+  host.style.cssText = 'position:fixed;inset:0;z-index:100050;background:#d1d5db;overflow:auto;-webkit-overflow-scrolling:touch';
+  const sr = host.attachShadow({ mode: 'open' });
+  sr.innerHTML = `<style>${css.replace(/@page[^}]*\}/, '')}
+.bar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#111827;color:#fff;font:600 14px system-ui,-apple-system,'Segoe UI',Arial,sans-serif}
+.bar span{flex:1 1 220px;font-weight:700;font-size:13px;opacity:.9}.bar button{font:700 14px system-ui,-apple-system,Arial,sans-serif;border:0;border-radius:9px;padding:9px 16px;cursor:pointer}.bar .pri{background:#f59e0b;color:#111}.bar .sec{background:#374151;color:#fff}
+.hint{padding:6px 14px;background:#fef3c7;color:#78350f;font:12px/1.4 system-ui,-apple-system,Arial,sans-serif}
+.wrap{padding:14px;display:flex;justify-content:center}
+.pg{width:287mm;height:200mm;overflow:hidden;background:#fff;box-shadow:0 6px 28px rgba(0,0,0,.35);position:relative;flex:0 0 auto}
+@media print{.bar,.hint{display:none!important}.wrap{padding:0!important;display:block!important}.pg{box-shadow:none!important;zoom:1!important;margin:0!important}}
+.sheet{font-family:'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000;background:#fff;width:287mm;height:200mm;overflow:hidden}
+</style>
+<div class="bar"><span>${pxpEsc(o.title)}${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><button class="pri" id="go" type="button">🖨 Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
+<div class="hint">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » (ou votre imprimante) : la feuille tient sur une page A4 paysage.</div>
+<div class="wrap"><div class="pg" id="pg"><div class="sheet">${dom.body.innerHTML}</div></div></div>`;
+  document.body.appendChild(host);
+  const st = document.createElement('style'); st.id = 'pxpCss';
+  st.textContent = '@page{size:A4 landscape;margin:5mm}@media print{body.pxp-on>*:not(#pxpOv){display:none!important}body.pxp-on{margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}#pxpOv{position:static!important;inset:auto!important;overflow:visible!important;background:#fff!important}}';
+  document.head.appendChild(st); document.body.classList.add('pxp-on'); document.addEventListener('keydown', pxpKey);
+  const fit = sr.getElementById('pg') && sr.querySelector('.fit');
+  if (fit) { fit.style.transform = 'none'; const W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / fit.scrollHeight, W / fit.scrollWidth); fit.style.transform = 'scale(' + s + ')'; }
+  const zoom = Math.min(1, (window.innerWidth - 28) / (287 / 25.4 * 96)); if (zoom < 1) sr.getElementById('pg').style.zoom = zoom;      // petit écran : aperçu réduit (l'impression reste à l'échelle 1)
+  sr.getElementById('go').onclick = () => { const pg = sr.getElementById('pg'), z = pg.style.zoom; pg.style.zoom = ''; try { window.print(); } finally { setTimeout(() => { pg.style.zoom = z; }, 400); } };
+  sr.getElementById('x').onclick = pxpClose;
 }
 
 // ── Règles de prix : écarts constatés ──
@@ -12208,7 +12233,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261125-191645';
+const BUILD_VERSION = '20261128-152632';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {

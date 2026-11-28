@@ -4008,9 +4008,87 @@ function bdfRender() {
   const banner = allFinal ? `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#dcfce7;color:#166534;border:1.5px solid #86efac">✅ Les ${nFinal} budgets ${Ty} sont finalisés (publiés par le franchisé) : la vision Franchise est définitive.</div>`
     : `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#fef3c7;color:#92400e;border:1.5px solid #fcd34d">🟠 Vision <b>provisoire</b> : ${nTot - nFinal} restaurant${nTot - nFinal > 1 ? 's' : ''} sur ${nTot} ${nTot - nFinal > 1 ? 'n\'ont' : 'n\'a'} pas encore de budget finalisé (version la plus avancée du circuit affichée). Le total Franchise est définitif quand tous sont ✅.</div>`;
   const sw = (m, l, rd) => `<button class="step" style="border-radius:${rd};${mode === m ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" type="button" onclick="bdfMode('${m}')">${l}</button>`;
-  pn.innerHTML = tog + head + banner + `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex">${sw('e', '€', '8px 0 0 8px')}${sw('ep', '€ + %', '0')}${sw('p', '% du CA alim.', '0 8px 8px 0')}</span><button class="step" type="button" onclick="BDF.data=null;renderBudget()" title="Relire les budgets">↻ Actualiser</button><button class="step" type="button" onclick="window.print()">🖨 Imprimer</button></div>
+  pn.innerHTML = tog + head + banner + `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex">${sw('e', '€', '8px 0 0 8px')}${sw('ep', '€ + %', '0')}${sw('p', '% du CA alim.', '0 8px 8px 0')}</span><button class="step" type="button" onclick="BDF.data=null;renderBudget()" title="Relire les budgets">↻ Actualiser</button><button class="step" type="button" onclick="bdfExcel()" title="Télécharger le tableau au format Excel (montants et % du CA alimentaire)">📊 Exporter Excel</button><button class="step" type="button" onclick="bdfPdf()" title="Aperçu A4 paysage : imprimer ou enregistrer en PDF">📄 PDF / Imprimer</button></div>
     <div style="overflow-x:auto;border:1.5px solid var(--border);border-radius:12px"><table class="bd" style="min-width:${260 + 118 * (D.length + 1)}px"><thead><tr><th>Année ${Ty}</th>${cols}<th style="min-width:130px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">Franchise</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${allFinal ? '<span style="color:#15803d;font-weight:800">✅ Définitif</span>' : '<span style="color:#b45309;font-weight:800">🟠 Provisoire</span>'}</span></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="hint" style="margin-top:8px">Montants annuels du compte de résultat prévisionnel de chaque restaurant (mêmes formules que l'onglet « Un restaurant »). % = part du CA alimentaire. Les salaires par poste ne sont pris en compte que si ton accès y donne droit ; sinon le coût mensuel des managers saisi par l'échelon qui y a droit est repris. Lecture seule : rien n'est enregistré ici.</div>`;
+}
+// ── Export Excel et PDF de la Vision Franchise (mêmes données que l'écran ; rien n'est écrit dans l'application) ──
+const bdfStamp = () => new Date().toLocaleDateString('fr-FR');
+const bdfFileBase = () => 'Budget_Vision_Franchise_' + (+SIM.ty) + '_' + String((typeof CFG !== 'undefined' && CFG.title) || (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.title) || 'Franchise').replace(/[^A-Za-z0-9]+/g, '_') + '_' + new Date().toISOString().slice(0, 10);
+function bdfStatusTxt(x) { return x.state === 'final' ? 'Finalisé' : x.state === 'prov' ? 'Provisoire (' + (bdfLvlName[x.level] || x.level) + ')' : x.state === 'lock' ? 'Hors accès' : x.state === 'err' ? 'Illisible' : 'Aucune saisie'; }
+function bdfStats() {                                                       // totaux et état global, communs à l'écran, à l'Excel et au PDF
+  const D = BDF.data || [], withT = D.filter(x => x.T), nFinal = D.filter(x => x.state === 'final').length, nTot = D.filter(x => x.state !== 'lock').length, allFinal = nTot > 0 && nFinal === nTot;
+  const tot = {}; for (const x of BD_LINES) tot[x.k] = withT.reduce((a, d) => a + (d.T[x.k] || 0), 0);
+  return { D, withT, nFinal, nTot, allFinal, tot };
+}
+function bdfXlsxLoad() {
+  return new Promise((res, rej) => {
+    if (window.XLSX && XLSX.utils) return res();
+    const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    sc.onload = () => res(); sc.onerror = () => rej(new Error('chargement de la bibliothèque Excel impossible (connexion ?)')); document.head.appendChild(sc);
+  });
+}
+function bdfXlsxBook() {                                                    // classeur : « Montants » (€) et « % du CA alim. » ; lignes en gras / vert comme à l'écran
+  const { D, withT, allFinal, tot } = bdfStats(), Ty = +SIM.ty, N = D.length, title = 'Budget & PNL · Vision Franchise ' + Ty;
+  const border = { bottom: { style: 'thin', color: { rgb: 'D1D5DB' } } }, head = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F2937' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
+  const sheet = (pct) => {
+    const aoa = [[title + (pct ? ' — en % du CA alimentaire' : ' — montants annuels en €')], [(allFinal ? 'Définitif : tous les budgets sont finalisés' : 'PROVISOIRE : au moins un restaurant n\'a pas de budget finalisé') + ' · établi le ' + bdfStamp()], [],
+      ['Ligne'].concat(D.map(x => x.nm), ['Franchise']), ['Statut'].concat(D.map(bdfStatusTxt), [allFinal ? 'Définitif' : 'Provisoire'])];
+    for (const x of BD_LINES) aoa.push([x.l].concat(D.map(d => d.T ? (pct ? (d.T.alim ? d.T[x.k] / d.T.alim : null) : Math.round(d.T[x.k])) : null), [withT.length ? (pct ? (tot.alim ? tot[x.k] / tot.alim : null) : Math.round(tot[x.k])) : null]));
+    aoa.push([], ['% = part du CA alimentaire de la colonne. Les salaires par poste ne sont repris que si votre accès y donne droit. Source : version la plus avancée du circuit de validation de chaque restaurant.']);
+    const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 42 }].concat(Array(N + 1).fill({ wch: 17 })); ws['!rows'] = [{ hpt: 22 }];
+    ws['A1'].s = { font: { bold: true, sz: 14 } }; ws['A2'].s = { font: { italic: true, color: { rgb: allFinal ? '166534' : '9A3412' } } };
+    for (let c = 0; c <= N + 1; c++) { const a = XLSX.utils.encode_cell({ r: 3, c }); if (ws[a]) ws[a].s = head; const b = XLSX.utils.encode_cell({ r: 4, c }); if (ws[b]) ws[b].s = { font: { italic: true, sz: 9 }, alignment: { horizontal: c ? 'center' : 'left', wrapText: true } }; }
+    BD_LINES.forEach((x, i) => { const r = 5 + i, st = x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? { font: { bold: true }, fill: { fgColor: { rgb: 'E3F4E8' } } } : { font: { bold: true }, fill: { fgColor: { rgb: 'E7EEFB' } } }) : {};
+      for (let c = 0; c <= N + 1; c++) { const a = XLSX.utils.encode_cell({ r, c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = Object.assign({ border }, st); if (c) { ws[a].s.alignment = { horizontal: 'right' }; if (typeof ws[a].v === 'number') ws[a].z = pct ? '0.0%' : '#,##0;[Red]-#,##0'; } } });
+    ws['!freeze'] = { xSplit: 1, ySplit: 5 }; ws['!views'] = [{ state: 'frozen', xSplit: 1, ySplit: 5 }];
+    return ws;
+  };
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(false), 'Montants'); XLSX.utils.book_append_sheet(wb, sheet(true), '% du CA alim.'); return wb;
+}
+async function bdfExcel() {
+  if (!BDF.data) return; const b = event && event.target && event.target.closest ? event.target.closest('button') : null, t0 = b ? b.textContent : '';
+  if (b) { b.disabled = true; b.textContent = '⏳ Export…'; }
+  try { await bdfXlsxLoad(); XLSX.writeFile(bdfXlsxBook(), bdfFileBase() + '.xlsx'); }
+  catch (e) { alert('Export Excel impossible : ' + ((e && e.message) || e) + '. Vérifiez la connexion et réessayez.'); }
+  if (b) { b.disabled = false; b.textContent = t0; }
+}
+function bdfPdfClose() { const h = document.getElementById('bdfOv'); if (h) h.remove(); const c = document.getElementById('bdfCss'); if (c) c.remove(); document.body.classList.remove('bdf-on'); document.removeEventListener('keydown', bdfPdfKey); }
+function bdfPdfKey(e) { if (e.key === 'Escape') bdfPdfClose(); }
+function bdfPdf() {                                                         // aperçu A4 paysage plein écran (imprimer / enregistrer en PDF) : on imprime la PAGE elle-même, la largeur est ajustée à la feuille, la hauteur se répartit sur plusieurs pages (en-tête répété)
+  if (!BDF.data) return; bdfPdfClose();
+  const { D, withT, allFinal, tot } = bdfStats(), Ty = +SIM.ty, mode = BDF.mode, E = escH;
+  const cell = (n, a) => { const pc = a ? bdP(n / a) : '—'; return mode === 'e' ? bdE(n) : mode === 'p' ? pc : `${bdE(n)}<span class="pc">${pc}</span>`; };
+  const th = D.map(x => `<th>${E(x.nm)}<small>${E(bdfStatusTxt(x))}</small></th>`).join('') + `<th>Franchise<small>${allFinal ? 'Définitif' : 'Provisoire'}</small></th>`;
+  const rows = BD_LINES.map(x => `<tr class="${x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : ''}"><td>${x.l}</td>${D.map(d => `<td>${d.T ? cell(d.T[x.k], d.T.alim) : '—'}</td>`).join('')}<td><b>${withT.length ? cell(tot[x.k], tot.alim) : '—'}</b></td></tr>`).join('');
+  const host = document.createElement('div'); host.id = 'bdfOv'; host.style.cssText = 'position:fixed;inset:0;z-index:100050;background:#d1d5db;overflow:auto;-webkit-overflow-scrolling:touch';
+  const sr = host.attachShadow({ mode: 'open' });
+  sr.innerHTML = `<style>
+.bar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#111827;color:#fff;font:600 14px system-ui,-apple-system,'Segoe UI',Arial,sans-serif}
+.bar span{flex:1 1 220px;font-weight:700;font-size:13px;opacity:.9}.bar button{font:700 14px system-ui,-apple-system,Arial,sans-serif;border:0;border-radius:9px;padding:9px 16px;cursor:pointer}.bar .pri{background:#f59e0b;color:#111}.bar .sec{background:#374151;color:#fff}
+.hint{padding:6px 14px;background:#fef3c7;color:#78350f;font:12px/1.4 system-ui,-apple-system,Arial,sans-serif}
+.wrap{padding:14px;display:flex;justify-content:center}.pg{background:#fff;box-shadow:0 6px 28px rgba(0,0,0,.35);padding:14px}
+.sheet{font-family:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#111;background:#fff;width:max-content}
+h1{font-size:16px;margin:0 0 2px}.sub{font-size:10px;margin:0 0 8px;font-weight:700;color:${allFinal ? '#166534' : '#9a3412'}}
+table{border-collapse:collapse;width:max-content}th{background:#1f2937;color:#fff;font-size:9.5px;padding:4px 7px;text-align:right;min-width:92px}th:first-child{text-align:left;min-width:210px}th small{display:block;font-weight:600;font-size:7.5px;opacity:.85}
+td{font-size:9.5px;padding:2px 7px;border-bottom:.5px solid #d1d5db;text-align:right;white-space:nowrap}td:first-child{text-align:left}.pc{display:block;font-size:7.5px;color:#6b7280;font-weight:600}
+tr.b td{font-weight:800;background:#e7eefb}tr.k td{font-weight:800;background:#e3f4e8}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}
+.note{font-size:8.5px;color:#555;margin-top:8px;max-width:1000px;line-height:1.4}
+@media print{.bar,.hint{display:none!important}.wrap{padding:0!important;display:block!important}.pg{box-shadow:none!important;padding:0!important}}
+</style>
+<div class="bar"><span>${E('Budget & PNL · Vision Franchise ' + Ty)}</span><button class="pri" id="go" type="button">🖨 Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
+<div class="hint">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » (ou votre imprimante), format A4 paysage. Le tableau est ajusté à la largeur de la page ; s'il est long, il continue sur la page suivante avec ses titres.</div>
+<div class="wrap"><div class="pg" id="pg"><div class="sheet" id="sheet"><h1>${E('Budget & PNL · Vision Franchise ' + Ty)}</h1><div class="sub">${allFinal ? '✅ Définitif : tous les budgets sont finalisés' : '🟠 PROVISOIRE : au moins un restaurant n\'a pas de budget finalisé'} · établi le ${bdfStamp()} · % = part du CA alimentaire</div>
+<table><thead><tr><th>Année ${Ty}</th>${th}</tr></thead><tbody>${rows}</tbody></table>
+<div class="note">Montants annuels du compte de résultat prévisionnel de chaque restaurant (version la plus avancée du circuit de validation ; « Finalisé » = publié par le franchisé). Les salaires par poste ne sont repris que si l'accès de la personne y donne droit.</div></div></div></div>`;
+  document.body.appendChild(host);
+  const st = document.createElement('style'); st.id = 'bdfCss';
+  st.textContent = '@page{size:A4 landscape;margin:8mm}@media print{body.bdf-on>*:not(#bdfOv){display:none!important}body.bdf-on{margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}#bdfOv{position:static!important;inset:auto!important;overflow:visible!important;background:#fff!important}}';
+  document.head.appendChild(st); document.body.classList.add('bdf-on'); document.addEventListener('keydown', bdfPdfKey);
+  const sheet = sr.getElementById('sheet'), natural = sheet.scrollWidth, avail = (297 - 16) / 25.4 * 96, zPrint = Math.min(1, avail / natural), zScreen = Math.min(1, (window.innerWidth - 56) / natural);
+  sheet.style.zoom = zScreen;
+  sr.getElementById('go').onclick = () => { sheet.style.zoom = zPrint; try { window.print(); } finally { setTimeout(() => { sheet.style.zoom = zScreen; }, 600); } };
+  sr.getElementById('x').onclick = bdfPdfClose;
 }
 const __renderBudgetFr = renderBudget;
 renderBudget = function () {
@@ -4071,16 +4149,41 @@ td.nm, th.nm { font-weight: 700; font-size: 8px; padding: 2px 3px; overflow: hid
 td.p { text-align: center; font-weight: 800; font-size: 7.8px; padding: 2px 0; white-space: nowrap; letter-spacing: -.2px; } td.k { text-align: center; font-size: 6.2px; padding: 2px 0; overflow: hidden; }
 </style></head><body><div class="fit" id="fit"><div class="hd"><span><b>${pxpEsc(o.title)}</b>${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><span>${pxpEsc(o.meta || '')}</span></div>${rules}<div class="grid">${bl.map(x => x.html).join('')}</div></div></body></html>`;
 }
-function pxpPrint(o) {                                                              // une page A4 paysage : la mise en page est réduite pour tout tenir, comme le modèle
-  const f = document.createElement('iframe'); f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
-  f.onload = () => {
-    try {
-      const d = f.contentDocument, el = d.getElementById('fit'), W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / el.scrollHeight, W / el.scrollWidth);
-      el.style.transform = 'scale(' + s + ')';
-      f.contentWindow.focus(); setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 250);
-    } catch (e) { f.remove(); }
-  };
-  document.body.appendChild(f); f.srcdoc = pxpPageHtml(o);
+// Aperçu plein écran de la feuille (une page A4 paysage, comme le modèle) avec « Imprimer / Enregistrer en PDF » : on imprime la PAGE ELLE-MÊME (méthode qui marche dans tous les navigateurs, y compris Safari et iPad),
+// et non plus un cadre invisible de 1 pixel (échec silencieux selon le navigateur). La feuille est isolée dans un « shadow DOM » : ses styles n'affectent pas l'application et inversement.
+function pxpClose() {
+  const h = document.getElementById('pxpOv'); if (h) h.remove();
+  const c = document.getElementById('pxpCss'); if (c) c.remove();
+  document.body.classList.remove('pxp-on'); document.removeEventListener('keydown', pxpKey);
+}
+function pxpKey(e) { if (e.key === 'Escape') pxpClose(); }
+function pxpPrint(o) {
+  pxpClose();
+  const dom = new DOMParser().parseFromString(pxpPageHtml(o), 'text/html'), css = [...dom.querySelectorAll('style')].map(x => x.textContent).join('\n');
+  const host = document.createElement('div'); host.id = 'pxpOv';
+  host.style.cssText = 'position:fixed;inset:0;z-index:100050;background:#d1d5db;overflow:auto;-webkit-overflow-scrolling:touch';
+  const sr = host.attachShadow({ mode: 'open' });
+  sr.innerHTML = `<style>${css.replace(/@page[^}]*\}/, '')}
+.bar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#111827;color:#fff;font:600 14px system-ui,-apple-system,'Segoe UI',Arial,sans-serif}
+.bar span{flex:1 1 220px;font-weight:700;font-size:13px;opacity:.9}.bar button{font:700 14px system-ui,-apple-system,Arial,sans-serif;border:0;border-radius:9px;padding:9px 16px;cursor:pointer}.bar .pri{background:#f59e0b;color:#111}.bar .sec{background:#374151;color:#fff}
+.hint{padding:6px 14px;background:#fef3c7;color:#78350f;font:12px/1.4 system-ui,-apple-system,Arial,sans-serif}
+.wrap{padding:14px;display:flex;justify-content:center}
+.pg{width:287mm;height:200mm;overflow:hidden;background:#fff;box-shadow:0 6px 28px rgba(0,0,0,.35);position:relative;flex:0 0 auto}
+@media print{.bar,.hint{display:none!important}.wrap{padding:0!important;display:block!important}.pg{box-shadow:none!important;zoom:1!important;margin:0!important}}
+.sheet{font-family:'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000;background:#fff;width:287mm;height:200mm;overflow:hidden}
+</style>
+<div class="bar"><span>${pxpEsc(o.title)}${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><button class="pri" id="go" type="button">🖨 Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
+<div class="hint">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » (ou votre imprimante) : la feuille tient sur une page A4 paysage.</div>
+<div class="wrap"><div class="pg" id="pg"><div class="sheet">${dom.body.innerHTML}</div></div></div>`;
+  document.body.appendChild(host);
+  const st = document.createElement('style'); st.id = 'pxpCss';
+  st.textContent = '@page{size:A4 landscape;margin:5mm}@media print{body.pxp-on>*:not(#pxpOv){display:none!important}body.pxp-on{margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}#pxpOv{position:static!important;inset:auto!important;overflow:visible!important;background:#fff!important}}';
+  document.head.appendChild(st); document.body.classList.add('pxp-on'); document.addEventListener('keydown', pxpKey);
+  const fit = sr.getElementById('pg') && sr.querySelector('.fit');
+  if (fit) { fit.style.transform = 'none'; const W = 287 / 25.4 * 96, H = 200 / 25.4 * 96, s = Math.min(1, H / fit.scrollHeight, W / fit.scrollWidth); fit.style.transform = 'scale(' + s + ')'; }
+  const zoom = Math.min(1, (window.innerWidth - 28) / (287 / 25.4 * 96)); if (zoom < 1) sr.getElementById('pg').style.zoom = zoom;      // petit écran : aperçu réduit (l'impression reste à l'échelle 1)
+  sr.getElementById('go').onclick = () => { const pg = sr.getElementById('pg'), z = pg.style.zoom; pg.style.zoom = ''; try { window.print(); } finally { setTimeout(() => { pg.style.zoom = z; }, 400); } };
+  sr.getElementById('x').onclick = pxpClose;
 }
 
 // ── Règles de prix : écarts constatés ──
