@@ -188,7 +188,7 @@
       <div><div class="brand-name">Franchise MJ</div><div class="brand-sub">Saisie KPI</div></div>
     </div>
     <div class="topbar-right">
-      <div class="resto-badge" id="restoBadge" style="display:none">📍 <span id="restoBadgeName"></span><button onclick="showPicker()">Changer</button></div>
+      <div class="resto-badge" id="restoBadge" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:4px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span id="restoBadgeName"></span><button onclick="showPicker()">Changer</button></div>
       <a class="dash-link" href="index.html" target="_blank" rel="noopener">Voir le dashboard →</a>
       <span class="sba-who" id="sbaWho"></span>
       <button class="dash-link" id="btnLogout" onclick="logoutSaisie()" title="Se déconnecter : le mot de passe sera redemandé" style="cursor:pointer;font-family:inherit;background:transparent">Se déconnecter</button>
@@ -206,7 +206,7 @@
   <div class="tab-bar" id="tabBar"></div>
   <div class="wrap"><div class="panel" id="panel"></div></div>
   <div class="foot-out"><a onclick="logoutSaisie()">Se déconnecter de cet appareil</a></div>
-  <div class="cfg-warn" id="cfgWarn" style="display:none">⚙️ La page n'est pas encore reliée au Google Sheet — remplace <b>APPS_SCRIPT_URL</b> en haut du script par l'URL de ton Apps Script (étape 3). En attendant, l'enregistrement est désactivé.</div>
+  <div class="cfg-warn" id="cfgWarn" style="display:none">La page n'est pas encore reliée au Google Sheet — remplace <b>APPS_SCRIPT_URL</b> en haut du script par l'URL de ton Apps Script (étape 3). En attendant, l'enregistrement est désactivé.</div>
 </div>
 
 <script>
@@ -230,7 +230,7 @@ function accLabel(r){ const p=accRole(r); return p?p.label:''; }
 function accGrant(a){ const ps=accProfiles().filter(p=>p.id!==a.id); ps.push({id:a.id,role:a.role,label:a.label,scope:a.scope,can:a.can,h:a.pwd_hash}); try{ sessionStorage.setItem('mj_access',JSON.stringify(ps)); }catch(e){} }
 function accLock(right, id, r){          // bandeau de déverrouillage : mot de passe d'accès (directeur, superviseur ou franchisé)
   const have=accProfiles().find(p=>(p.can||[]).includes(right)&&!accCovers(p,r));
-  return `<div class="entry-banner" style="display:block;background:var(--card2);border:1.5px solid var(--border);color:var(--text)"><b>🔒 Accès réservé</b> — ${ACC_NEED[right]||right} s'ouvre avec un mot de passe d'accès (directeur de ce restaurant, superviseur de son secteur, franchisé ou collaboratrice), distinct de celui de la saisie.${have?` <i>Ton accès actuel (${escH(have.label)}) ne couvre pas ce restaurant.</i>`:''}
+  return `<div class="entry-banner" style="display:block;background:var(--card2);border:1.5px solid var(--border);color:var(--text)"><b>Accès réservé</b> — ${ACC_NEED[right]||right} s'ouvre avec un mot de passe d'accès (directeur de ce restaurant, superviseur de son secteur, franchisé ou collaboratrice), distinct de celui de la saisie.${have?` <i>Ton accès actuel (${escH(have.label)}) ne couvre pas ce restaurant.</i>`:''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><input type="password" id="${id}" placeholder="Mot de passe d'accès" autocomplete="off" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;min-width:200px" onkeydown="if(event.key==='Enter')accTry('${right}','${id}')"><button class="btn-save" style="padding:8px 16px" onclick="accTry('${right}','${id}')">Déverrouiller</button><span class="save-msg" id="${id}Msg"></span></div></div>`;
 }
 async function accTry(right, id){
@@ -271,7 +271,7 @@ const TABS=[['quotidien','Quotidien'],['hebdomadaire','Hebdomadaire'],['mensuel'
 // se pré-remplit avec la moyenne des semaines tant qu'il n'a pas été validé.
 const HEBDO_KEYS=['oepe','r2p','avis','hello_mcdo','reseaux','uvhe','tche'];   // « avis » = somme des avis négatifs (OPH calculé)
 // u = unité affichée dans le champ ; pct = saisi en % (94,4) mais stocké en fraction (0,944)
-const METEO=[['','—'],['soleil','☀️ Soleil'],['nuageux','⛅ Nuageux'],['pluie','🌧️ Pluie'],['orage','⛈️ Orage'],['neige','❄️ Neige'],['brouillard','🌫️ Brouillard'],['canicule','🥵 Canicule'],['vent','💨 Vent fort'],['froid','🥶 Froid'],['chaud','🌡️ Chaud']];
+const METEO=[['','—'],['soleil','Soleil'],['nuageux','Nuageux'],['pluie','Pluie'],['orage','Orage'],['neige','Neige'],['brouillard','Brouillard'],['canicule','Canicule'],['vent','Vent fort'],['froid','Froid'],['chaud','Chaud']];
 const FIELDS={
   quotidien:[
     {k:'ca_net_total',l:'CA Net Total',u:'€'},{k:'ca_net_alim',l:'CA Net Alimentaire',u:'€'},{k:'transactions',l:"Transactions (TAC'S)",u:'nb'},
@@ -392,7 +392,7 @@ function lastLabel(tab){
 
 function fitTabs(){ const b=document.getElementById('tabBar'); if(!b) return; b.classList.remove('wrapped'); const w=b.scrollWidth>b.clientWidth+1; b.classList.toggle('wrapped',w); document.body.classList.toggle('tabs-wrapped',w); }
 let _fitT=null; window.addEventListener('resize',()=>{ clearTimeout(_fitT); _fitT=setTimeout(fitTabs,80); });
-function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>(k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin()))&&(typeof sbTabOk==='function'?sbTabOk(k):k!=='equipes')).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'&&!accCan(k))||(k==='valid'&&!(accCan('valid')||accCan('sim')||accCan('budget')))?'🔒 ':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
+function buildTabs(){ const tb=document.getElementById('tabBar'); if(!tb) return; if(typeof wfEnsureList==='function') wfEnsureList(true); tb.innerHTML=TABS.filter(([k])=>(k!=='acces'||(typeof accIsAdmin==='function'&&accIsAdmin()))&&(typeof sbTabOk==='function'?sbTabOk(k):k!=='equipes')).map(([k,n])=>`<button class="tab ${k===curTab?'on':''}" data-t="${k}" onclick="setTab('${k}')">${(k==='budget'&&!accCan(k))||(k==='valid'&&!(accCan('valid')||accCan('sim')||accCan('budget')))?'':''}${n}${typeof bcTabDot==='function'?bcTabDot(k):''}</button>`).join(''); fitTabs(); }
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(typeof fitTabs==='function') fitTabs(); });
 function init(){
   if(!configured()) document.getElementById('cfgWarn').style.display='block';
@@ -481,7 +481,7 @@ function renderPanel(keepPeriod){
   const p=document.getElementById('panel');
   if(['quotidien','hebdomadaire','mensuel'].includes(curTab) && LAST_STATE==='loading'){   // jamais de date « du jour » par défaut : on attend la dernière saisie
     GATE_ON=true;
-    p.innerHTML=`<div class="gate">⏳ Recherche de la dernière saisie de ${RESTOS.find(r=>r[0]===curResto)[1]}…<small>La saisie s'ouvre dès que la dernière date saisie est connue, pour t'éviter une erreur de date.</small></div>`;
+    p.innerHTML=`<div class="gate">Recherche de la dernière saisie de ${RESTOS.find(r=>r[0]===curResto)[1]}…<small>La saisie s'ouvre dès que la dernière date saisie est connue, pour t'éviter une erreur de date.</small></div>`;
     return;
   }
   GATE_ON=false;
@@ -554,7 +554,7 @@ function recomputeOph(){
     else if(note) note.textContent="Saisis le nombre d'avis négatifs : l'OPH se calcule seul.";
     return;
   }
-  if(!TX){ if(note) note.textContent='⏳ Chargement des transactions…'; loadTx(); return; }
+  if(!TX){ if(note) note.textContent='Chargement des transactions…'; loadTx(); return; }
   const tx=periodDates().reduce((s,d)=>s+(((TX[curResto]||{})[d])||0),0);
   if(!tx){ if(note) note.textContent='Transactions non saisies sur cette période : OPH non calculable.'; return; }
   setAuto('f_oph', avis*100000/tx, 1);
@@ -566,7 +566,7 @@ function recomputeDigital(){
   const set=(k,t)=>{ const n=document.getElementById('note_'+k); if(n) n.textContent=t||''; };
   const cc=num('f_cc_eur'), ue=num('f_uber_eur'), lad=num('f_lad_eur');
   if(cc==null&&ue==null&&lad==null){ ['cc_eur','uber_eur','lad_eur'].forEach(k=>set(k,'')); return; }
-  if(!CAM){ ['cc_eur','uber_eur','lad_eur'].forEach(k=>set(k,'⏳ Chargement du CA…')); loadTx(); return; }
+  if(!CAM){ ['cc_eur','uber_eur','lad_eur'].forEach(k=>set(k,'Chargement du CA…')); loadTx(); return; }
   const ca=periodDates().reduce((s,d)=>s+(((CAM[curResto]||{})[d])||0),0), pct=x=>(x*100).toFixed(1).replace('.',',')+' %';
   const caTxt=ca?ca.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €':null;
   set('cc_eur', cc==null?'':(ca?`${pct(cc/ca)} du CA net (${caTxt})`:'CA du mois non saisi : % non calculable'));
@@ -583,7 +583,7 @@ function recomputeFid(){
     if(legacy){ el.value=String(Math.round(+legacy*1000)/10).replace('.',','); if(n) n.textContent="Taux d'origine (importé d'Excel) — saisis le nombre de comptes pour le recalculer."; }
     return;
   }
-  if(!TX){ if(n) n.textContent='⏳ Chargement des transactions…'; loadTx(); return; }
+  if(!TX){ if(n) n.textContent='Chargement des transactions…'; loadTx(); return; }
   const tx=periodDates().reduce((s,d)=>s+(((TX[curResto]||{})[d])||0),0);
   if(!tx){ if(n) n.textContent='Transactions non saisies sur ce mois : taux non calculable.'; return; }
   setAuto('f_fid_actifs', nb*100/tx, 1);
@@ -645,13 +645,13 @@ async function loadExisting(){
   recompute();
   const msg=document.getElementById('saveMsg'); if(msg){ msg.className='save-msg'; msg.textContent=''; }
   if(!configured()){ setBanner('',''); return; }
-  setBanner('loading','⏳ Recherche d\'une saisie existante…');
+  setBanner('loading','Recherche d\'une saisie existante…');
   let data=null;
   try{
     let u=APPS_SCRIPT_URL+'?frequence='+encodeURIComponent(tab)+'&restaurant='+encodeURIComponent(resto)+'&periode='+encodeURIComponent(currentPeriode());
     if(tab==='ponctuel') u+='&type='+encodeURIComponent(currentType());
     const res=await fetch(u+'&_='+Date.now()); if(res.ok){ const j=await res.json(); data=j&&j.data; if(data&&!Object.keys(data).length) data=null; }
-  }catch(e){ if(seq===loadSeq) setBanner('err','⚠️ Impossible de vérifier les saisies existantes (connexion ?). Tu peux quand même saisir.'); return; }
+  }catch(e){ if(seq===loadSeq) setBanner('err','Impossible de vérifier les saisies existantes (connexion ?). Tu peux quand même saisir.'); return; }
   if(seq!==loadSeq) return;   // l'utilisateur a changé de période entre-temps
   window.hasExisting=!!data; updateDateBanner();
   if(data){
@@ -670,7 +670,7 @@ async function loadExisting(){
       if(sc) sc.dataset.manual=(s!=null&&isFinite(s)&&(a==null||Math.abs(s-a)>0.06))?'1':'';
     }
     recompute();
-    setBanner('exists','📝 <b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées. Modifie-les puis clique sur « Enregistrer » pour les mettre à jour.');
+    setBanner('exists','<b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées. Modifie-les puis clique sur « Enregistrer » pour les mettre à jour.');
   } else {
     setBanner('new','🆕 Aucune saisie pour cette période — nouvelle saisie.');
   }
@@ -690,7 +690,7 @@ async function loadExisting(){
       });
       if(filled.length){
         const cur=new Date(), cm=MONTHS[cur.getMonth()]+' '+cur.getFullYear();
-        setBanner('suggest',`💡 <b>Suggestion calculée à partir de ${rows.length} semaine${rows.length>1?'s':''} saisie${rows.length>1?'s':''}</b> (${filled.join(', ')}) — vérifie puis clique sur « Enregistrer » pour valider le mois.`+(monthKey===cm?' ⚠️ Ce mois n\'est pas terminé : toutes les semaines ne sont peut-être pas saisies.':''));
+        setBanner('suggest',`<b>Suggestion calculée à partir de ${rows.length} semaine${rows.length>1?'s':''} saisie${rows.length>1?'s':''}</b> (${filled.join(', ')}) — vérifie puis clique sur « Enregistrer » pour valider le mois.`+(monthKey===cm?' Ce mois n\'est pas terminé : toutes les semaines ne sont peut-être pas saisies.':''));
       }
     }catch(e){}
   }
@@ -736,13 +736,13 @@ function periodState(){
   const on=periodOrdinal(curTab,nowPeriod(curTab)), last=lastOf(curTab), od=last?oc-periodOrdinal(curTab,last):null;
   const big=curTab==='quotidien'?dateLong(cur):periodeLabel();
   let kind='ok', msg='', blocking=false;
-  if(oc>on){ kind='bad'; msg='⛔ Cette période est dans le futur : elle ne peut pas être saisie.'; blocking=true; }
-  else if(window.hasExisting){ kind='edit'; msg='📝 Une saisie existe déjà : tu vas la MODIFIER (pas en créer une nouvelle).'; }
-  else if(oc===on){ kind='warn'; msg=curTab==='quotidien'?"⚠️ C'est AUJOURD'HUI : la journée n'est pas terminée. Voulais-tu saisir la veille ?":'⚠️ Période en cours, non terminée.'; }
+  if(oc>on){ kind='bad'; msg='Cette période est dans le futur : elle ne peut pas être saisie.'; blocking=true; }
+  else if(window.hasExisting){ kind='edit'; msg='Une saisie existe déjà : tu vas la MODIFIER (pas en créer une nouvelle).'; }
+  else if(oc===on){ kind='warn'; msg=curTab==='quotidien'?"C'est AUJOURD'HUI : la journée n'est pas terminée. Voulais-tu saisir la veille ?":'Période en cours, non terminée.'; }
   else if(last && od===1){ kind='ok'; msg='✓ C\'est bien la suite de la dernière saisie ('+lastLabel(curTab)+').'; }
-  else if(last && od>1){ kind='warn'; msg=`⚠️ Dernière saisie : ${lastLabel(curTab)}. Il manquerait ${od-1} période(s) entre les deux.`; }
-  else if(last && od<0){ kind='warn'; msg=`⚠️ Antérieure à la dernière saisie (${lastLabel(curTab)}) : est-ce voulu ?`; }
-  else if(!last){ kind='warn'; msg=LAST_STATE==='fail'?'⚠️ Dernière saisie introuvable (connexion ?) : contrôle bien la date.':'⚠️ Aucune saisie précédente : contrôle bien la date.'; }
+  else if(last && od>1){ kind='warn'; msg=`Dernière saisie : ${lastLabel(curTab)}. Il manquerait ${od-1} période(s) entre les deux.`; }
+  else if(last && od<0){ kind='warn'; msg=`Antérieure à la dernière saisie (${lastLabel(curTab)}) : est-ce voulu ?`; }
+  else if(!last){ kind='warn'; msg=LAST_STATE==='fail'?'Dernière saisie introuvable (connexion ?) : contrôle bien la date.':'Aucune saisie précédente : contrôle bien la date.'; }
   return {kind,big,rel:relLabel(),msg,blocking};
 }
 function updateDateBanner(){
@@ -754,7 +754,7 @@ function updateDateBanner(){
   b.innerHTML=`<span class="db-lbl">Tu saisis pour ${escH(rn)}</span><span class="db-date">${escH(s.big)}</span><span class="db-rel">${escH(s.rel)}</span>${next}<span class="db-msg">${escH(s.msg)}${LAST_STATE==='cache'?' (dernière saisie en cours de vérification…)':''}</span>`;
   if(btn){ btn.disabled=!!s.blocking; btn.textContent=(curTab==='quotidien'?'Enregistrer le '+currentPeriode().split('-').reverse().join('/'):'Enregistrer '+periodeLabel())+' · '+rn; }
 }
-function periodWarning(){ const m=periodMsgs(); return m.length?m.map(x=>'⚠️ '+x).join('\n\n')+'\n\nEnregistrer quand même ?':''; }
+function periodWarning(){ const m=periodMsgs(); return m.length?m.map(x=>''+x).join('\n\n')+'\n\nEnregistrer quand même ?':''; }
 // ── Contrôle de cohérence du CA saisi avec les mêmes jours de la semaine des semaines précédentes ──
 function salesSanity(){
   const SRC=RECENT||CAM; if(curTab!=='quotidien'||!SRC) return '';
@@ -774,7 +774,7 @@ function askConfirm({big,rel,resto,warns,rows,okLabel}){
     let ov=document.getElementById('cfmOv'); if(!ov){ ov=document.createElement('div'); ov.id='cfmOv'; ov.innerHTML='<div id="cfmBox"></div>'; document.body.appendChild(ov); }
     const fin=v=>{ ov.classList.remove('open'); res(v); };
     ov.querySelector('#cfmBox').innerHTML=`<h3>Confirmer la saisie · ${escH(resto)}</h3><div class="cf-date">${escH(big)}</div><div class="cf-sub">${escH(rel)}</div>
-      ${warns.map(w=>`<div class="cf-warn">⚠️ ${escH(w)}</div>`).join('')}
+      ${warns.map(w=>`<div class="cf-warn">${escH(w)}</div>`).join('')}
       <div class="cf-rows">${rows.map(([l,v])=>`<div><span>${escH(l)}</span><b>${escH(v)}</b></div>`).join('')}</div>
       <div class="cf-btns"><button type="button" id="cfCancel">← Corriger</button><button type="button" class="cf-ok" id="cfOk">${escH(okLabel)}</button></div>`;
     ov.classList.add('open');
@@ -820,7 +820,7 @@ async function save(){
     const j=droitMsg(await res.json());
     if(j&&j.ok){
       msg.className='save-msg ok'; msg.textContent=(j.updated?'✓ Saisie mise à jour':'✓ Saisie enregistrée')+' ('+where+')';
-      setBanner('exists','📝 <b>Une saisie existe pour cette période</b> — tu peux encore modifier les valeurs puis ré-enregistrer.');
+      setBanner('exists','<b>Une saisie existe pour cette période</b> — tu peux encore modifier les valeurs puis ré-enregistrer.');
       document.querySelectorAll('.field input.suggest').forEach(el=>el.classList.remove('suggest'));
       if(curTab==='hebdomadaire') delete hebdoCache[curResto];
       // mémorise la dernière saisie pour proposer la période suivante
@@ -872,7 +872,7 @@ function renderDocuments(){
   const p=document.getElementById('panel');
   if(!pwdHash()){
     p.innerHTML=`<div class="panel-head"><div class="panel-title">Documents</div></div>
-      <div class="entry-banner err" style="display:block">🔒 Pour téléverser des documents, reconnecte-toi avec le mot de passe de la saisie.</div>
+      <div class="entry-banner err" style="display:block">Pour téléverser des documents, reconnecte-toi avec le mot de passe de la saisie.</div>
       <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
   }
   p.innerHTML=`
@@ -908,7 +908,7 @@ async function loadDocList(){
       fetch(APPS_SCRIPT_URL+'?action=docs&_='+Date.now()).then(r=>r.json()),
       fetch(APPS_SCRIPT_URL+'?action=perf_list&_='+Date.now()).then(r=>r.json()).catch(()=>({months:[]})) ]);
     if(!d||!d.ok) throw new Error('réponse inattendue');
-    const sec=(title,kind,items)=>`<div class="doc-sec">${title}${d.folders&&d.folders[kind]?` · <a href="${escH(d.folders[kind].url)}" target="_blank" rel="noopener" style="text-transform:none;letter-spacing:0">ouvrir le dossier Drive ↗</a>`:''}</div>`+(items.length?items.map(x=>`<div class="doc-row"><span>📄 ${escH(x.mois)} <i>${escH(x.sous_titre||'')}</i></span><button onclick="deleteDocument('${kind}','${x.id}','${escH(x.mois).replace(/'/g,'’')}')" title="Supprimer">✕</button></div>`).join(''):'<div class="hint">Aucun document.</div>');
+    const sec=(title,kind,items)=>`<div class="doc-sec">${title}${d.folders&&d.folders[kind]?` · <a href="${escH(d.folders[kind].url)}" target="_blank" rel="noopener" style="text-transform:none;letter-spacing:0">ouvrir le dossier Drive ↗</a>`:''}</div>`+(items.length?items.map(x=>`<div class="doc-row"><span>${escH(x.mois)} <i>${escH(x.sous_titre||'')}</i></span><button onclick="deleteDocument('${kind}','${x.id}','${escH(x.mois).replace(/'/g,'’')}')" title="Supprimer">✕</button></div>`).join(''):'<div class="hint">Aucun document.</div>');
     box.innerHTML=sec('Marketing News','marketing',d.marketing||[])+sec('Actualité Restaurant','actualite',d.actualite||[])+
       `<div class="doc-sec">Performance Restaurants</div>`+((pf.months&&pf.months.length)?`<div class="hint">Mois téléversés depuis cette page : ${pf.months.map(escH).join(', ')}. Les mois plus anciens viennent de la version d'origine du dashboard.</div>`:'<div class="hint">Aucun mois téléversé depuis cette page.</div>');
   }catch(e){ box.innerHTML='<div class="hint">Impossible de lire la liste des documents (connexion ?).</div>'; }
@@ -1049,7 +1049,7 @@ function pvDraftBar() {
   const p = pvPending();
   if (!p.length) { box.innerHTML = ''; return; }
   const lab = x => `${(RESTOS.find(r => r[0] === x.r) || [0, x.r])[1]} · ${MONTHS[+x.ym.slice(5) - 1].toLowerCase()} ${x.ym.slice(0, 4)} (${x.n} jour${x.n > 1 ? 's' : ''})`;
-  box.innerHTML = `<div style="background:#fff7ed;border:1.5px solid #fdba74;color:#7c2d12;border-radius:10px;padding:9px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.7">⚠ <b>Prévisions non enregistrées</b> : ${p.map(lab).join(' ; ')}. Elles sont gardées si tu changes de mois ou de restaurant, mais ne comptent qu'une fois enregistrées. <button class="btn-save" style="padding:6px 14px;margin-left:6px" onclick="pvSave()">Enregistrer${p.length > 1 ? ' tout' : ''}</button></div>`;
+  box.innerHTML = `<div style="background:#fff7ed;border:1.5px solid #fdba74;color:#7c2d12;border-radius:10px;padding:9px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.7"><b>Prévisions non enregistrées</b> : ${p.map(lab).join(' ; ')}. Elles sont gardées si tu changes de mois ou de restaurant, mais ne comptent qu'une fois enregistrées. <button class="btn-save" style="padding:6px 14px;margin-left:6px" onclick="pvSave()">Enregistrer${p.length > 1 ? ' tout' : ''}</button></div>`;
 }
 window.addEventListener('beforeunload', e => { try { if (pvPending().length) { e.preventDefault(); e.returnValue = ''; } } catch (x) {} });
 const PV_JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -1108,7 +1108,7 @@ function pvRoundTo(vals, target, step) {
 function pvRefLine(lbl, r, iso, k, v) {                     // valeur du jour équivalent + sa date (même jour de la semaine) et son statut férié
   const ri = pvShift(iso, k), dow = PV_JOURS[(new Date(_pvT(ri)).getUTCDay() + 6) % 7], f = pvFerie(ri), isPrev = pvCa(r, ri) == null && v != null;
   const T = typeof simT === 'function' ? simT(r, ri) : null, A = pvCa(r, ri), tp = T > 0 && A > 0 ? ` · ${Math.round(T).toLocaleString('fr-FR')} TAC'S · PM ${(A / T).toFixed(2).replace('.', ',')} €` : '';
-  return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · 🎉 ${f}` : ''}${tp}</small></div>`;
+  return `<div class="pv-ref">${lbl} <b>${pvEur(v)}</b>${isPrev ? '<em>prév.</em>' : ''}<small>${dow.toLowerCase()} ${ri.slice(8)}/${ri.slice(5, 7)}/${ri.slice(2, 4)}${f ? ` · ${f}` : ''}${tp}</small></div>`;
 }
 const pvFrD = d => { const dow = PV_JOURS[(new Date(_pvT(d)).getUTCDay() + 6) % 7].toLowerCase(); return `${dow} ${d.slice(8)}/${d.slice(5, 7)}/${d.slice(2, 4)}`; };
 function pvRefsHtml(r, iso) {                               // jours de référence choisis pour ce jour : valeur de chacun, bouton « Utiliser » (moyenne) et « + jour de réf. »
@@ -1154,10 +1154,10 @@ function renderPrevCa() {
   const p = document.getElementById('panel');
   if (!pwdHash()) {
     p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div>
-      <div class="entry-banner err" style="display:block">🔒 Pour saisir une prévision, reconnecte-toi avec le mot de passe de la saisie.</div>
+      <div class="entry-banner err" style="display:block">Pour saisir une prévision, reconnecte-toi avec le mot de passe de la saisie.</div>
       <div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return;
   }
-  if (!ALIMM || !PREVJ) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div><div class="hint">⏳ Chargement du CA des années précédentes…</div>`; loadTx(); return; }
+  if (!ALIMM || !PREVJ) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prévision CA</div></div><div class="hint">Chargement du CA des années précédentes…</div>`; loadTx(); return; }
   pvInit();
   if (PV.wkFor !== curResto) { PV.wkFor = curResto; pvWkLoad().then(ch => { if (ch && document.getElementById('pvWk')) renderPrevCa(); }); }   // réglage de la semaine : lu une fois par restaurant
   const [y, m] = PV.ym.split('-').map(Number), days = pvDays(PV.ym), name = RESTOS.find(r => r[0] === curResto)[1];
@@ -1171,7 +1171,7 @@ function renderPrevCa() {
   for (const iso of days) {
     const n1 = pvN1(curResto, iso), n2 = pvN2(curResto, iso), real = pvCa(curResto, iso), v = PV.vals[iso];
     const dow = (new Date(_pvT(iso)).getUTCDay() + 6) % 7, pos = pvPos(iso), fer = pvFerie(iso), mon = pvShift(iso, -pos); curMon = mon;
-    cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}${typeof wfChgCls === 'function' ? wfChgCls(curResto, iso) : ''}" id="pvc_${iso}" data-u="${PV.unit}"${typeof wfChgTip === 'function' ? wfChgTip(curResto, iso) : ''}><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">🎉 ${fer}</div>` : ''}
+    cells += `<div class="pv-day ${iso < today ? 'past' : ''} ${dow > 4 ? 'we' : ''} ${fer ? 'fer' : ''}${typeof wfChgCls === 'function' ? wfChgCls(curResto, iso) : ''}" id="pvc_${iso}" data-u="${PV.unit}"${typeof wfChgTip === 'function' ? wfChgTip(curResto, iso) : ''}><div class="pv-dn">${+iso.slice(8)}${dow > 4 ? `<span>${PV_JOURS[dow]}</span>` : `<span class="pv-wd">${PV_JOURS[dow]}</span>`}</div>${fer ? `<div class="pv-fer">${fer}</div>` : ''}
       ${pvRefLine('N-1', curResto, iso, -364, n1)}${pvRefLine('N-2', curResto, iso, -728, n2)}${pvRefsHtml(curResto, iso)}
       ${real != null ? `<div class="pv-real">Réel <b>${pvEur(real)}</b></div>` : ''}
       <div class="pv-in"><input type="number" step="any" inputmode="decimal" class="pv-i1" id="pvi_${iso}" value="${v != null ? Math.round(v * 100) / 100 : ''}" oninput="pvDayInput('${iso}')" onchange="pvCommit('${iso}')" placeholder="CA prévu" aria-label="Prévision du ${+iso.slice(8)}">
@@ -1308,7 +1308,7 @@ function pvRecap() {
     box.innerHTML += '<div class="pv-chute"><div class="pv-chute-t">Chute du mois · CA net alimentaire</div>'
       + k('Réalisé à date', pvEur(s.realAll), `${s.nReal} jour${s.nReal > 1 ? 's' : ''}${ecart != null ? ' · ' + pvPct(ecart) + ' vs prévu sur ces jours' : ''}`)
       + k('Prévu jours restants', pvEur(s.prevRest), s.nRest ? `${s.nRestPrev} jour${s.nRestPrev > 1 ? 's' : ''} prévu${s.nRestPrev > 1 ? 's' : ''} sur ${s.nRest}` : 'mois terminé')
-      + k('Chute du mois (CA net alim.)', pvEur(chute), manque > 0 ? `⚠ ${manque} jour${manque > 1 ? 's' : ''} restant${manque > 1 ? 's' : ''} sans prévision` : 'réalisé + prévu restant')
+      + k('Chute du mois (CA net alim.)', pvEur(chute), manque > 0 ? `${manque} jour${manque > 1 ? 's' : ''} restant${manque > 1 ? 's' : ''} sans prévision` : 'réalisé + prévu restant')
       + k('Chute vs N-1', s.n1All ? pvPct(chute / s.n1All - 1) : '—', 'mois complet, jours équivalents')
       + k('Chute vs prévision', s.prev ? pvPct(chute / s.prev - 1) : '—', 'prévision saisie du mois') + '</div>';
   }
@@ -1367,7 +1367,7 @@ async function pvSave() {
     if (res.ok && res.same && rows.length) continue;                      // déjà partagé : inutile de le répéter à côté de l'enregistrement direct
     sharedTxt.push(`${nm} ${Y} : ${res.msg}`);
   }
-  if (!rows.length) { if (btn) btn.disabled = false; pvMsg(sharedOk ? 'ok' : 'err', (sharedOk ? '✓ Prévision ' : '⚠ Prévision non partagée — ') + sharedTxt.join(' ; ') + (sharedOk ? '. Le superviseur valide après la réunion budget, le franchisé publie ensuite dans le Sheet.' : '')); return; }
+  if (!rows.length) { if (btn) btn.disabled = false; pvMsg(sharedOk ? 'ok' : 'err', (sharedOk ? '✓ Prévision ' : 'Prévision non partagée — ') + sharedTxt.join(' ; ') + (sharedOk ? '. Le superviseur valide après la réunion budget, le franchisé publie ensuite dans le Sheet.' : '')); return; }
   const j = await postJson({ action: 'bulk_save', frequence: 'prevjour', pwd: pwdHash(), rows });
   if (btn) btn.disabled = false;
   if (!j.ok) { pvMsg('err', 'Erreur : ' + (j.error || 'enregistrement refusé') + ' — tes saisies sont conservées, réessaie.'); return; }
@@ -1378,7 +1378,7 @@ async function pvSave() {
     delete PV.drafts[k];
   }
   pvDraftPersist(); pvDraftBar();
-  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour${sent.length > 1 ? ', ' + sent.length + ' mois / restaurants' : ''}).${sharedTxt.length ? ' Partagé : ' + sharedTxt.join(' ; ') + '.' : ''}${blocked.size ? ' ⚠ Non enregistré (dossier de validation) : ' + [...blocked].join(', ') + '.' : ''}`);
+  pvMsg('ok', `✓ Prévision enregistrée (${rows.length} jour${rows.length > 1 ? 's' : ''} mis à jour${sent.length > 1 ? ', ' + sent.length + ' mois / restaurants' : ''}).${sharedTxt.length ? ' Partagé : ' + sharedTxt.join(' ; ') + '.' : ''}${blocked.size ? ' Non enregistré (dossier de validation) : ' + [...blocked].join(', ') + '.' : ''}`);
 }
 
 // ── Export Excel : modèle « PREV ET BUDGET » (mois côte à côte, jours alignés par jour de la semaine) ──
@@ -1698,15 +1698,15 @@ const simSign = v => v == null ? '' : (v >= 0 ? 'sim-pos' : 'sim-neg');
 // Encart « Simulation » de l'onglet Prévision CA (calendrier) : réservé aux accès « simulation » (franchisé, équipe) ; le résultat est déposé dans le calendrier juste en dessous
 function simMount() {
   const h = document.getElementById('simHost'); if (!h) return;
-  if (!accCan('sim', curResto)) { h.innerHTML = `<details class="sim-d sim-box"><summary>🔒 Simulation du prévisionnel · accès sur mot de passe</summary>${accLock('sim', 'simPwd', curResto)}</details>`; return; }
-  h.innerHTML = `<details class="sim-d sim-box" id="simDet" ${SIMV.open ? 'open' : ''} ontoggle="simToggle(this)"><summary>🧮 Simulation du prévisionnel <small style="text-transform:none;letter-spacing:0;font-weight:600">· part du réel des années précédentes, ajuste, puis dépose dans le calendrier ci-dessous${accLabel(curResto) ? ' · accès ' + escH(accLabel(curResto)) : ''}</small></summary><div id="simBox"></div></details>`;
+  if (!accCan('sim', curResto)) { h.innerHTML = `<details class="sim-d sim-box"><summary>Simulation du prévisionnel · accès sur mot de passe</summary>${accLock('sim', 'simPwd', curResto)}</details>`; return; }
+  h.innerHTML = `<details class="sim-d sim-box" id="simDet" ${SIMV.open ? 'open' : ''} ontoggle="simToggle(this)"><summary>Simulation du prévisionnel <small style="text-transform:none;letter-spacing:0;font-weight:600">· part du réel des années précédentes, ajuste, puis dépose dans le calendrier ci-dessous${accLabel(curResto) ? ' · accès ' + escH(accLabel(curResto)) : ''}</small></summary><div id="simBox"></div></details>`;
   if (SIMV.open) renderSimu();
 }
 function simToggle(d) { SIMV.open = d.open; const b = document.getElementById('simBox'); if (d.open && b && !b.innerHTML) renderSimu(); }
 function renderSimu() {
   const p = document.getElementById('simBox'); if (!p) return;
   if (!accCan('sim', curResto)) { simMount(); return; }
-  if (!ALIMM || !PREVJ || !TX) { p.innerHTML = `<div class="hint">⏳ Chargement du CA et des TAC'S des années précédentes…</div>`; loadTx(); return; }
+  if (!ALIMM || !PREVJ || !TX) { p.innerHTML = `<div class="hint">Chargement du CA et des TAC'S des années précédentes…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Y = simYear(r), Ty = Y.Ty, c = Y.c, D = Y.D, rnd = c.rnd || 100;
   if (SIMV.month == null) SIMV.month = Math.min(12, Math.max(1, new Date().getFullYear() === Ty ? new Date().getMonth() + 1 : 1));
   const S = simSum(Y.days), evo = S.a ? S.ca / S.a - 1 : null, evoT = S.t0 ? S.t / S.t0 - 1 : null, pmB = S.t0 ? S.a / S.t0 : null, pmF = S.t ? S.ca / S.t : null;
@@ -1723,7 +1723,7 @@ function renderSimu() {
   }).join('');
   // Jours fériés de l'année cible + jours saisis à la main
   const spec = Y.days.filter(d => d.fer || c.ov[d.iso]);
-  const srows = spec.map(d => `<tr><td>${d.iso.slice(8)}/${d.iso.slice(5, 7)} <small>${PV_JOURS[d.dow].toLowerCase()}</small></td><td class="l">${d.fer ? '🎉 ' + escH(d.fer) : 'Jour saisi à la main'}</td>
+  const srows = spec.map(d => `<tr><td>${d.iso.slice(8)}/${d.iso.slice(5, 7)} <small>${PV_JOURS[d.dow].toLowerCase()}</small></td><td class="l">${d.fer ? '' + escH(d.fer) : 'Jour saisi à la main'}</td>
       <td class="l"><small>${d.b1.slice(8)}/${d.b1.slice(5, 7)}/${d.b1.slice(2, 4)}${d.ferB ? ' · ' + escH(d.ferB) : ''}</small></td><td>${d.A1 != null ? pvEur(d.A1) : '—'}</td>
       <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].j != null ? 'ov' : ''}" value="${simNum(d.jt)}" onchange="simDay('${d.iso}','j',this.value)">` : '—'}</td><td><b>${d.ca != null ? pvEur(d.ca) : '—'}</b></td>
       <td>${d.auto != null ? `<small>proposé ${simPct(d.auto, 0)}</small>` : '<small>—</small>'}</td><td>${c.ov[d.iso] ? `<button class="step" onclick="simDayReset('${d.iso}')" title="Revenir au calcul automatique">↺</button>` : ''}</td></tr>`).join('');
@@ -1748,7 +1748,7 @@ function renderSimu() {
     <details class="sim-d" open><summary>Détail : CA alim., TAC'S et panier moyen</summary><div class="sim-wrap" style="margin-top:8px"><table class="sim" style="min-width:860px"><thead><tr><th>Mois</th><th>CA ${Ty - 2}</th><th>CA ${Ty - 1}</th><th>Évol.</th><th>TAC'S ${Ty - 2}</th><th>TAC'S ${Ty - 1}</th><th>Évol.</th><th>PM ${Ty - 2}</th><th>PM ${Ty - 1}</th><th>Évol.</th></tr></thead><tbody>${MN.map((mn, i) => hRow(mn, h2[i], h1[i], false)).join('')}${hRow('Année', sumH(h2), sumH(h1), true)}</tbody></table></div></details>`;
   // Calendrier du mois choisi
   const M = SIMV.month, cd = Y.days.filter(d => d.m === M), sM = simSum(cd);
-  const crows = cd.map(d => `<tr class="${d.fer ? 'fe' : (d.dow > 4 ? 'we' : '')}"><td>${PV_JOURS[d.dow]} ${+d.iso.slice(8)}${d.fer ? ' 🎉' : ''}${d.kind && !d.fer ? ` <small>${escH(d.kind)}</small>` : ''}</td>
+  const crows = cd.map(d => `<tr class="${d.fer ? 'fe' : (d.dow > 4 ? 'we' : '')}"><td>${PV_JOURS[d.dow]} ${+d.iso.slice(8)}${d.fer ? ' ' : ''}${d.kind && !d.fer ? ` <small>${escH(d.kind)}</small>` : ''}</td>
       <td>${d.A2 ? pvEur(d.A2) : '—'}<br><small>${d.T2 ? Math.round(d.T2).toLocaleString('fr-FR') + ' TAC\'S · ' : ''}${d.b2.slice(8)}/${d.b2.slice(5, 7)}/${d.b2.slice(2, 4)}</small></td>
       <td>${d.src ? pvEur(d.A1) : '—'}${d.src === 'N-2' ? '<span class="sim-src">base 2 ans</span>' : ''}<br><small>${d.src ? Math.round(d.T1).toLocaleString('fr-FR') + ' TAC\'S' : ''}</small></td>
       <td>${d.src ? `<input type="text" inputmode="decimal" class="${c.ov[d.iso] && c.ov[d.iso].j != null ? 'ov' : ''}" value="${simNum(d.jt)}" onchange="simDay('${d.iso}','j',this.value)">` : ''}</td>
@@ -2183,9 +2183,9 @@ async function bdImport(inp) {
 
 function renderBudget() {
   const pn = document.getElementById('panel');
-  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
+  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="entry-banner err" style="display:block">Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
   if (!(accCan('budget', curResto) || (typeof lvSeeBud === 'function' && lvSeeBud(curResto)))) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div>${accLock('budget', 'bdPwd', curResto)}<div class="hint" style="margin-top:8px">Le compte de résultat prévisionnel est ouvert au directeur du restaurant, au superviseur de son secteur et au franchisé (chacun son mot de passe). Chaque échelon saisit ses salaires par poste ; la saisie d'un échelon n'est jamais visible des échelons en dessous.</div>`; return; }
-  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
+  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Budget & PNL</div></div><div class="hint">Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Ty = +SIM.ty, o = bdParams(r), p = o.p, ca = bdCa(r, Ty), L = bdCompute(p, ca.alim);
   const tot = k => L[k].reduce((a, b) => a + b, 0), A = tot('alim'), ref = o.ref, view = BUD.view;
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
@@ -2424,7 +2424,7 @@ async function bdApply() {
   const { rows, bad } = bdRowsFrom(r, Ty, L);
   if (!rows.length) { msg('err', 'Aucun CA prévu : renseigne la prévision journalière ou le simulateur.'); return; }
   const part = MN.filter((m, i) => ca.src[i] === 'part' && L.alim[i]);
-  if (!confirm(`Enregistrer le Prévisionnel mensuel ${Ty} de ${name} dans le Sheet (${rows.length} mois) ?\nLes valeurs déjà saisies pour ces mois seront remplacées.${bad.length ? '\nMois sans CA prévu, ignorés : ' + bad.join(', ') + '.' : ''}${part.length ? '\n⚠ CA incomplet (jours sans prévision) pour : ' + part.join(', ') + '.' : ''}`)) return;
+  if (!confirm(`Enregistrer le Prévisionnel mensuel ${Ty} de ${name} dans le Sheet (${rows.length} mois) ?\nLes valeurs déjà saisies pour ces mois seront remplacées.${bad.length ? '\nMois sans CA prévu, ignorés : ' + bad.join(', ') + '.' : ''}${part.length ? '\nCA incomplet (jours sans prévision) pour : ' + part.join(', ') + '.' : ''}`)) return;
   msg('', 'Enregistrement…');
   const j = await postJson({ action: 'bulk_save', frequence: 'previsionnel', pwd: pwdHash(), rows });
   if (!j.ok) { msg('err', 'Erreur : ' + (j.error || 'enregistrement refusé')); return; }
@@ -2734,26 +2734,26 @@ async function wfFetch() {
 }
 function renderValid() {
   const pn = document.getElementById('panel');
-  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Validation du prévisionnel</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
+  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Validation du prévisionnel</div></div><div class="entry-banner err" style="display:block">Reconnecte-toi avec le mot de passe de la saisie.</div><div class="foot"><button class="btn-save" onclick="try{sessionStorage.clear()}catch(e){};location.reload()">Se reconnecter</button></div>`; return; }
   const r = curResto, name = RESTOS.find(x => x[0] === r)[1], Y = WF.year || (WF.year = +SIM.ty);
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
   const head = `<div class="panel-head"><div><div class="panel-title">Validation du prévisionnel ${Y} · ${escH(name)}</div>
     <div class="last-saisie">La saisie est <b>partagée</b> : le directeur, le superviseur et le franchisé saisissent dans Prévision CA et Budget & PNL, et chacun voit aussitôt la saisie des autres. Après la réunion budget, le superviseur <b>valide</b>, puis le franchisé <b>finalise</b> : la prévision est alors publiée dans le Sheet.</div></div>
     <div class="period"><select onchange="wfYear(this.value)">${years.map(v => `<option ${v === Y ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>`;
   if (!wfRightsOk(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
-  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
+  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">Chargement du CA et des prévisions…</div>`; loadTx(); return; }
   const C = WF.cur && WF.cur.r === r && WF.cur.y === Y ? WF.cur : null;
-  if (!C) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du dossier…</div>`; wfFetch(); return; }
-  if (C.loading) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du dossier…</div>`; return; }
+  if (!C) { pn.innerHTML = head + `<div class="hint">Chargement du dossier…</div>`; wfFetch(); return; }
+  if (C.loading) { pn.innerHTML = head + `<div class="hint">Chargement du dossier…</div>`; return; }
   const me = accRole(r) || accProfiles().find(p => accCovers(p, r)) || null, who = `<div class="sim-note">Connecté : <b>${escH(me ? me.label : '')}</b> <span class="wf-tag">${me ? ACC_ROLE[me.role] : ''}</span></div>`;
   if (C.error) { pn.innerHTML = head + who + `<div class="entry-banner err" style="display:block">${escH(C.error)}</div><div class="foot"><button class="step" onclick="WF.cur=null;renderValid()">Réessayer</button></div>`; return; }
   const D = C.dossier, chain = C.chain || ['directeur', 'franchise'], etape = D ? D.etape : null, isFinal = etape === 'final', hasSup = chain.includes('superviseur');
   const mayEdit = !!D && !isFinal && wfMayEdit(r, etape) && wfRightsOk(r), isSup = wfHasRole(r, 'superviseur') || wfHasRole(r, 'owner'), isFr = wfHasRole(r, 'franchise') || wfHasRole(r, 'owner');
   const J = C.journal || [], supDone = J.filter(x => x.action === 'validate' && x.role === 'superviseur').pop(), finDone = J.filter(x => x.action === 'finalize').pop();
   const st = (n, t, cls, sub) => `<div class="wf-st ${cls}"><b>${n} · ${t}</b><small>${sub}</small></div>`;
-  let steps = st(1, WF_STEP.directeur, !D ? '' : (etape === 'directeur' ? 'cur' : 'done'), !D ? '—' : (etape === 'directeur' ? `⏳ En cours${D.statut === 'rouvert' ? ' (rouvert)' : ''}<br>v${D.version} · ${wfDate(D.at)}<br>${escH(D.by || '')}` : '✓ Saisie arrêtée'));
+  let steps = st(1, WF_STEP.directeur, !D ? '' : (etape === 'directeur' ? 'cur' : 'done'), !D ? '—' : (etape === 'directeur' ? `En cours${D.statut === 'rouvert' ? ' (rouvert)' : ''}<br>v${D.version} · ${wfDate(D.at)}<br>${escH(D.by || '')}` : '✓ Saisie arrêtée'));
   if (hasSup) steps += st(2, WF_STEP.superviseur, supDone && D ? 'done' : (D && etape === 'superviseur' ? 'cur' : ''), supDone && D ? `✓ Validé le ${wfDate(supDone.at)}<br>${escH(supDone.by)}` : (isFinal ? 'Non requise' : (D ? 'À venir (après la réunion budget)' : '—')));
-  steps += st(hasSup ? 3 : 2, WF_STEP.franchise, isFinal ? 'done' : (D && etape === 'franchise' ? 'cur' : ''), isFinal && finDone ? `✓ Finalisé le ${wfDate(finDone.at)}<br>${escH(finDone.by)}` : (D && etape === 'franchise' ? '⏳ À finaliser' : (D ? 'À venir' : '—')));
+  steps += st(hasSup ? 3 : 2, WF_STEP.franchise, isFinal ? 'done' : (D && etape === 'franchise' ? 'cur' : ''), isFinal && finDone ? `✓ Finalisé le ${wfDate(finDone.at)}<br>${escH(finDone.by)}` : (D && etape === 'franchise' ? 'À finaliser' : (D ? 'À venir' : '—')));
   steps += `<div class="wf-st ${isFinal ? 'fin' : ''}"><b>✔ Publié dans le Sheet</b><small>${isFinal ? 'le ' + wfDate(D.at) : 'à la finalisation par le franchisé'}</small></div>`;
   const P = D ? wfParse(D.donnees) : null, S = P ? wfSummary(P, r, C.salaires) : null;
   const kp = (l, v, sub) => `<div class="sim-kpi"><span>${l}</span><b>${v}</b><i>${sub || ''}</i></div>`;
@@ -2771,14 +2771,14 @@ function renderValid() {
     if (isFr && !isFinal) a += `<button class="btn-save" onclick="wfFinalize()">✔ Finaliser et publier ${Y}</button>`;
     const canReset = wfHasRole(r, 'franchise') || wfHasRole(r, 'owner');
     const reset = canReset ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><b style="font-size:.78rem">Repartir de zéro</b> — supprime le dossier partagé de ${escH(name)} ${Y} (par exemple une saisie de test). La version actuelle est archivée dans l'historique du Sheet ; les valeurs déjà publiées dans le Sheet ne changent pas.
-      <div class="wf-act"><button class="step" onclick="wfReset()">🗑 Repartir de zéro</button></div></div>` : '';
+      <div class="wf-act"><button class="step" onclick="wfReset()">Repartir de zéro</button></div></div>` : '';
     const unlock = isFr && etape !== 'directeur' ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><b style="font-size:.78rem">Franchisé : déverrouiller</b> — rouvre le dossier à l'étape choisie (le contenu est conservé, les niveaux concernés peuvent à nouveau le modifier).
-      <div class="wf-act"><select id="wfTo" style="padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit">${chain.map(e => `<option value="${e}" ${e === 'directeur' ? 'selected' : ''}>${WF_STEP[e]}</option>`).join('')}</select><button class="step" onclick="wfUnlock()">🔓 Déverrouiller</button></div></div>` : '';
+      <div class="wf-act"><select id="wfTo" style="padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit">${chain.map(e => `<option value="${e}" ${e === 'directeur' ? 'selected' : ''}>${WF_STEP[e]}</option>`).join('')}</select><button class="step" onclick="wfUnlock()">Déverrouiller</button></div></div>` : '';
     box = `<div class="wf-box">${fin}
       ${!isFinal && !mayEdit ? `<div class="hint" style="margin-top:6px">${etape !== 'directeur' ? 'La saisie est validée : tu peux la consulter et commenter ; seul le franchisé peut encore l\'ajuster ou la déverrouiller.' : 'Ton accès ne permet pas de modifier le dossier : tu peux le consulter et commenter.'}</div>` : ''}
       ${isFr && !isFinal && hasSup && !supDone ? `<div class="hint" style="margin-top:6px;color:#b45309">Le superviseur n'a pas encore validé la saisie. Tu peux finaliser quand même (une confirmation te sera demandée).</div>` : ''}
       <div style="margin-top:10px"><label style="font-size:.7rem;font-weight:800;color:var(--muted)">Commentaire (joint à l'action, visible de tous les niveaux)</label><textarea id="wfCm" placeholder="ex. CA décembre relevé de 3 % : ouverture exceptionnelle le 24"></textarea></div>
-      <div class="wf-act">${a}<button class="step" onclick="wfComment()">💬 Envoyer seulement le commentaire</button><span class="save-msg" id="wfMsg"></span></div>${unlock}${reset}</div>`;
+      <div class="wf-act">${a}<button class="step" onclick="wfComment()">Envoyer seulement le commentaire</button><span class="save-msg" id="wfMsg"></span></div>${unlock}${reset}</div>`;
   }
   const L = J.slice().reverse().map(x => {
     const t = { open: 'a ouvert le dossier', validate: 'a validé la saisie', finalize: 'a finalisé et publié', unlock: `a déverrouillé (retour à « ${WF_STEP[x.to] || x.to} »)`, comment: 'a commenté', save: 'a repris la main sur la version d\'un autre', reset: 'a remis le dossier à zéro' }[x.action] || x.action;
@@ -2817,7 +2817,7 @@ async function wfFinalize() {
   const P = wfParse(j0.dossier.donnees); if (!P || !P.cal || !Object.keys(P.cal).length) return wfMsg('err', 'Aucune prévision journalière à publier.');
   const seg = accCan('edg', r) ? wfTopSeg(j0.salaires) : undefined, R = wfRows(r, P, seg && { on: seg.on, rows: seg.rows });
   const hasSup = (j0.chain || []).includes('superviseur'), supOk = (j0.journal || []).some(x => x.action === 'validate' && x.role === 'superviseur');
-  if (!confirm(`Finaliser et publier le prévisionnel ${Y} de ${name} (version partagée v${j0.dossier.version}) ?${hasSup && !supOk ? '\n⚠ Le superviseur n\'a pas encore validé la saisie.' : ''}\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ${Y} seront remplacées. Seul le franchisé pourra ensuite déverrouiller.`)) return;
+  if (!confirm(`Finaliser et publier le prévisionnel ${Y} de ${name} (version partagée v${j0.dossier.version}) ?${hasSup && !supOk ? '\nLe superviseur n\'a pas encore validé la saisie.' : ''}\n• ${R.prevjour.length} ligne(s) de prévision journalière\n• ${R.previsionnel.length} mois du Prévisionnel mensuel${R.bad.length ? ' (sans CA : ' + R.bad.join(', ') + ')' : ''}\nLes valeurs déjà présentes dans le Sheet pour ${Y} seront remplacées. Seul le franchisé pourra ensuite déverrouiller.`)) return;
   wfMsg('', 'Publication…');
   const j = await wfCall('finalize', r, Y, { donnees: JSON.stringify(P), base_version: j0.dossier.version, comment: wfCm(), rows_prevjour: R.prevjour, rows_previsionnel: R.previsionnel }, 'franchise');
   if (!j.ok) return wfMsg('err', 'Erreur : ' + j.error);
@@ -3109,7 +3109,7 @@ async function wfFirstContact(r, Y) {
 function wfSafeHtml(r, Y) {
   const L = WFSAFE[wfKey(r, Y)] || []; if (!L.length) return '';
   const i = L.length - 1, S = L[i], a = `'${String(r).replace(/'/g, '')}', ${+Y}, ${i}`;
-  return `<span class="wf-safe">📌 <b>Ta saisie d'avant sur cet appareil est gardée de côté</b> (${wfDate(S.at)} · ${S.n} ligne(s) différente(s) du dossier partagé) : le dossier partagé a été chargé à la place, rien n'a été écrasé. <button class="step" onclick="wfSafeResume(${a}, false)">Reprendre dans les cases vides</button> <button class="step" onclick="wfSafeResume(${a}, true)">Tout reprendre…</button> <button class="step" onclick="wfSafeDrop(${a})">Ignorer</button></span><br>`;
+  return `<span class="wf-safe"><b>Ta saisie d'avant sur cet appareil est gardée de côté</b> (${wfDate(S.at)} · ${S.n} ligne(s) différente(s) du dossier partagé) : le dossier partagé a été chargé à la place, rien n'a été écrasé. <button class="step" onclick="wfSafeResume(${a}, false)">Reprendre dans les cases vides</button> <button class="step" onclick="wfSafeResume(${a}, true)">Tout reprendre…</button> <button class="step" onclick="wfSafeDrop(${a})">Ignorer</button></span><br>`;
 }
 function wfSafeDrop(r, Y, i) { const L = WFSAFE[wfKey(r, Y)] || []; if (!L[i]) return; L.splice(i, 1); if (!L.length) delete WFSAFE[wfKey(r, Y)]; wfSafePersist(); wfBarPaint(); }
 function wfSafeResume(r, Y, i, all) {
@@ -3205,16 +3205,16 @@ function wfBarHtml(r, Y) { return wfBarCore(r, Y) + wfChgHtml(r, Y); }
 function wfBarCore(r, Y) {
   if (!r || !wfInCircuit(r, Y)) return '';
   if (Date.now() - WF_KICK > 6000) { WF_KICK = Date.now(); setTimeout(() => wfAutoPull(), 60); }      // première lecture à l'ouverture de l'écran
-  if (wfConsult()) { const Dc = WF.byKey[wfKey(r, Y)]; return `<div class="bd-sh">👁 <b>Mode consultation</b> : tu vois la saisie partagée ; rien n'est enregistré, partagé ni validé depuis cet appareil.${Dc ? ' Version partagée : v' + Dc.version + ' · ' + wfDate(Dc.at) + ' par ' + escH(Dc.by || '?') + '.' : ''} <button class="step" onclick="wfConsultSet(false)">Passer en modification</button></div>`; }
+  if (wfConsult()) { const Dc = WF.byKey[wfKey(r, Y)]; return `<div class="bd-sh"><b>Mode consultation</b> : tu vois la saisie partagée ; rien n'est enregistré, partagé ni validé depuis cet appareil.${Dc ? ' Version partagée : v' + Dc.version + ' · ' + wfDate(Dc.at) + ' par ' + escH(Dc.by || '?') + '.' : ''} <button class="step" onclick="wfConsultSet(false)">Passer en modification</button></div>`; }
   const key = wfKey(r, Y), D = WF.byKey[key] || null, box = (c, h) => `<div class="bd-sh ${c}">${h}</div>`, nm = (RESTOS.find(x => x[0] === r) || [0, r])[1];
-  const loc = (BD_SAVE.ok === false ? '<b style="color:#b91c1c">⚠ Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '') + wfSafeHtml(r, Y);
+  const loc = (BD_SAVE.ok === false ? '<b style="color:#b91c1c">Impossible d\'enregistrer sur cet appareil (navigation privée ou stockage plein) : exporte ton travail en Excel.</b><br>' : '') + wfSafeHtml(r, Y);
   const when = D ? `v${D.version} · ${wfDate(D.at)} par ${escH(D.by || '?')}` : '';
   if (WF.backend === false) return box('err', loc + "Le partage de la saisie demande une mise à jour de l'Apps Script du Sheet (circuit de validation).");
-  if (D && D.etape === 'final') return box('', loc + `🔒 Dossier ${Y} <b>finalisé</b> et publié dans le Sheet (${when}) : seul le franchisé peut le déverrouiller.`);
-  if (!wfRightsOk(r)) return box('warn', loc + `💾 Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL », ta saisie ne peut donc pas être partagée. Demande au franchisé de l'activer (Équipes → Modifier).` + (D ? `<br>Version partagée : ${when}.` : ''));
-  if (D && !wfMayEdit(r, D.etape)) return box('', loc + `🔒 Saisie <b>validée par le superviseur</b> (${when}) : lecture seule pour toi. Seul le franchisé peut encore l'ajuster, la finaliser ou la déverrouiller.`);
-  const er = WFA.err[key]; if (er) return box('err', loc + `<b>⚠ Partage impossible :</b> ${escH(er)} <button class="step" onclick="wfShareClick()">Réessayer</button>`);
-  if (WFA.saving[key]) return box('', loc + '⏳ Partage en cours…');
+  if (D && D.etape === 'final') return box('', loc + `Dossier ${Y} <b>finalisé</b> et publié dans le Sheet (${when}) : seul le franchisé peut le déverrouiller.`);
+  if (!wfRightsOk(r)) return box('warn', loc + `Brouillon sur cet appareil seulement : ton accès n'a ni « Prévision CA et simulation » ni « Budget & PNL », ta saisie ne peut donc pas être partagée. Demande au franchisé de l'activer (Équipes → Modifier).` + (D ? `<br>Version partagée : ${when}.` : ''));
+  if (D && !wfMayEdit(r, D.etape)) return box('', loc + `Saisie <b>validée par le superviseur</b> (${when}) : lecture seule pour toi. Seul le franchisé peut encore l'ajuster, la finaliser ou la déverrouiller.`);
+  const er = WFA.err[key]; if (er) return box('err', loc + `<b>Partage impossible :</b> ${escH(er)} <button class="step" onclick="wfShareClick()">Réessayer</button>`);
+  if (WFA.saving[key]) return box('', loc + 'Partage en cours…');
   if (WFA.dirty[key]) return box('warn', loc + `● Modifications partagées dans quelques secondes… <button class="btn-save" onclick="wfShareClick()">Partager maintenant</button>`);
   const fl = WFA.flash[key] ? ` <span class="save-msg ok">${escH(WFA.flash[key])}</span>` : '';
   if (D) {
@@ -3726,15 +3726,15 @@ function wfShareClick() { return lvSave(); }
 function wfYear(v) { WF.year = +v; LV.view = {}; renderValid(); }
 function renderValid() {
   const pn = document.getElementById('panel');
-  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Validation du prévisionnel</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec le mot de passe de la saisie.</div>`; return; }
+  if (!pwdHash()) { pn.innerHTML = `<div class="panel-head"><div class="panel-title">Validation du prévisionnel</div></div><div class="entry-banner err" style="display:block">Reconnecte-toi avec le mot de passe de la saisie.</div>`; return; }
   const r = curResto, name = (RESTOS.find(x => x[0] === r) || [0, r])[1], Y = WF.year || (WF.year = +SIM.ty);
   const years = Array.from({ length: Math.max(1, PV_YMAX - new Date().getFullYear()) + 1 }, (_, i) => new Date().getFullYear() + i);
   const head = `<div class="panel-head"><div><div class="panel-title">Validation du prévisionnel ${Y} · ${escH(name)}</div>
     <div class="last-saisie">Chaque niveau <b>enregistre sa propre saisie</b> (bouton « Enregistrer ») puis la <b>valide</b> pour l'envoyer au niveau suivant ; le franchisé publie dans le Sheet. Les autres niveaux consultent (bouton « Voir »). Pour modifier une saisie validée : « Demander le déblocage ».</div>
     <div class="period"><select onchange="wfYear(this.value)">${years.map(v => `<option ${v === Y ? 'selected' : ''} value="${v}">Année ${v}</option>`).join('')}</select></div></div>`;
   if (!lvCanView(r)) { pn.innerHTML = head + accLock('valid', 'wfPwd', r); return; }
-  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">⏳ Chargement du CA et des prévisions…</div>`; loadTx(); return; }
-  if (LV.backend === null) { pn.innerHTML = head + `<div class="hint">⏳ Chargement…</div>`; lvRefresh(true).then(() => { if (curTab === 'valid') renderValid(); }); return; }
+  if (!ALIMM || !PREVJ || !TX) { pn.innerHTML = head + `<div class="hint">Chargement du CA et des prévisions…</div>`; loadTx(); return; }
+  if (LV.backend === null) { pn.innerHTML = head + `<div class="hint">Chargement…</div>`; lvRefresh(true).then(() => { if (curTab === 'valid') renderValid(); }); return; }
   const key = lvK(r, Y), me = accProfiles().find(p => accCovers(p, r)) || null, jk = LV.journal[key];
   if (!jk || Date.now() - jk.at > 30000) { LV.journal[key] = { at: Date.now(), rows: jk ? jk.rows : [] }; const my = lvMy(r); if (my) lvCall('load', r, Y, { niveau: my }).then(j => { if (j.ok) { LV.journal[key] = { at: Date.now(), rows: j.journal || [], sum: null }; if (curTab === 'valid') renderValid(); } }); }
   const J = (LV.journal[key] || {}).rows || [];
@@ -3802,10 +3802,10 @@ async function pvbSuggest(resto, seq, data) {
   const have = k => data && data[k] != null && data[k] !== '';
   const diff = fieldsFor('previsionnel').filter(f => have(f.k) && row.data[f.k] != null && Math.abs(data[f.k] - row.data[f.k]) > (isPct(f) ? 0.0005 : 1)).map(f => f.l);
   const filled = pvbFill(row, true);
-  if (filled.length) setBanner('suggest', `💡 <b>Valeurs issues du Budget & PNL ${Y}</b> (${src.label}) : ${filled.length} champ${filled.length > 1 ? 's' : ''} prérempli${filled.length > 1 ? 's' : ''} — vérifie puis clique sur « Enregistrer » pour les publier dans le Sheet.`);
-  else if (diff.length) setBanner('exists', `📝 <b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées.<br>ℹ Le Budget & PNL ${Y} (${src.label}) donne d'autres valeurs (${diff.join(', ')}). <button type="button" class="step" style="margin-left:6px" onclick="pvbApply()">Reprendre les valeurs du budget</button>`);
+  if (filled.length) setBanner('suggest', `<b>Valeurs issues du Budget & PNL ${Y}</b> (${src.label}) : ${filled.length} champ${filled.length > 1 ? 's' : ''} prérempli${filled.length > 1 ? 's' : ''} — vérifie puis clique sur « Enregistrer » pour les publier dans le Sheet.`);
+  else if (diff.length) setBanner('exists', `<b>Une saisie existe déjà pour cette période</b> — les valeurs ci-dessous sont celles déjà enregistrées.<br>ℹ Le Budget & PNL ${Y} (${src.label}) donne d'autres valeurs (${diff.join(', ')}). <button type="button" class="step" style="margin-left:6px" onclick="pvbApply()">Reprendre les valeurs du budget</button>`);
 }
-function pvbApply() { const row = window.__pvbRow; if (!row) return; const f = pvbFill(row, false); setBanner('suggest', `💡 <b>Valeurs du budget reprises</b> (${f.length} champs) — clique sur « Enregistrer » pour les publier dans le Sheet.`); }
+function pvbApply() { const row = window.__pvbRow; if (!row) return; const f = pvbFill(row, false); setBanner('suggest', `<b>Valeurs du budget reprises</b> (${f.length} champs) — clique sur « Enregistrer » pour les publier dans le Sheet.`); }
 // ── Saisie de la collaboratrice (Budget & PNL), partagée avec TOUS les niveaux : directeurs, superviseurs et franchisé ──
 // Elle saisit les hypothèses du budget (lignes du PNL, services extérieurs par société) de n'importe quel restaurant avec son accès (rôle « collab », droit « budget » seul)
 // puis les partage : une version par restaurant et par année est enregistrée dans l'onglet « BudgetCollab » du Sheet (Apps Script, actions bc_*).
@@ -3856,7 +3856,7 @@ function bcBannerHtml(r, Ty) {
   if (!bcOn()) return '';
   const x = BC.byKey[bcKey(r, Ty)], mine = bcIsCollab(r), isNew = bcNew(r, Ty), name = RESTOS.find(z => z[0] === r)[1];
   let h = '';
-  if (x) h += `<div class="bc-box ${isNew ? 'new' : ''}"><div><b>${isNew ? '🔔 Nouvelle saisie' : '📥 Saisie'} de ${escH(x.by || 'la collaboratrice')}</b> pour ${escH(name)} ${Ty} — version ${x.version}, ${escH(wfDate(x.at))}<br><small>${mine ? 'Reprends la dernière version partagée si tu changes d\'appareil.' : 'Ta propre version reste intacte tant que tu ne la reprends pas ; la reprise ne prend que les lignes qu\'elle a saisies (le reste de ta version et tes salaires sont conservés).'}</small></div>
+  if (x) h += `<div class="bc-box ${isNew ? 'new' : ''}"><div><b>${isNew ? 'Nouvelle saisie' : 'Saisie'} de ${escH(x.by || 'la collaboratrice')}</b> pour ${escH(name)} ${Ty} — version ${x.version}, ${escH(wfDate(x.at))}<br><small>${mine ? 'Reprends la dernière version partagée si tu changes d\'appareil.' : 'Ta propre version reste intacte tant que tu ne la reprends pas ; la reprise ne prend que les lignes qu\'elle a saisies (le reste de ta version et tes salaires sont conservés).'}</small></div>
     <div class="wf-act"><button class="btn-save" onclick="bcPull()">${mine ? 'Reprendre la dernière version' : 'Reprendre sa saisie'}</button>${isNew && !mine ? '<button class="step" onclick="bcDismiss()">Masquer</button>' : ''}</div></div>`;
   if (mine) h += `<div class="bc-box bc-share"><div><b>Partager ma saisie avec tous les niveaux</b><br><small>Les directeurs, les superviseurs et le franchisé la voient dans leur Budget & PNL pour ${escH(name)} ${Ty} et la reprennent d'un clic. Ce que tu saisis reste sur cet appareil tant que tu ne le partages pas ; les salaires ne sont jamais partagés.</small></div>
     <div class="wf-act"><button class="btn-save" onclick="bcShare()">Partager ma saisie · ${escH(name)} ${Ty}</button><span class="save-msg" id="bcMsg"></span></div></div>`;
@@ -4402,7 +4402,7 @@ function pxGuardHtml() {
   const rows = g.rows.slice(0, 80).map(r => `<tr><td>${escH(r.name)}${r.r ? ` <small>· ${escH(r.r)}</small>` : ''}</td><td>${escH(r.fmt)}</td><td>${r.old === undefined ? '' : e(r.old) + ' → '}<b>${e(r.now)}</b></td>${PX_UD.map(([cn]) => `<td>${ud(r.u[cn])}</td>`).join('')}</tr>`).join('');
   const t1 = g.rows.length ? `<h4>Prix Uber et Deliveroo (créés automatiquement)</h4><div class="px-mt"><table><thead><tr><th>Produit</th><th>Format</th><th>Restaurant</th><th>Uber +${pxF(PX.doc.canaux.uber.taux)} %</th><th>Deliveroo +${pxF(PX.doc.canaux.deliveroo.taux)} %</th></tr></thead><tbody>${rows}</tbody></table></div>${g.rows.length > 80 ? `<div class="hint">… et ${g.rows.length - 80} autres lignes.</div>` : ''}` : '';
   const t2 = g.repas.length ? `<h4>Politique de repas (ajout automatique)</h4><div class="hint">Décoche un produit qui ne doit pas être dans les repas. Une ligne cochée sans points n'est pas ajoutée.</div><div class="px-mt"><table><thead><tr><th></th><th>Produit</th><th>Groupe</th><th>Points</th></tr></thead><tbody>${g.repas.map((x, i) => `<tr><td><input type="checkbox" id="pxGU_${i}" checked aria-label="Ajouter ${escH(x.n)} aux repas"></td><td>${escH(x.n)}</td><td><select id="pxGG_${i}">${[...new Set([x.g, ...g.groups])].map(y => `<option ${y === x.g ? 'selected' : ''}>${escH(y)}</option>`).join('')}</select></td><td><input type="text" inputmode="numeric" id="pxGP_${i}" style="width:60px" value="${x.p == null ? '' : pxF(x.p)}" placeholder="?"></td></tr>`).join('')}</tbody></table></div>` : '';
-  const t3 = g.warns.length ? `<div class="px-warn"><b>⚠ Valeurs non saisies (${g.warns.length})</b><ul>${g.warns.slice(0, 40).map(w => `<li>${w}</li>`).join('')}</ul>${g.warns.length > 40 ? '<div>… et ' + (g.warns.length - 40) + ' autres.</div>' : ''}</div>` : '';
+  const t3 = g.warns.length ? `<div class="px-warn"><b>Valeurs non saisies (${g.warns.length})</b><ul>${g.warns.slice(0, 40).map(w => `<li>${w}</li>`).join('')}</ul>${g.warns.length > 40 ? '<div>… et ' + (g.warns.length - 40) + ' autres.</div>' : ''}</div>` : '';
   return `<div class="px-mod" id="pxGuard" role="dialog" aria-modal="true" aria-label="Vérification avant enregistrement"><div class="px-mb"><h3>Vérifie avant d'enregistrer</h3>${t1}${t2}${t3}<div class="px-act"><button class="step" type="button" onclick="pxGuardNo()">Revenir corriger</button><button class="${g.warns.length ? 'step' : 'btn-save'}" style="${g.warns.length ? 'border-color:#ea580c;color:#c2410c;font-weight:800' : ''}" type="button" onclick="pxGuardOk()">${g.warns.length ? 'Confirmer malgré les valeurs non saisies' : 'Confirmer et enregistrer'}</button></div></div></div>`;
 }
 // ── Tuile d'alerte : prix qui ne respectent pas leurs règles ──
@@ -4576,7 +4576,7 @@ function pxPrintNow() {
 }
 // ── Journal ──
 async function pxJournalLoad() { if (PX.journal) return; const j = await pxCall({ action: 'px_journal' }); PX.journal = j.ok ? j.rows : []; const el = document.getElementById('pxJournal'); if (el) el.innerHTML = pxJournalHtml(); }
-const pxJournalHtml = () => !PX.journal ? '<div class="hint">⏳ Chargement…</div>' : (PX.journal.length ? `<ul class="wf-log">${PX.journal.map(x => `<li><b>${escH(x.by)}</b> <small>· ${wfDate(x.at)} · v${x.version}</small><i>${escH(x.change)}</i></li>`).join('')}</ul>` : '<div class="hint">Aucune modification enregistrée pour le moment.</div>');
+const pxJournalHtml = () => !PX.journal ? '<div class="hint">Chargement…</div>' : (PX.journal.length ? `<ul class="wf-log">${PX.journal.map(x => `<li><b>${escH(x.by)}</b> <small>· ${wfDate(x.at)} · v${x.version}</small><i>${escH(x.change)}</i></li>`).join('')}</ul>` : '<div class="hint">Aucune modification enregistrée pour le moment.</div>');
 async function pxImport(inp) {
   const f = inp.files && inp.files[0]; if (!f) return; let s; try { s = JSON.parse(await f.text()); } catch (e) { return alert('Fichier illisible : ce n\'est pas un modèle de prix valide.'); }
   if (!s || !Array.isArray(s.modele) || !s.modele.length) return alert('Ce fichier ne contient pas de modèle de prix.');
@@ -4624,7 +4624,7 @@ function pxBlocHtml(canal) {
 function pxRepasHtml() {
   const q = PX.q.trim().toLowerCase(), g = {}; PX.doc.repas.forEach((x, i) => { if (!q || x.produit.toLowerCase().includes(q)) (g[x.groupe || 'Autres'] = g[x.groupe || 'Autres'] || []).push({ x, i }); });
   const have = pxProdNames(), orph = PX.doc.repas.filter(x => !have.has(pxNm(x.produit))), groups = [...new Set(PX.doc.repas.map(x => x.groupe || 'Autres'))], rules = PX.doc.repasRegles.length ? `<div class="wf-box" style="margin-bottom:12px"><b>Politique de repas</b><ul style="margin:6px 0 0 18px;padding:0">${PX.doc.repasRegles.map(t => `<li>${escH(t)}</li>`).join('')}</ul></div>` : '';
-  const add = PX.can ? `<div class="px-bar"><input type="text" id="pxAR_n" placeholder="Nouveau produit repas" maxlength="60"><select id="pxAR_g">${groups.map(x => `<option>${escH(x)}</option>`).join('')}</select><input type="text" id="pxAR_p" placeholder="Points" inputmode="numeric" style="width:80px" value="1"><button class="step" type="button" onclick="pxAddRepas()">Ajouter</button></div>` + (orph.length ? `<div class="bd-sh warn">⚠ <b>${orph.length} ligne${orph.length > 1 ? 's' : ''} de repas sans produit au tarif</b> (repérée${orph.length > 1 ? 's' : ''} en orange). <button class="step" type="button" onclick="pxRepasPurge()">Retirer ${orph.length > 1 ? 'ces lignes' : 'cette ligne'}</button></div>` : '') : '';
+  const add = PX.can ? `<div class="px-bar"><input type="text" id="pxAR_n" placeholder="Nouveau produit repas" maxlength="60"><select id="pxAR_g">${groups.map(x => `<option>${escH(x)}</option>`).join('')}</select><input type="text" id="pxAR_p" placeholder="Points" inputmode="numeric" style="width:80px" value="1"><button class="step" type="button" onclick="pxAddRepas()">Ajouter</button></div>` + (orph.length ? `<div class="bd-sh warn"><b>${orph.length} ligne${orph.length > 1 ? 's' : ''} de repas sans produit au tarif</b> (repérée${orph.length > 1 ? 's' : ''} en orange). <button class="step" type="button" onclick="pxRepasPurge()">Retirer ${orph.length > 1 ? 'ces lignes' : 'cette ligne'}</button></div>` : '') : '';
   return rules + add + (Object.keys(g).map((k, gi) => { const th = pxpTh(groups.indexOf(k));
     return `<div class="pxb" style="${pxVars('', th)}"><div class="pxt">${escH(k.toUpperCase())}</div><div class="pxw"><table class="pxm" style="min-width:340px"><thead><tr><th class="nm"></th><th>POINTS</th></tr></thead><tbody>${g[k].map(({ x, i }) => `<tr><td class="nm">${escH(x.produit)}${!have.has(pxNm(x.produit)) ? ' <small style="color:#fdba74" title="Ce produit n\'est plus (ou pas) au tarif">· hors tarif</small>' : ''}${PX.can ? `<button type="button" class="pxd" title="Retirer de la politique de repas" aria-label="Retirer ${escH(x.produit)}" onclick="pxDelRepas(${i})">×</button>` : ''}</td><td class="p">${PX.can ? `<input class="pxi" inputmode="numeric" value="${pxF(x.points)}" onchange="pxPoints(${i},this.value)" aria-label="Points ${escH(x.produit)}">` : pxF(x.points)}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('') || `<div class="hint">Aucun produit ne correspond à « ${escH(PX.q)} ».</div>`);
 }
@@ -4679,7 +4679,7 @@ function pxSimApply() {
 }
 function renderPrix() {
   const p = document.getElementById('panel');
-  if (!pwdHash()) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prix franchise</div></div><div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec ton compte.</div>`; return; }
+  if (!pwdHash()) { p.innerHTML = `<div class="panel-head"><div class="panel-title">Prix franchise</div></div><div class="entry-banner err" style="display:block">Reconnecte-toi avec ton compte.</div>`; return; }
   const head = `<div class="panel-head"><div><div class="panel-title">Prix franchise</div><div class="last-saisie">Les prix de vente en vigueur, présentés comme le modèle : un tarif commun à tous les restaurants, avec des exceptions par restaurant sur certains produits. ${PX.can ? 'Tu peux les modifier, ajouter ou supprimer des produits (franchisé et superviseur) ; les directeurs les consultent.' : 'Consultation : seuls le franchisé et le superviseur modifient les prix.'}</div></div></div>`;
   if (PX.err) { p.innerHTML = head + `<div class="entry-banner err" style="display:block">${escH(PX.err)}</div><div class="foot"><button class="step" onclick="PX.err='';PX.doc=null;PX.state='idle';renderPrix()">Réessayer</button></div>`; return; }
   if (!PX.doc) {
@@ -4687,7 +4687,7 @@ function renderPrix() {
       p.innerHTML = head + `<div class="wf-box"><b>Aucun modèle de prix pour le moment.</b> ${PX.can ? 'Importe le fichier de départ (modèle au format .json préparé à partir du classeur « Prix Franchise »).<div class="wf-act"><input type="file" accept=".json,application/json" onchange="pxImport(this)"></div>' : 'Le franchisé ou le superviseur doit d\'abord le mettre en place.'}</div>`; return;
     }
     if (PX.state !== 'loading' && !PX.saving) { PX.state = 'loading'; pxLoad(); }
-    p.innerHTML = head + '<div class="hint">⏳ Chargement des prix…</div>'; return;
+    p.innerHTML = head + '<div class="hint">Chargement des prix…</div>'; return;
   }
   const alertH = pxAlertHtml();                                                                   // calculé d'abord : les pastilles des onglets et les cases de la grille s'appuient sur la même liste d'écarts
   const name = r => (RESTOS.find(x => x[0] === r) || [0, r])[1], dirty = pxChanges(), canal = PX.canal, nExc = Object.keys(PX.doc.exceptions).reduce((a, r) => a + Object.keys(PX.doc.exceptions[r]).reduce((x, c) => x + Object.keys(PX.doc.exceptions[r][c]).length, 0), 0);
@@ -4696,14 +4696,14 @@ function renderPrix() {
   const bloc = canal === 'repas' ? '' : `<div class="px-chips bl">${PX.doc.modele.map((b, i) => `<button style="${pxVars('', pxpTh(i))}" class="${i === Math.min(PX.bloc, PX.doc.modele.length - 1) ? 'on' : ''}" onclick="pxPick('bloc',${i})">${escH(b.titre)}${pxDevBdg(PX.dev.filter(d => d.b === b.titre && d.canal === canal && pxDevShown(d)).length)}</button>`).join('')}${PX.can && !PX.view ? `<span style="display:inline-flex;gap:6px;align-items:center"><input type="text" id="pxAB" placeholder="Nouvelle rubrique" maxlength="40" style="padding:6px 9px;border:1.5px solid var(--border);border-radius:999px;font:inherit;font-size:.78rem;background:var(--card);color:var(--text)" onkeydown="if(event.key==='Enter')pxAddBloc()"><button class="step" type="button" onclick="pxAddBloc()">+ Rubrique</button></span>` : ''}</div>`;
   const what = PX.view ? (PX.can ? `Tu modifies les prix de <b>${escH(name(PX.view))}</b> : chaque prix changé devient une <b>exception</b> (cadre orange). Efface la case pour revenir au modèle. Pour ajouter ou supprimer un produit, choisis « Modèle global ».` : `Prix de <b>${escH(name(PX.view))}</b> ; les cadres orange diffèrent du modèle.`) : (PX.can ? 'Tu modifies le <b>modèle global</b> : il s\'applique à tous les restaurants sans exception. ' + (canal === 'restaurant' ? 'Tu peux aussi ajouter, renommer ou supprimer des produits : leurs prix Uber et Deliveroo (+' + pxF(PX.doc.canaux.uber.taux) + ' % / +' + pxF(PX.doc.canaux.deliveroo.taux) + ' %) se calculent tout seuls.' : 'Ici, le prix se calcule à partir du prix restaurant (+' + pxF(PX.doc.canaux[canal === 'repas' ? 'uber' : canal].taux) + ' %) ; saisis-en un seul pour le fixer à la main. Pour <b>ajouter un produit</b>, passe par l\'onglet « Restaurant ».') : 'Modèle global appliqué aux restaurants qui n\'ont pas d\'exception.');
   const leg = canal === 'repas' ? '' : `<div class="px-leg">${PX.dev.some(pxDevShown) ? '<span><i style="box-shadow:inset 0 0 0 3px #dc2626"></i>prix hors règle (voir « attendu »)</span>' : ''}<span><i style="box-shadow:inset 0 0 0 2.5px #ea580c"></i>exception du restaurant</span>${canal !== 'restaurant' ? '<span><i style="box-shadow:inset 0 0 0 2.5px #2563eb"></i>prix fixé (hors majoration)</span>' : ''}<span>petit chiffre sur fond foncé = code caisse</span></div>`;
-  const conflict = PX.conflict ? `<div class="bd-sh warn">🔔 <b>Une version plus récente existe</b> (v${PX.conflict.version}${PX.conflict.at ? ' · ' + wfDate(PX.conflict.at) : ''}${PX.conflict.by ? ' par ' + escH(PX.conflict.by) : ''}). Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="PX.doc=null;PX.base=null;PX.conflict=null;PX.state='idle';renderPrix()">Recharger la version enregistrée</button></div>` : '';
+  const conflict = PX.conflict ? `<div class="bd-sh warn"><b>Une version plus récente existe</b> (v${PX.conflict.version}${PX.conflict.at ? ' · ' + wfDate(PX.conflict.at) : ''}${PX.conflict.by ? ' par ' + escH(PX.conflict.by) : ''}). Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="PX.doc=null;PX.base=null;PX.conflict=null;PX.state='idle';renderPrix()">Recharger la version enregistrée</button></div>` : '';
   const flash = PX.flash ? `<div class="bd-sh ${PX.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PX.flash[1])}</div>` : '';
-  const bar = PX.can ? `<div class="bd-sh ${dirty.length ? 'warn' : ''} px-save">${PX.saving ? '⏳ Enregistrement…' : dirty.length ? `<b>● ${dirty.length} modification${dirty.length > 1 ? 's' : ''} non enregistrée${dirty.length > 1 ? 's' : ''}</b> <button class="btn-save" onclick="pxSave()">Enregistrer les prix</button><button class="step" onclick="pxCancel()">Annuler</button> <span class="loc">${escH(dirty.slice(0, 3).join(' ; '))}${dirty.length > 3 ? ' …' : ''}</span>` : `Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. Rien à enregistrer.`}</div>` : `<div class="bd-sh"><span class="loc">Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. ${nExc ? nExc + ' exception' + (nExc > 1 ? 's' : '') + ' par restaurant.' : ''}</span></div>`;
+  const bar = PX.can ? `<div class="bd-sh ${dirty.length ? 'warn' : ''} px-save">${PX.saving ? 'Enregistrement…' : dirty.length ? `<b>● ${dirty.length} modification${dirty.length > 1 ? 's' : ''} non enregistrée${dirty.length > 1 ? 's' : ''}</b> <button class="btn-save" onclick="pxSave()">Enregistrer les prix</button><button class="step" onclick="pxCancel()">Annuler</button> <span class="loc">${escH(dirty.slice(0, 3).join(' ; '))}${dirty.length > 3 ? ' …' : ''}</span>` : `Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. Rien à enregistrer.`}</div>` : `<div class="bd-sh"><span class="loc">Version ${PX.version}${PX.by ? ' · enregistrée par ' + escH(PX.by) : ''}${PX.at ? ' · ' + wfDate(PX.at) : ''}. ${nExc ? nExc + ' exception' + (nExc > 1 ? 's' : '') + ' par restaurant.' : ''}</span></div>`;
   const admin = PX.can ? `<details class="sim-d"><summary>Administration : remplacer le modèle par un fichier</summary><div class="hint" style="margin:6px 0 8px">Pour la mise à jour annuelle : un fichier .json préparé à partir du classeur « Prix Franchise ». Il remplace le modèle global ; les exceptions par restaurant sont conservées et l'ancienne version reste dans le journal.</div><input type="file" accept=".json,application/json" onchange="pxImport(this)"></details>` : '';
   p.innerHTML = head + conflict + flash + alertH + pxSimHtml() + `<div class="px-chips">${PX_CANAUX.map(([k, n]) => `<button class="${k === canal ? 'on' : ''}" onclick="pxPick('canal','${k}')">${n}${pxDevBdg(PX.dev.filter(d => d.canal === k && pxDevShown(d)).length)}</button>`).join('')}</div>` +
     `<div class="px-bar">${canal === 'repas' ? '' : views}<input type="text" placeholder="Rechercher un produit" value="${escH(PX.q)}" oninput="PX.q=this.value;clearTimeout(PX.qt);PX.qt=setTimeout(()=>{renderPrix();const e=document.getElementById('pxQ');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},350)" id="pxQ">${taux}<button type="button" class="step" onclick="pxPrintNow()" title="Une page A4 paysage, comme le modèle">Imprimer</button></div>` +
     (canal === 'repas' ? '' : `<div class="hint" style="margin:0 0 10px">${what}</div>`) + bloc + leg + (canal === 'repas' ? pxRepasHtml() : pxBlocHtml(canal)) +
-    bar + pxGuardHtml() + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">⏳ Chargement…</div>'}</div></details>` + admin;
+    bar + pxGuardHtml() + `<details class="sim-d" ontoggle="if(this.open)pxJournalLoad()"><summary>Historique des modifications</summary><div id="pxJournal" style="margin-top:8px">${PX.journal ? pxJournalHtml() : '<div class="hint">Chargement…</div>'}</div></details>` + admin;
 }
 // ── Point Business : le DOCUMENT (écran du dashboard + impression A4 comme le modèle « Accompagnement : tour opérationnel / Point Business ») ──
 // Partagé par la saisie et le dashboard. Un point = { restaurant, date, type, avec, prochain, sup:{ crit:[{id,label}], bl:[{id,titre}], notes:{id:{n,c}}, blocs:{id:texte}, plan:[{id,t}], photos:[{fid,lg}] }, dir:{ notes:{id:texte}, rep, plan:{id:{s,c}}, photos } }.
@@ -4886,7 +4886,7 @@ async function pbPhotoDel(side, i) {
 // ── Écran ──
 function pbFootHtml() {
   const d = pbDirtyNow(), p = PB.cur; if (!p) return '';
-  return `<div class="bd-sh ${d ? 'warn' : ''}" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? '⏳ Enregistrement…' : `${d ? '<b>● Modifications non enregistrées</b>' : (p.id ? 'Tout est enregistré.' : 'Point pas encore enregistré.')} <button class="btn-save" onclick="pbSave()" ${(PB.can || pbEditDir()) ? '' : 'disabled'}>Enregistrer</button><button class="step" onclick="pbPrintNow()" ${p.id ? '' : 'disabled'} title="Une page A4 comme le modèle, avec les photos">Imprimer / PDF</button><button class="step" onclick="pbBack()">← Liste des points</button>${PB.can && p.id ? '<button class="step" onclick="pbDelete()" style="margin-left:auto">Supprimer</button>' : ''}`}</div>`;
+  return `<div class="bd-sh ${d ? 'warn' : ''}" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? 'Enregistrement…' : `${d ? '<b>● Modifications non enregistrées</b>' : (p.id ? 'Tout est enregistré.' : 'Point pas encore enregistré.')} <button class="btn-save" onclick="pbSave()" ${(PB.can || pbEditDir()) ? '' : 'disabled'}>Enregistrer</button><button class="step" onclick="pbPrintNow()" ${p.id ? '' : 'disabled'} title="Une page A4 comme le modèle, avec les photos">Imprimer / PDF</button><button class="step" onclick="pbBack()">← Liste des points</button>${PB.can && p.id ? '<button class="step" onclick="pbDelete()" style="margin-left:auto">Supprimer</button>' : ''}`}</div>`;
 }
 function pbCritHtml(c, i) {
   const nt = (PB.cur.sup.notes[c.id] || {}), dn = PB.cur.dir.notes[c.id] || '', E = pbEditSup(), D = pbEditDir();
@@ -4909,7 +4909,7 @@ function pbPhotosHtml() {
     return `<figure><img src="${pbpImg(x.fid, 400)}" alt="${escH(x.lg || 'Photo')}" loading="lazy">${side === 'dir' ? '<span class="who">Directeur</span>' : ''}${own ? `<button type="button" class="x" title="Retirer la photo" aria-label="Retirer la photo" onclick="pbPhotoDel('${side}',${i})">×</button>` : ''}<figcaption>${own ? `<input value="${escH(x.lg || '')}" maxlength="80" placeholder="Légende (ex. Nettoyer le toit)" onchange="PB.cur.${side}.photos[${i}].lg=this.value;pbDirty()">` : `<small>${escH(x.lg || '')}</small>`}</figcaption></figure>`; };
   const all = PB.cur.sup.photos.map((x, i) => fig('sup', i, x)).join('') + PB.cur.dir.photos.map((x, i) => fig('dir', i, x)).join('');
   const side = E ? 'sup' : (D ? 'dir' : '');
-  return `<div class="pb-sect"><h4>Photographies</h4>${all ? `<div class="pb-ph">${all}</div>` : '<div class="hint">Aucune photo.</div>'}${side ? `<div style="margin-top:8px"><label class="pb-add">📷 Ajouter des photos<input type="file" accept="image/*" multiple onchange="pbPhotoAdd(this,'${side}')"></label>${PB.cur.id ? '' : ' <small class="loc">Le point est enregistré automatiquement à la première photo.</small>'}</div>` : ''}</div>`;
+  return `<div class="pb-sect"><h4>Photographies</h4>${all ? `<div class="pb-ph">${all}</div>` : '<div class="hint">Aucune photo.</div>'}${side ? `<div style="margin-top:8px"><label class="pb-add"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:6px;" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Ajouter des photos<input type="file" accept="image/*" multiple onchange="pbPhotoAdd(this,'${side}')"></label>${PB.cur.id ? '' : ' <small class="loc">Le point est enregistré automatiquement à la première photo.</small>'}</div>` : ''}</div>`;
 }
 function pbPointHtml() {
   const p = PB.cur, E = pbEditSup(), D = pbEditDir(), types = pbCfgOf().types;
@@ -4958,17 +4958,17 @@ function pbCfgHtml() {
     const ov = PB.cfgR ? (D.restos[PB.cfgR] || {})[t.id] : null;
     const body = !PB.cfgR || ov ? listH(ti, 'criteres', 'Critères (notés de 1 à 5 avec un commentaire)') + listH(ti, 'bl', 'Blocs de texte libre') + (PB.cfgR ? `<div style="margin-top:8px"><button class="step" onclick="pbCfgOverride(${ti},false)">Revenir à la liste commune pour ${escH(pbName(PB.cfgR))}</button></div>` : '') : `<div class="hint" style="margin:8px 0">${escH(pbName(PB.cfgR))} utilise la liste commune de ce type. <button class="step" onclick="pbCfgOverride(${ti},true)">Créer une liste propre à ${escH(pbName(PB.cfgR))}</button></div>`;
     return `<div class="pb-card"><div class="pb-cfgrow"><input value="${escH(t.nom)}" maxlength="60" style="font-weight:800" onchange="pbCfgType(${ti},this.value)" aria-label="Nom du type de visite"><button type="button" onclick="pbCfgDelType(${ti})" aria-label="Supprimer ce type" title="Supprimer ce type">×</button></div>${body}</div>`; }).join('');
-  return `<div class="pb-cfg"><div class="hint" style="margin:0 0 10px">Les types de visite, leurs critères et leurs blocs de texte se modifient ici. Un point déjà saisi garde les critères du jour où il a été créé. Le plan d'action et les photos sont toujours présents.${PB.cfg ? '' : ' <b>Modèle par défaut (non encore enregistré).</b>'}</div>${scope}${types}<div class="pb-card"><div class="pb-cfgrow"><input id="pbNT" maxlength="60" placeholder="+ Nouveau type de visite (ex. Audit propreté) (Entrée)" onkeydown="if(event.key==='Enter')pbCfgAddType()"><button type="button" style="width:auto;padding:0 12px" onclick="pbCfgAddType()">Ajouter</button></div></div><div class="pb-foot"><div class="bd-sh" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? '⏳ Enregistrement…' : `<button class="btn-save" onclick="pbCfgSave()">Enregistrer la configuration</button><button class="step" onclick="PB.view='list';PB.flash=null;renderPB()">Annuler</button>`}</div></div></div>`;
+  return `<div class="pb-cfg"><div class="hint" style="margin:0 0 10px">Les types de visite, leurs critères et leurs blocs de texte se modifient ici. Un point déjà saisi garde les critères du jour où il a été créé. Le plan d'action et les photos sont toujours présents.${PB.cfg ? '' : ' <b>Modèle par défaut (non encore enregistré).</b>'}</div>${scope}${types}<div class="pb-card"><div class="pb-cfgrow"><input id="pbNT" maxlength="60" placeholder="+ Nouveau type de visite (ex. Audit propreté) (Entrée)" onkeydown="if(event.key==='Enter')pbCfgAddType()"><button type="button" style="width:auto;padding:0 12px" onclick="pbCfgAddType()">Ajouter</button></div></div><div class="pb-foot"><div class="bd-sh" style="flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${PB.saving ? 'Enregistrement…' : `<button class="btn-save" onclick="pbCfgSave()">Enregistrer la configuration</button><button class="step" onclick="PB.view='list';PB.flash=null;renderPB()">Annuler</button>`}</div></div></div>`;
 }
 function renderPB() {
   const p = document.getElementById('panel');
   if (PB._cur !== curResto) { PB._cur = curResto; PB.resto = null; if (PB.view === 'list') PB.loaded = false; }                      // le restaurant choisi en haut de page change : on relit ses points
   const head = `<div class="panel-head"><div><div class="panel-title">Point Business</div><div class="last-saisie">${PB.can ? 'Diagnostic régulier avec le directeur : note par critère, commentaires, plan d\'action et photos. Le directeur du restaurant le voit aussitôt (sauf brouillon) et y répond ; chaque directeur ne voit que SON restaurant.' : 'Les points de ton restaurant avec ton superviseur : tu peux commenter chaque critère, répondre, mettre à jour l\'avancement des actions et ajouter des photos.'}</div></div></div>`;
-  if (!pwdHash()) { p.innerHTML = head + '<div class="entry-banner err" style="display:block">🔒 Reconnecte-toi avec ton compte.</div>'; return; }
+  if (!pwdHash()) { p.innerHTML = head + '<div class="entry-banner err" style="display:block">Reconnecte-toi avec ton compte.</div>'; return; }
   if (PB.err) { p.innerHTML = head + `<div class="entry-banner err" style="display:block">${escH(PB.err)}</div><div class="foot"><button class="step" onclick="PB.err='';PB.loaded=false;renderPB()">Réessayer</button></div>`; return; }
-  if (!PB.loaded || PB.listFor !== (PB.resto || curResto)) { if (PB.view === 'list' && PB.state !== 'loading') { if (!PB.resto || !pbRestos().some(x => x[0] === PB.resto)) PB.resto = curResto; pbLoad(); } p.innerHTML = head + '<div class="hint">⏳ Chargement…</div>'; return; }
-  const flash = PB.flash ? `<div class="bd-sh ${PB.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PB.flash[1])}</div>` : '', busy = PB.busy ? `<div class="bd-sh warn">⏳ ${escH(PB.busy)}</div>` : '';
-  const conflict = PB.conflict ? `<div class="bd-sh warn">🔔 <b>Une version plus récente de ce point a été enregistrée</b>${PB.conflict.par ? ' par ' + escH(PB.conflict.par) : ''}. Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="pbOpen(PB.cur.id)">Recharger le point</button></div>` : '';
+  if (!PB.loaded || PB.listFor !== (PB.resto || curResto)) { if (PB.view === 'list' && PB.state !== 'loading') { if (!PB.resto || !pbRestos().some(x => x[0] === PB.resto)) PB.resto = curResto; pbLoad(); } p.innerHTML = head + '<div class="hint">Chargement…</div>'; return; }
+  const flash = PB.flash ? `<div class="bd-sh ${PB.flash[0] === 'ok' ? 'ok' : 'err'}">${escH(PB.flash[1])}</div>` : '', busy = PB.busy ? `<div class="bd-sh warn">${escH(PB.busy)}</div>` : '';
+  const conflict = PB.conflict ? `<div class="bd-sh warn"><b>Une version plus récente de ce point a été enregistrée</b>${PB.conflict.par ? ' par ' + escH(PB.conflict.par) : ''}. Tes modifications ne sont pas enregistrées. <button class="btn-save" onclick="pbOpen(PB.cur.id)">Recharger le point</button></div>` : '';
   const body = PB.view === 'point' && PB.cur ? pbPointHtml() : (PB.view === 'cfg' ? pbCfgHtml() : pbListHtml());
   p.innerHTML = head + conflict + flash + busy + body;
 }
@@ -4976,11 +4976,11 @@ function renderPB() {
 // ── Plan de communication : bandeau « Prochains rendez-vous » au-dessus des onglets pour le restaurant choisi (14 jours : ses événements + ceux de toute la franchise) ──
 // Lecture légère de l'onglet PlanCom (action=plancom) : à l'ouverture, au choix du restaurant, toutes les 2 minutes et au retour sur la page.
 const PCB = { rows: [], at: 0, all: false };
-const PCB_ICO = { reunion: '👥', rap_session: '🎤', audit: '🔍', evaluation: '📝', election: '🗳️', festif: '🎉', formation: '🎓', campagne: '📣', libre: '📌', reunion_manager: '👥', reunion_directeur: '👥' };
+const PCB_ICO = { reunion: '', rap_session: '', audit: '', evaluation: '', election: '', festif: '', formation: '', campagne: '', libre: '', reunion_manager: '', reunion_directeur: '' };
 const PCB_COL = { reunion: '#2563eb', rap_session: '#0d9488', audit: '#d97706', evaluation: '#7c3aed', election: '#e11d48', festif: '#db2777', formation: '#16a34a', campagne: '#ea580c', libre: '#64748b', reunion_manager: '#2563eb', reunion_directeur: '#2563eb' };
 function pcbLabel(e) {
   const t = String(e.type || 'libre'), d = String(e.detail || '');
-  return (PCB_ICO[t] || '📌') + ' ' + (t === 'formation' ? 'Formation' + (d ? ' · ' + d : '') : (d || { reunion_manager: 'Réunion MANAGERS', reunion_directeur: 'Réunion DIRECTEURS' }[t] || 'Rendez-vous'));
+  return (PCB_ICO[t] || '') + ' ' + (t === 'formation' ? 'Formation' + (d ? ' · ' + d : '') : (d || { reunion_manager: 'Réunion MANAGERS', reunion_directeur: 'Réunion DIRECTEURS' }[t] || 'Rendez-vous'));
 }
 function pcbHeure(v) {                                           // heure d'un événement au format français : « 9h », « 14h30 », « 9h-12h » (le Sheet peut renvoyer une vraie valeur d'heure : « 1899-12-30T13:21:39.000Z » ou un nombre)
   if (v == null || v === '') return '';
@@ -5002,7 +5002,7 @@ function pcbShow() {
   const evs = PCB.rows.map(e => ({ e, p: String(e.periode || '').slice(0, 10), f: String(e.fin || e.periode || '').slice(0, 10) })).filter(x => x.p && x.f >= today && x.p <= lim && (x.e.restaurant === curResto || x.e.restaurant === 'FRANCHISE')).sort((a, b) => a.p.localeCompare(b.p));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = p => { const d = p < today ? today : p; return J[new Date(d + 'T00:00:00Z').getUTCDay()] + ' ' + d.slice(8) + '/' + d.slice(5, 7); };
-  box.innerHTML = `<div class="pcb"><b>📅 Prochains rendez-vous</b>${evs.slice(0, PCB.all ? evs.length : 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + pcbHeure(x.e.heure) : '') + (x.e.lieu ? '\n📍 ' + x.e.lieu : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.lieu ? ' · 📍 ' + escH(x.e.lieu) : ''}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<button type="button" class="pcb-m" onclick="PCB.all = !PCB.all; pcbShow()" title="${PCB.all ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PCB.all ? '▲ Réduire' : '+ ' + (evs.length - 4) + ' autre' + (evs.length > 5 ? 's' : '')}</button>` : ''}</div>`;
+  box.innerHTML = `<div class="pcb"><b><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:6px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Prochains rendez-vous</b>${evs.slice(0, PCB.all ? evs.length : 4).map(x => `<span class="pcb-c" style="--tc:${PCB_COL[x.e.type] || '#64748b'}" title="${escH(pcbLabel(x.e) + (x.e.heure ? ' · ' + pcbHeure(x.e.heure) : '') + (x.e.lieu ? '\n' + x.e.lieu : '') + (x.e.note ? '\n' + x.e.note : ''))}">${escH(day(x.p))}${x.e.heure ? ' ' + escH(x.e.heure) : ''} · ${escH(pcbLabel(x.e))}${x.e.lieu ? ' · ' + escH(x.e.lieu) : ''}${x.e.restaurant === 'FRANCHISE' ? ' (franchise)' : ''}</span>`).join('')}${evs.length > 4 ? `<button type="button" class="pcb-m" onclick="PCB.all = !PCB.all; pcbShow()" title="${PCB.all ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PCB.all ? '▲ Réduire' : '+ ' + (evs.length - 4) + ' autre' + (evs.length > 5 ? 's' : '')}</button>` : ''}</div>`;
 }
 async function pcbPull(force) {
   if (typeof configured === 'function' && !configured()) return;
@@ -5049,9 +5049,9 @@ const acxHead = '<div class="panel-head"><div class="panel-title">Mots de passe 
 const acxWhen = s => { const m = /^(\d{4})-(\d{2})-(\d{2})T?(\d{2}:\d{2})?/.exec(String(s || '')); return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' ' + m[4] : ''}` : String(s || ''); };
 async function renderAcces() {
   const p = document.getElementById('panel'), me = accAdmin();
-  if (!me) { p.innerHTML = acxHead + '<div class="hint">🔒 Réservé au propriétaire, au franchisé et à la collaboratrice : connecte-toi avec ton mot de passe d’accès.</div>'; return; }
+  if (!me) { p.innerHTML = acxHead + '<div class="hint">Réservé au propriétaire, au franchisé et à la collaboratrice : connecte-toi avec ton mot de passe d’accès.</div>'; return; }
   if (!ACX.ak) return acxLock();
-  p.innerHTML = acxHead + '<div class="hint">⏳ Chargement des accès…</div>';
+  p.innerHTML = acxHead + '<div class="hint">Chargement des accès…</div>';
   const j = await accPost({ action: 'acc_list', ak: ACX.ak }, 30000);
   if (!j || !j.ok) {
     if (j && /mot de passe non reconnu/.test(j.error || '')) { ACX.ak = ''; return acxLock('Mot de passe incorrect'); }
@@ -5295,8 +5295,8 @@ const SBA = (() => {
     msg('');
   }
   const ROLE = { owner: 'Propriétaire', franchise: 'Franchisé', collab: 'Collaboratrice', superviseur: 'Superviseur', directeur: 'Directeur' };
-  function showWho(r) {                                                          // « 👤 Camille D. » dans l'en-tête de la page
-    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '👤 ' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
+  function showWho(r) {                                                          // « Camille D. » dans l'en-tête de la page
+    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
   }
   async function enter() {                                                       // connexion réussie : droits relus dans la base, puis ouverture de la page
     const r = await rights(true);
@@ -5478,8 +5478,8 @@ async function eqCall(path, method, body, headers) {
 }
 async function renderEquipes() {
   const p = document.getElementById('panel');
-  if (!SB_RIGHTS || !sbTabOk('equipes')) { p.innerHTML = '<div class="hint">🔒 Réservé aux personnes qui gèrent les accès.</div>'; return; }
-  p.innerHTML = '<div class="hint">⏳ Chargement des équipes…</div>';
+  if (!SB_RIGHTS || !sbTabOk('equipes')) { p.innerHTML = '<div class="hint">Réservé aux personnes qui gèrent les accès.</div>'; return; }
+  p.innerHTML = '<div class="hint">Chargement des équipes…</div>';
   const fr = encodeURIComponent(CFG.auth.franchise);
   const [a, b, c, d] = await Promise.all([eqCall('/rest/v1/droits?franchise=eq.' + fr + '&select=*&order=nom.asc'), eqCall('/rest/v1/droits_journal?franchise=eq.' + fr + '&select=*&order=quand.desc&limit=12'), eqCall('/rest/v1/rpc/acces_218_liste', 'POST', { f: CFG.auth.franchise }), eqCall('/rest/v1/postes?franchise=eq.' + fr + '&select=*&order=ordre.asc,nom.asc')]);
   EQ.postes = d.ok && Array.isArray(d.j) && d.j.length ? d.j : null;                                // null = postes pas encore installés côté base : l'écran d'avant s'affiche
@@ -5828,7 +5828,7 @@ async function eqPSave() {
   if (!changed.length && nom === po.nom) return eqSet('Aucun changement à enregistrer', '');
   const perso = users.filter(r => changed.some(k => r.acces && r.acces[k] !== undefined)), lab = k => (ACC_CAT.flatMap(g => g[1]).find(x => x[0] === k) || [k, k])[1];
   const keep = changed.filter(k => perso.some(r => r.acces[k] !== undefined));
-  if (perso.length && !confirm('⚠ ' + perso.length + ' personne' + (perso.length > 1 ? 's ont' : ' a') + ' un accès personnalisé sur ' + keep.map(lab).join(', ') + ' et ne suivr' + (perso.length > 1 ? 'ont' : 'a') + ' pas ce changement :\n• ' + perso.map(r => r.nom).join('\n• ') + '\n\n' + (users.length - perso.length) + ' autre' + (users.length - perso.length > 1 ? 's' : '') + ' personne' + (users.length - perso.length > 1 ? 's' : '') + ' du poste le suivront.\n\nEnregistrer le poste quand même ?')) return;
+  if (perso.length && !confirm('' + perso.length + ' personne' + (perso.length > 1 ? 's ont' : ' a') + ' un accès personnalisé sur ' + keep.map(lab).join(', ') + ' et ne suivr' + (perso.length > 1 ? 'ont' : 'a') + ' pas ce changement :\n• ' + perso.map(r => r.nom).join('\n• ') + '\n\n' + (users.length - perso.length) + ' autre' + (users.length - perso.length > 1 ? 's' : '') + ' personne' + (users.length - perso.length > 1 ? 's' : '') + ' du poste le suivront.\n\nEnregistrer le poste quand même ?')) return;
   if (!perso.length && changed.length && !confirm('Modifier le poste « ' + po.nom + ' » ? ' + users.length + ' personne' + (users.length > 1 ? 's' : '') + ' ' + (users.length > 1 ? 'seront mises' : 'sera mise') + ' à jour (' + changed.map(lab).join(', ') + ').')) return;
   const r = await eqCall('/rest/v1/postes?id=eq.' + po.id, 'PATCH', { nom, acces: full }, { Prefer: 'return=representation' });
   if (!r.ok || (Array.isArray(r.j) && !r.j.length)) return eqSet(((r.j && r.j.message) || 'Modification refusée').replace(/^postes : /, ''), 'err');

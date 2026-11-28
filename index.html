@@ -383,8 +383,8 @@ const SBA = (() => {
     msg('');
   }
   const ROLE = { owner: 'Propriétaire', franchise: 'Franchisé', collab: 'Collaboratrice', superviseur: 'Superviseur', directeur: 'Directeur' };
-  function showWho(r) {                                                          // « 👤 Camille D. » dans l'en-tête de la page
-    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '👤 ' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
+  function showWho(r) {                                                          // « Camille D. » dans l'en-tête de la page
+    document.querySelectorAll('.sba-who').forEach(e => { e.textContent = r && r.nom ? '' + r.nom : ''; e.title = r ? (ROLE[r.role] || r.role) + ' · ' + r.email : ''; });
   }
   async function enter() {                                                       // connexion réussie : droits relus dans la base, puis ouverture de la page
     const r = await rights(true);
@@ -1455,7 +1455,7 @@ window.addEventListener('DOMContentLoaded', () => {
 <!-- APPLICATION (masquée jusqu'à authentification) -->
 <div id="app" style="display:none">
 <div id="updateBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:20000;background:#dc2626;color:#fff;text-align:center;padding:9px 14px;font-size:.82rem;font-weight:700;box-shadow:0 2px 14px rgba(0,0,0,.35);font-family:'Segoe UI',system-ui,sans-serif">
-  🔴 Une nouvelle version du dashboard est disponible.
+  Une nouvelle version du dashboard est disponible.
   <button onclick="var u=new URL(location.href);u.searchParams.set('v',Date.now());location.replace(u.toString());" style="margin-left:10px;background:#fff;color:#dc2626;border:none;border-radius:8px;padding:4px 14px;font-weight:800;cursor:pointer;font-family:inherit">Actualiser</button>
   <button onclick="document.getElementById('updateBanner').style.display='none'" style="margin-left:8px;background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.6);border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer;font-family:inherit">Plus tard</button>
 </div>
@@ -1518,7 +1518,7 @@ window.addEventListener('DOMContentLoaded', () => {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       <span>Se déconnecter</span>
     </a>
-    <div class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()" title="Mode nuit">🌙</div>
+    <div class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()" title="Mode nuit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
   </div>
 </div>
 
@@ -1604,7 +1604,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
       <!-- Description -->
       <div class="interv-field">
-        <label class="interv-label">Descriptif de la panne * <span style="font-weight:400;color:var(--muted);text-transform:none">(n'oublions pas la politesse &#128521;)</span></label>
+        <label class="interv-label">Descriptif de la panne * <span style="font-weight:400;color:var(--muted);text-transform:none">(n'oublions pas la politesse)</span></label>
         <textarea class="interv-textarea" id="iDesc" placeholder="Decrivez la panne avec precision..."></textarea>
       </div>
 
@@ -1613,15 +1613,15 @@ window.addEventListener('DOMContentLoaded', () => {
         <label class="interv-label">Urgence</label>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
           <div class="interv-urgence-btn" onclick="setIntervUrgence('low',this)" id="urg-low">
-            <div style="font-size:1.3rem">&#128994;</div>
+            <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#22c55e"></span></div>
             <div>Pas urgent</div>
           </div>
           <div class="interv-urgence-btn" onclick="setIntervUrgence('medium',this)" id="urg-medium">
-            <div style="font-size:1.3rem">&#128993;</div>
+            <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#f59e0b"></span></div>
             <div>A traiter</div>
           </div>
           <div class="interv-urgence-btn" onclick="setIntervUrgence('high',this)" id="urg-high">
-            <div style="font-size:1.3rem">&#128308;</div>
+            <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#ef4444"></span></div>
             <div>Urgent</div>
           </div>
         </div>
@@ -1659,7 +1659,7 @@ window.addEventListener('DOMContentLoaded', () => {
              ondragleave="this.style.borderColor=''"
              ondrop="event.preventDefault();this.style.borderColor='';addIntervPhotos(event.dataTransfer.files)">
           <input type="file" id="iPhotos" accept="image/*" multiple style="display:none" onchange="addIntervPhotos(this.files)">
-          <div style="font-size:1.8rem">&#128247;</div>
+          <div style="color:var(--muted)"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-5px;" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
           <div style="font-size:.82rem;font-weight:600;color:var(--text)">Cliquez ou glissez vos photos</div>
           <div style="font-size:.7rem;color:var(--muted)">JPG, PNG, HEIC - Max 5 photos</div>
         </div>
@@ -1687,8 +1687,8 @@ window.addEventListener('DOMContentLoaded', () => {
           <div class="esp-card-title" style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(13,148,136,.14);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 2 2 3-3"/><path d="m3 12 2 2 3-3"/><path d="m3 19 2 2 3-3"/><path d="M13 6h8M13 13h8M13 20h8"/></svg></span>Suivi des demandes</div>
           <div class="suivi-bar" style="margin:0">
             <button class="suivi-filter sf-active" data-f="all" onclick="setSuiviFilter('all')">Toutes</button>
-            <button class="suivi-filter" data-f="wait" onclick="setSuiviFilter('wait')">🟠 En attente</button>
-            <button class="suivi-filter" data-f="done" onclick="setSuiviFilter('done')">✅ Traité</button>
+            <button class="suivi-filter" data-f="wait" onclick="setSuiviFilter('wait')">En attente</button>
+            <button class="suivi-filter" data-f="done" onclick="setSuiviFilter('done')">Traité</button>
             <button class="suivi-refresh" onclick="loadSuivi()">↻</button>
           </div>
         </div>
@@ -3302,28 +3302,28 @@ function renderAlertPanel() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </div>
         <div class="alert-summary-counts">
-          ${badList.length  ? `<span style="color:#ef4444">🔴 ${badList.length} hors objectifs</span>` : ''}
-          ${warnList.length ? `<span style="color:#f59e0b">🟡 ${warnList.length} à surveiller</span>` : ''}
-          ${okList.length   ? `<span style="color:#22c55e">✅ ${okList.length} OK</span>` : ''}
+          ${badList.length  ? `<span style="color:#ef4444">${badList.length} hors objectifs</span>` : ''}
+          ${warnList.length ? `<span style="color:#f59e0b">${warnList.length} à surveiller</span>` : ''}
+          ${okList.length   ? `<span style="color:#22c55e">${okList.length} OK</span>` : ''}
         </div>
         <span class="alert-expand-hint">Tap pour voir ▾</span>
       </div>
       <div class="alert-detail">
         ${badList.length ? `
         <div class="alert-group-toggle" onclick="toggleAlertGroup(event,'alertGrpBad')">
-          <span style="color:#ef4444">🔴 Hors objectifs (${badList.length})</span>
+          <span style="color:#ef4444">Hors objectifs (${badList.length})</span>
           <span class="alert-group-chevron" id="chevBad">▾</span>
         </div>
         <div class="alert-group-chips" id="alertGrpBad">${badChips}</div>` : ''}
         ${warnList.length ? `
         <div class="alert-group-toggle" onclick="toggleAlertGroup(event,'alertGrpWarn')">
-          <span style="color:#f59e0b">🟡 À surveiller (${warnList.length})</span>
+          <span style="color:#f59e0b">À surveiller (${warnList.length})</span>
           <span class="alert-group-chevron" id="chevWarn">▾</span>
         </div>
         <div class="alert-group-chips hidden" id="alertGrpWarn">${warnChips}</div>` : ''}
         ${okList.length ? `
         <div class="alert-group-toggle" onclick="toggleAlertGroup(event,'alertGrpOk')">
-          <span style="color:#22c55e">✅ Dans les objectifs (${okList.length})</span>
+          <span style="color:#22c55e">Dans les objectifs (${okList.length})</span>
           <span class="alert-group-chevron" id="chevOk">▾</span>
         </div>
         <div class="alert-group-chips hidden" id="alertGrpOk">${okChips}</div>` : ''}
@@ -4133,7 +4133,7 @@ function renderMain() {
 function toggleDarkMode() {
   const isDark = document.body.classList.toggle('dark-mode');
   localStorage.setItem('fmj_dark_mode', isDark ? '1' : '0');
-  document.getElementById('darkToggle').textContent = isDark ? '☀️' : '🌙';
+  document.getElementById('darkToggle').innerHTML = isDark ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 }
 
 function initDarkMode() {
@@ -4143,7 +4143,7 @@ function initDarkMode() {
   if (isDark) {
     document.body.classList.add('dark-mode');
     const btn = document.getElementById('darkToggle');
-    if (btn) btn.textContent = '☀️';
+    if (btn) btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
   }
 }
 
@@ -4376,10 +4376,10 @@ async function sendInterventionEmail() {
 // BANNIÈRES
 // ============================================================
 const BANNER_TYPES = {
-  campagne: { label:'Campagne', emoji:'📣', color:'#f59e0b', bg:'#fff8e1' },
-  urgence:  { label:'Urgent',   emoji:'⚠️', color:'#ef4444', bg:'#fef2f2' },
-  objectif: { label:'Objectif', emoji:'🎯', color:'#22c55e', bg:'#f0fdf4' },
-  info:     { label:'Info',     emoji:'💡', color:'#3b82f6', bg:'#eff6ff' },
+  campagne: { label:'Campagne', emoji:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;color:#f59e0b;" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>', color:'#f59e0b', bg:'#fff8e1' },
+  urgence:  { label:'Urgent',   emoji:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;color:#ef4444;" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', color:'#ef4444', bg:'#fef2f2' },
+  objectif: { label:'Objectif', emoji:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;color:#22c55e;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', color:'#22c55e', bg:'#f0fdf4' },
+  info:     { label:'Info',     emoji:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-3px;color:#3b82f6;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>', color:'#3b82f6', bg:'#eff6ff' },
 };
 
 /* PATCH_20261001 */
@@ -6168,7 +6168,7 @@ if (typeof FRANCHISE_CFG !== 'undefined' && typeof SheetAdapter !== 'undefined')
       show(state, msg, hideAfter) {
         clearTimeout(timer);
         box.className = 'show ' + state + (state === 'err' ? ' act' : '');
-        box.querySelector('.fs-ico').textContent = state === 'ok' ? '✓' : (state === 'err' ? '⚠' : (state === 'retry' ? '↻' : ''));
+        box.querySelector('.fs-ico').textContent = state === 'ok' ? '✓' : (state === 'err' ? '!' : (state === 'retry' ? '↻' : ''));
         box.querySelector('.fs-msg').textContent = msg;
         bar.style.display = (state === 'loading' || state === 'retry') ? 'block' : 'none';
         if (hideAfter) timer = setTimeout(() => { box.classList.remove('show'); }, hideAfter);
@@ -6282,17 +6282,17 @@ if (typeof FRANCHISE_CFG !== 'undefined' && typeof SheetAdapter !== 'undefined')
 <!-- Modal admin bannières -->
 <div class="banner-modal-overlay" id="bannerModal" onclick="if(event.target===this)closeBannerAdmin()">
   <div class="banner-modal">
-    <h3>📌 Gérer les bannières</h3>
+    <h3>Gérer les bannières</h3>
     <div style="font-size:.72rem;color:var(--muted);line-height:1.5;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
-      📡 Les bannières sont enregistrées dans le Google Sheet : <b>« Ajouter » les publie immédiatement</b> pour tout le monde, ✕ les retire.
+      Les bannières sont enregistrées dans le Google Sheet : <b>« Ajouter » les publie immédiatement</b> pour tout le monde, ✕ les retire.
     </div>
     <div class="banner-modal-list" id="bannerList"></div>
     <div class="banner-form">
       <select id="bType">
-        <option value="campagne">📣 Campagne</option>
-        <option value="urgence">⚠️ Urgent</option>
-        <option value="objectif">🎯 Objectif</option>
-        <option value="info">💡 Info</option>
+        <option value="campagne">Campagne</option>
+        <option value="urgence">Urgent</option>
+        <option value="objectif">Objectif</option>
+        <option value="info">Info</option>
       </select>
       <select id="bResto"></select>
       <input id="bTitle" placeholder="Titre de la bannière *" maxlength="60">
@@ -6509,7 +6509,7 @@ function setWeekMode(m) {
 buildWeek(weekOffset);
 
 // Météo & commentaires saisis au quotidien
-const METEO_ICO = { soleil: '☀️', nuageux: '⛅', pluie: '🌧️', orage: '⛈️', neige: '❄️', brouillard: '🌫️', canicule: '🥵', vent: '💨', froid: '🥶', chaud: '🌡️' };
+const METEO_ICO = {soleil: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#f59e0b;" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>', nuageux: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#64748b;" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>', pluie: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#3b82f6;" aria-hidden="true"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>', orage: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#7c3aed;" aria-hidden="true"><path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><polyline points="13 11 9 17 15 17 11 23"/></svg>', neige: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#38bdf8;" aria-hidden="true"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/></svg>', brouillard: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#94a3b8;" aria-hidden="true"><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>', canicule: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#ef4444;" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>', vent: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#64748b;" aria-hidden="true"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>', froid: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#3b82f6;" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>', chaud: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;color:#f97316;" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>'};
 function weekComments(r) {
   if (weekMode === 'y') return [];                              // vue Année : pas de remarques jour par jour
   const C = DASHBOARD_DATA.comments || {}, out = [];
@@ -6531,7 +6531,7 @@ function renderWeekComments(r) {
     const items = list.filter(x => x.i === i);
     const ico = r !== 'FRANCHISE' ? (items.map(x => METEO_ICO[x.meteo]).find(Boolean) || '') : '';
     const n = items.filter(x => x.txt).length;
-    return `<span class="wk-day ${items.length ? 'wk-day-on' : ''}" title="${items.map(x => (r === 'FRANCHISE' ? restoShort(x.resto) + ' : ' : '') + (x.txt || '')).join(' · ').replace(/"/g, '&quot;')}">${weekMode === 'm' ? d.slice(8, 10) : _wkWd(d) + ' ' + d.slice(8, 10)} ${ico}${n ? ` 💬${r === 'FRANCHISE' && n > 1 ? n : ''}` : ''}</span>`;
+    return `<span class="wk-day ${items.length ? 'wk-day-on' : ''}" title="${items.map(x => (r === 'FRANCHISE' ? restoShort(x.resto) + ' : ' : '') + (x.txt || '')).join(' · ').replace(/"/g, '&quot;')}">${weekMode === 'm' ? d.slice(8, 10) : _wkWd(d) + ' ' + d.slice(8, 10)} ${ico}${n ? ` <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:2px;" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${r === 'FRANCHISE' && n > 1 ? n : ''}` : ''}</span>`;
   }).join('');
   // La météo ne figure que sur les pastilles des jours ; la liste ne reprend que les remarques écrites
   const lines = list.filter(x => x.txt).map(x =>
@@ -6543,9 +6543,9 @@ function renderWeekComments(r) {
 function renderWeekMissing(r) {
   if (r !== 'FRANCHISE' || !WEEK.missing || weekMode === 'y') return '';
   const rows = WEEK.days.map((d, i) => ({ d, m: WEEK.missing[i] })).filter(x => x.m.length);
-  if (!rows.length) return `<div class="wk-comments" style="margin-top:10px"><div class="wk-com">✅ Tous les restaurants sont saisis sur la période.</div></div>`;
+  if (!rows.length) return `<div class="wk-comments" style="margin-top:10px"><div class="wk-com">Tous les restaurants sont saisis sur la période.</div></div>`;
   const line = x => `<div class="wk-com"><b>${_wkWd(x.d)} ${_wkFmt(x.d)}</b> — ${x.m.length === RESTOS.length ? 'aucun restaurant' : x.m.map(restoShort).join(', ')}</div>`;
-  return `<details class="wk-comments" style="margin-top:10px" ${rows.length <= 4 ? 'open' : ''}><summary style="cursor:pointer;font-weight:700;font-size:.82rem">⚠ Restaurants non saisis · ${rows.length} jour${rows.length > 1 ? 's' : ''} concerné${rows.length > 1 ? 's' : ''}</summary>${rows.map(line).join('')}</details>`;
+  return `<details class="wk-comments" style="margin-top:10px" ${rows.length <= 4 ? 'open' : ''}><summary style="cursor:pointer;font-weight:700;font-size:.82rem">Restaurants non saisis · ${rows.length} jour${rows.length > 1 ? 's' : ''} concerné${rows.length > 1 ? 's' : ''}</summary>${rows.map(line).join('')}</details>`;
 }
 
 // Prévision de CA d'un restaurant pour un jour (CA net total ou alimentaire).
@@ -6840,7 +6840,7 @@ function piaTileHtml(r) {
       ${al && al.pred > 0 ? `<div class="pia-line">CA net alimentaire <b>≈ ${fmt(_piaEur(al.pred), 'euros')}</b>${al.band ? ` <span>± ${(al.band * 100).toFixed(1).replace('.', ',')} %</span>` : ''}</div>` : ''}
       ${vsSaisie}
       <div class="pia-prec">${prec}</div>
-      ${t.miss ? `<div class="pia-prec">⚠ ${t.miss} jour${t.miss > 1 ? 's' : ''} sans référence N-1 (non comptés)</div>` : ''}
+      ${t.miss ? `<div class="pia-prec">${t.miss} jour${t.miss > 1 ? 's' : ''} sans référence N-1 (non comptés)</div>` : ''}
     </div>`;
   } catch (e) { return ''; }
 }
@@ -7726,7 +7726,7 @@ function renderAutoSummary() {
   }
 
   const ico = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`;
-  el.innerHTML = `<div class="auto-summary"><span class="as-ico">${ico}</span><span><div class="as-title">📅 ${WEEK.label}</div><div class="as-body">${body}</div></span></div>`;
+  el.innerHTML = `<div class="auto-summary"><span class="as-ico">${ico}</span><span><div class="as-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:6px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${WEEK.label}</div><div class="as-body">${body}</div></span></div>`;
 }
 const __sumOrigRenderMain = renderMain;
 renderMain = function () { __sumOrigRenderMain.apply(this, arguments); renderAutoSummary(); };
@@ -7816,9 +7816,9 @@ async function exportView() {
     </div>
     <div class="exp-lbl">Format</div>
     <div class="exp-seg" id="expFormat">
-      <button data-v="periods" onclick="expSet('format','periods')">📈 Excel — données par période</button>
-      <button data-v="xlsx" onclick="expSet('format','xlsx')">📊 Excel — tableau annuel (N-1)</button>
-      <button data-v="png" onclick="expSet('format','png')">🖼️ Image de la vue (.png)</button>
+      <button data-v="periods" onclick="expSet('format','periods')">Excel — données par période</button>
+      <button data-v="xlsx" onclick="expSet('format','xlsx')">Excel — tableau annuel (N-1)</button>
+      <button data-v="png" onclick="expSet('format','png')">Image de la vue (.png)</button>
     </div>
     <div id="expPeriodsOpts"></div>
     <div id="expXlsxOpts">
@@ -8533,7 +8533,7 @@ function qhInitChart(canvas) {
       <div class="pc-warn" id="pcWarn"></div>
       <label>Lieu (facultatif)</label><input id="pcPlace" maxlength="80" placeholder="ex. Salle de réunion Chambéry, Teams, Siège, restaurant de Belley…">
       <label>Note (champ libre)</label><textarea id="pcNote" maxlength="500" placeholder="Participants, ordre du jour, précisions…"></textarea>
-      <div class="pc-cal">📅 Ajouter à mon agenda : <button type="button" class="pc-btn" onclick="pcCalForm('ics')" title="Fichier à ouvrir avec Apple Calendar, Outlook, Google Agenda…">Fichier .ics</button><button type="button" class="pc-btn" onclick="pcCalForm('google')">Google Agenda</button></div>
+      <div class="pc-cal"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:6px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Ajouter à mon agenda : <button type="button" class="pc-btn" onclick="pcCalForm('ics')" title="Fichier à ouvrir avec Apple Calendar, Outlook, Google Agenda…">Fichier .ics</button><button type="button" class="pc-btn" onclick="pcCalForm('google')">Google Agenda</button></div>
       <div class="pc-msg" id="pcMsg"></div>
     </div>
     <div class="pc-mf"><button type="button" class="pc-btn pc-del" id="pcDel" onclick="pcDelete()" style="display:none">Supprimer</button><span style="flex:1"></span><button type="button" class="pc-btn" onclick="pcClose()">Annuler</button><button type="button" class="pc-btn pc-save" id="pcSaveBtn" onclick="pcSave()">Enregistrer</button></div>
@@ -8543,15 +8543,15 @@ function qhInitChart(canvas) {
 // ── Plan de communication : calendrier par restaurant (réunions manager / directeur, formations, événement libre) ──
 // Données : onglet « PlanCom » du Google Sheet (lues avec le reste du dashboard, écrites par l'Apps Script avec le mot de passe du dashboard).
 const PC_TYPES = [                                          // catégories (couleur, icône) et leurs types : liste du plan de communication
-  { k: 'reunion', l: 'Réunions', c: '#2563eb', i: '👥', subs: ['Réunion DIRECTEURS', 'Réunion MANAGERS', 'Réunion EQUIPIERS (à la suite de la rap session)', 'Réunion ADM', 'Réunion RESP. FORMATION', 'Réunion RESP. HOTE(SSE)S', 'Réunion CSE'] },
-  { k: 'rap_session', l: 'Rap Session', c: '#0d9488', i: '🎤', subs: ['Rap Session EQUIPIERS', 'Rap Session MANAGERS'] },
-  { k: 'audit', l: 'Audit', c: '#d97706', i: '🔍', subs: ['Audit FORMATION', 'Audit RH', 'Audit MARKETING', 'Audit PEP', 'Audit RGRV'] },
-  { k: 'evaluation', l: 'Évaluation', c: '#7c3aed', i: '📝', subs: ['Evals DIRECTEURS', 'Evals MANAGERS', 'Evals RZ'] },
-  { k: 'election', l: 'Élection', c: '#e11d48', i: '🗳️', subs: ['Election CSE'] },
-  { k: 'festif', l: 'Festif', c: '#db2777', i: '🎉', subs: ['Repas MANAGERS', 'Soirée EQUIPIERS'] },
-  { k: 'formation', l: 'Formation', c: '#16a34a', i: '🎓', subs: ['SST', 'Atelier gestion de quart', 'Atelier culture service'] },
-  { k: 'campagne', l: 'Campagne', c: '#ea580c', i: '📣', subs: [] },                  // campagne clé : affichée en bandeau au-dessus des jours (pas dans chaque jour)
-  { k: 'libre', l: 'Autre (champ libre)', c: '#64748b', i: '📌', subs: [] },
+  { k: 'reunion', l: 'Réunions', c: '#2563eb', i: '', subs: ['Réunion DIRECTEURS', 'Réunion MANAGERS', 'Réunion EQUIPIERS (à la suite de la rap session)', 'Réunion ADM', 'Réunion RESP. FORMATION', 'Réunion RESP. HOTE(SSE)S', 'Réunion CSE'] },
+  { k: 'rap_session', l: 'Rap Session', c: '#0d9488', i: '', subs: ['Rap Session EQUIPIERS', 'Rap Session MANAGERS'] },
+  { k: 'audit', l: 'Audit', c: '#d97706', i: '', subs: ['Audit FORMATION', 'Audit RH', 'Audit MARKETING', 'Audit PEP', 'Audit RGRV'] },
+  { k: 'evaluation', l: 'Évaluation', c: '#7c3aed', i: '', subs: ['Evals DIRECTEURS', 'Evals MANAGERS', 'Evals RZ'] },
+  { k: 'election', l: 'Élection', c: '#e11d48', i: '', subs: ['Election CSE'] },
+  { k: 'festif', l: 'Festif', c: '#db2777', i: '', subs: ['Repas MANAGERS', 'Soirée EQUIPIERS'] },
+  { k: 'formation', l: 'Formation', c: '#16a34a', i: '', subs: ['SST', 'Atelier gestion de quart', 'Atelier culture service'] },
+  { k: 'campagne', l: 'Campagne', c: '#ea580c', i: '', subs: [] },                  // campagne clé : affichée en bandeau au-dessus des jours (pas dans chaque jour)
+  { k: 'libre', l: 'Autre (champ libre)', c: '#64748b', i: '', subs: [] },
 ];
 const PC_ALIAS = { reunion_manager: ['reunion', 'Réunion MANAGERS'], reunion_directeur: ['reunion', 'Réunion DIRECTEURS'] };   // anciens types
 const PC_OTHER = '__autre__', PC_FR = 'FRANCHISE', PC_NONE = 'SANS RESTAURANT';          // PC_FR : événement pour toute la franchise (une seule ligne)
@@ -8690,7 +8690,7 @@ function pcRenderUpcoming() {                                   // bandeau « Pr
   const evs = pcAll().filter(e => (e.fin || e.periode) >= today && e.periode <= lim && (!one || pcForResto(e, r))).sort((a, b) => a.periode.localeCompare(b.periode) || a.type.localeCompare(b.type));
   if (!evs.length) { box.innerHTML = ''; return; }
   const day = e => { const d = e.periode < today ? today : e.periode; return PC_J[pcDow(d)].toLowerCase() + ' ' + pcFmt(d).slice(0, 5); };
-  box.innerHTML = `<div class="pc-up"><b>📅 Prochains rendez-vous</b>${evs.slice(0, PC.upAll ? evs.length : 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}</span>`).join('')}${evs.length > 5 ? `<button type="button" class="pc-more" onclick="PC.upAll = !PC.upAll; pcRenderUpcoming()" title="${PC.upAll ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PC.upAll ? '▲ Réduire' : `+ ${evs.length - 5} autre${evs.length > 6 ? 's' : ''}`}</button>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
+  box.innerHTML = `<div class="pc-up"><b><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:6px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Prochains rendez-vous</b>${evs.slice(0, PC.upAll ? evs.length : 5).map(e => `<span class="pc-upc" style="--tc:${pcT(e.type).c}" title="${pcEsc(pcTitle(e))}">${pcEsc(day(e))} · ${pcEsc(pcLabel(e, !one))}${e.lieu ? ' · ' + pcEsc(e.lieu) : ''}</span>`).join('')}${evs.length > 5 ? `<button type="button" class="pc-more" onclick="PC.upAll = !PC.upAll; pcRenderUpcoming()" title="${PC.upAll ? 'Replier' : 'Voir tous les rendez-vous des 14 prochains jours'}">${PC.upAll ? '▲ Réduire' : `+ ${evs.length - 5} autre${evs.length > 6 ? 's' : ''}`}</button>` : ''}<button type="button" class="pc-btn" onclick="pcGoPlan()">Voir le plan</button></div>`;
 }
 function pcGoPlan() { if (!pcAccess()) return; const r = typeof currentResto !== 'undefined' ? currentResto : 'ALL'; PC.resto = RESTOS.includes(r) ? r : 'ALL'; PC.ym = null; switchEspace('plancom'); }
 async function pcPull() {                                       // lecture légère de l'onglet PlanCom seul (le reste du dashboard se synchronise à son rythme)
@@ -8730,7 +8730,7 @@ function pcLabel(e, showResto) {
   const t = pcT(e.type), main = e.type === 'formation' ? 'Formation' + (e.detail ? ' · ' + e.detail : '') : (e.detail || t.l);
   return `${t.i} ${main}${showResto ? ' · ' + restoShort(e.restaurant) : ''}`;
 }
-const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' + pcFmt(e.fin) : ''}${e.heure ? ' · ' + e.heure : ''}${e.lieu ? '\n📍 ' + e.lieu : ''}${e.note ? '\n' + e.note : ''}`;
+const pcTitle = e => `${pcLabel(e, true)}\n${pcFmt(e.periode)}${e.fin ? ' → ' + pcFmt(e.fin) : ''}${e.heure ? ' · ' + e.heure : ''}${e.lieu ? '\n' + e.lieu : ''}${e.note ? '\n' + e.note : ''}`;
 function loadPlanCom() { if (!PC.ym) { const n = new Date(); PC.ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; } pcRender(); }
 function pcRender() {
   const card = document.getElementById('pcCard'); if (!card) return;
@@ -8767,7 +8767,7 @@ function pcRender() {
   const ferRows = PC.fer ? pcFerMonth(PC.ym).map(([d, n]) => ({ fer: n, periode: d })) : [], rk = e => e.fer ? 0 : e.vac ? 1 : 2, mixed = sorted.concat(ferRows, pcVacMonth(PC.ym)).sort((a, b) => a.periode.localeCompare(b.periode) || rk(a) - rk(b));
   const ferLi = e => `<div class="pc-lrow pc-lfer"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt">${pcEsc(e.fer)}<small>Jour férié</small></div><div class="pc-la"></div></div>`;
   const vacLi = e => { const c = pcVacCol(e.zs.length === 1 ? e.zs[0] : 'M'), end = pcAdd(e.v[1], -1); return `<div class="pc-lrow pc-lvac" style="--tc:${c[1]}"><div class="pc-ld">${pcFmt(e.periode).slice(0, 5)}<small>${PC_J[pcDow(e.periode)].toLowerCase()}</small></div><div class="pc-lt" style="color:${c[1]}">Vacances ${pcEsc(e.v[2])} · ${e.zs.length > 1 ? 'zones ' : 'zone '}${e.zs.join(' + ')}<small>du ${pcFmt(e.v[0]).slice(0, 5)} au ${pcFmt(end).slice(0, 5)} · reprise le ${pcFmt(e.v[1]).slice(0, 5)}</small></div><div class="pc-la"></div></div>`; };
-  const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : e.vac ? vacLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · 📍 ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" onclick="pcCalList('${pcEsc(e.id)}')" title="Ajouter à mon agenda (fichier .ics)">📅</button><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
+  const list = mixed.length ? `<div class="pc-list">${mixed.map(e => e.fer ? ferLi(e) : e.vac ? vacLi(e) : `<div class="pc-lrow ${fresh.has(pcKeyOf(e)) ? 'pc-new' : ''}" style="--tc:${pcT(e.type).c}"><div class="pc-ld">${fresh.has(pcKeyOf(e)) ? '<span class="pc-newtag">NOUVEAU</span>' : ''}${pcFmt(e.periode).slice(0, 5)}${e.fin ? ' → ' + pcFmt(e.fin).slice(0, 5) : ''}<small>${PC_J[pcDow(e.periode)].toLowerCase()}${e.heure ? ' · ' + pcEsc(e.heure) : ''}</small></div><div class="pc-lt">${pcEsc(pcLabel(e, false))}<small>${pcEsc(restoDisplay(e.restaurant))}${e.lieu ? ' · ' + pcEsc(e.lieu) : ''}${e.note ? ' — ' + pcEsc(e.note) : ''}</small></div><div class="pc-la"><button type="button" class="pc-btn" onclick="pcCalList('${pcEsc(e.id)}')" title="Ajouter à mon agenda (fichier .ics)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button><button type="button" class="pc-btn" data-id="${pcEsc(e.id)}">Modifier</button></div></div>`).join('')}</div>` : `<div class="pc-empty">Aucun événement ce mois-ci${PC.resto === 'ALL' ? '' : ' pour ' + pcEsc(restoDisplay(PC.resto))}.<br>Utilise « + Ajouter un événement » ou clique sur un jour du calendrier.</div>`;
   const strip = pcCampStrip(PC.ym, nDaysOf(PC.ym), monthEv.filter(e => e.type === 'campagne'), fresh);
   card.innerHTML = top + body + (view === 'list' ? strip + list : `<div class="pc-onlymobile">${strip}${list}</div>`) + `<div class="pc-note">${monthEv.length} événement${monthEv.length > 1 ? 's' : ''} affiché${monthEv.length > 1 ? 's' : ''} sur ${PC_MOIS[M - 1]} ${Y}. ${pcCanEdit() ? 'Clique sur un jour pour ajouter, sur un événement pour le modifier ou le supprimer.' : 'Consultation seule : tu peux tout voir, mais pas modifier.'}${(PC.vz || []).length && typeof PLG_VAC_FIN !== 'undefined' && PC.ym + '-01' > PLG_VAC_FIN ? ' Calendrier des vacances scolaires publié jusqu’au ' + pcFmt(PLG_VAC_FIN) + '.' : ''}<span class="pc-status" id="pcStatus"></span></div>`;
   const unseenLeft = PC.loaded ? pcAll().filter(e => (e.fin || e.periode) >= pcIso(new Date()) && pcUnseen(e) && !fresh.has(pcKeyOf(e))).length : 0;
@@ -8808,7 +8808,7 @@ function pcCampWarn() {                                         // à la saisie 
   const fr = document.getElementById('pcFr'), sel = fr && fr.checked ? [] : [...document.querySelectorAll('#pcMRestos input[name=pcr]:checked')].map(i => i.value);
   const hit = PC.mType === 'campagne' || !s ? [] : pcAll().filter(c => c.type === 'campagne' && c.periode <= e && (c.fin || c.periode) >= s && (c.restaurant === PC_FR || !sel.length || sel.includes(c.restaurant)));
   w.className = 'pc-warn' + (hit.length ? ' on' : '');
-  w.innerHTML = hit.length ? `⚠ ${hit.length > 1 ? 'Campagnes en cours à cette date' : 'Campagne en cours à cette date'} : ${hit.map(c => `<b>${pcEsc(c.detail || 'Campagne')}</b> (${pcCampDates(c)})`).join(', ')}. Vérifie que l’événement ne la gêne pas.` : '';
+  w.innerHTML = hit.length ? `${hit.length > 1 ? 'Campagnes en cours à cette date' : 'Campagne en cours à cette date'} : ${hit.map(c => `<b>${pcEsc(c.detail || 'Campagne')}</b> (${pcCampDates(c)})`).join(', ')}. Vérifie que l’événement ne la gêne pas.` : '';
 }
 function pcStatus(c, t) { const s = document.getElementById('pcStatus'); if (s) { s.className = 'pc-status ' + c; s.textContent = t; } }
 function pcSetResto(v) { PC.resto = v; pcRender(); }
@@ -8890,7 +8890,7 @@ async function pcSave() {
   { const sm = pcSeen(); if (sm) { rows.forEach((r, i) => { const id = (j.ids || [])[i] || r.id; if (id) sm[id] = '*'; }); pcSeenSave(); } }
   PC.lastCal = { type, detail, periode: start, fin: end, heure: base.heure, lieu: base.lieu, note: base.note, restos, id: baseId || (j.ids || [])[0] || '' };
   PC.ym = start.slice(0, 7); pcClose(); pcRender(); pcStatus('ok', `✓ ${rows.length > 1 ? rows.length + ' événements enregistrés' : 'Événement enregistré'}`);
-  { const st = document.getElementById('pcStatus'); if (st) st.insertAdjacentHTML('beforeend', ' · 📅 Mon agenda : <a href="#" onclick="pcCalLast(\'ics\');return false" style="color:#0891b2;font-weight:700">fichier .ics</a> · <a href="#" onclick="pcCalLast(\'google\');return false" style="color:#0891b2;font-weight:700">Google Agenda</a>'); }
+  { const st = document.getElementById('pcStatus'); if (st) st.insertAdjacentHTML('beforeend', ' · <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:4px;" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Mon agenda : <a href="#" onclick="pcCalLast(\'ics\');return false" style="color:#0891b2;font-weight:700">fichier .ics</a> · <a href="#" onclick="pcCalLast(\'google\');return false" style="color:#0891b2;font-weight:700">Google Agenda</a>'); }
 }
 async function pcDelete() {
   if (!PC.edit || PC.busy || !confirm('Supprimer cet événement ?\n' + pcLabel(PC.edit, true) + ' — ' + pcFmt(PC.edit.periode))) return;
@@ -9090,7 +9090,7 @@ async function crewPolyRender() {
       <div class="svc-row"><input class="svc-in" id="svcWho" maxlength="30" placeholder="Ton prénom *" autocomplete="given-name"><span class="svc-note" style="flex:1">Ton prénom signe chaque message.</span></div>
       <div class="svc-row"><textarea class="svc-in" id="svcTxt" maxlength="600" rows="2" placeholder="Écris un commentaire…"></textarea><button type="button" class="svc-send" id="svcSend" onclick="svcSend()">Envoyer</button></div>
       <div class="svc-err" id="svcErr"></div>
-      <div class="svc-note">🔒 Les commentaires s'ajoutent à la suite : ils ne peuvent être ni modifiés ni supprimés.</div>
+      <div class="svc-note">Les commentaires s'ajoutent à la suite : ils ne peuvent être ni modifiés ni supprimés.</div>
     </div>
   </div>
 </div>
@@ -9145,13 +9145,13 @@ function svxBuild(items) {                                     // classeur prêt
 }
 async function suiviExportXlsx() {
   const items = svxItems(); if (!items.length) return;
-  const b = document.getElementById('svxBtn'); if (b) { b.disabled = true; b.textContent = '⏳ Export…'; }
+  const b = document.getElementById('svxBtn'); if (b) { b.disabled = true; b.textContent = 'Export…'; }
   try {
     await _loadXlsx();
     const f = [suiviFilter === 'wait' ? 'en-attente' : suiviFilter === 'done' ? 'traitees' : '', suiviResto !== 'all' ? suiviResto : '', suiviInterv !== 'all' ? suiviInterv : ''].filter(Boolean).join('_').normalize('NFD').replace(/[^\w-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     XLSX.writeFile(svxBuild(items), `${((typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.title) || 'Franchise').replace(/\s+/g, '_')}_Interventions${f ? '_' + f : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   } catch (e) { alert('Export Excel impossible : ' + e.message + '. Vérifie la connexion et réessaie.'); }
-  if (b) { b.disabled = false; b.textContent = '📊 Exporter Excel'; }
+  if (b) { b.disabled = false; b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:5px;" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exporter Excel'; }
 }
 
 // Chaque demande (en attente ou traitée) a un fil de commentaires façon messages : plusieurs commentaires, jamais modifiables ni effaçables, signés d'un prénom.
@@ -9167,9 +9167,9 @@ const svcMe = () => { try { return (localStorage.getItem(SVC_NAME) || '').trim()
 // cellule « Demande » du tableau : bouton ou résumé du fil
 function suiviComCell(i, done) {
   const cs = i.comments || [], id = svcEsc(String(i.id)), ra = suiviReactLine(i, done);
-  if (!cs.length) return ra + `<div><button type="button" class="svc-add" onclick="svcOpen('${id}')">💬 Ajouter un commentaire</button></div>`;
+  if (!cs.length) return ra + `<div><button type="button" class="svc-add" onclick="svcOpen('${id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:5px;" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Ajouter un commentaire</button></div>`;
   const l = cs[cs.length - 1], tx = String(l.texte || ''), cut = tx.length > 70 ? tx.slice(0, 70) + '…' : tx;
-  return ra + `<div class="svc-blk"><button type="button" class="svc-chip" onclick="svcOpen('${id}')">💬 ${cs.length} commentaire${cs.length > 1 ? 's' : ''}</button><div class="svc-last"><b>${svcEsc(l.auteur || '')}</b> · ${svcEsc(svcDayLbl(l.date))} ${svcEsc(svcTime(l.date))} — ${svcEsc(cut)}</div></div>`;
+  return ra + `<div class="svc-blk"><button type="button" class="svc-chip" onclick="svcOpen('${id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:4px;" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${cs.length} commentaire${cs.length > 1 ? 's' : ''}</button><div class="svc-last"><b>${svcEsc(l.auteur || '')}</b> · ${svcEsc(svcDayLbl(l.date))} ${svcEsc(svcTime(l.date))} — ${svcEsc(cut)}</div></div>`;
 }
 function svcRender(toEnd) {
   const it = svcItem(SVC.id), th = document.getElementById('svcThread'); if (!it || !th) return;
@@ -9187,7 +9187,7 @@ function svcOpen(id) {
   const it = svcItem(id); if (!it) return; SVC.id = String(id);
   const d = String(it.date || ''), fd = d.length >= 10 ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d, desc = String(it.description || '');
   document.getElementById('svcTitle').textContent = `${it.restaurant || ''} · ${fd}`;
-  document.getElementById('svcSub').textContent = (desc.length > 120 ? desc.slice(0, 120) + '…' : desc) + ' — ' + (String(it.statut) === 'Traité' ? '✅ traitée' : '🟠 en attente');
+  document.getElementById('svcSub').textContent = (desc.length > 120 ? desc.slice(0, 120) + '…' : desc) + ' — ' + (String(it.statut) === 'Traité' ? 'traitée' : 'en attente');
   document.getElementById('svcWho').value = svcMe(); document.getElementById('svcTxt').value = ''; document.getElementById('svcErr').textContent = '';
   document.getElementById('svcOv').classList.add('open'); svcRender(true);
   setTimeout(() => { const w = document.getElementById('svcWho'); (w.value ? document.getElementById('svcTxt') : w).focus(); }, 60);
@@ -9736,7 +9736,7 @@ function igRenderCheck(key) {
   const m = igMissing(wk); box.style.display = '';
   if (!m.length) { box.className = 'ig-check ok'; box.innerHTML = '<div class="t" style="margin:0">✓ Toutes les saisies de la semaine sont complètes pour les ' + RESTOS.length + ' restaurants.</div>'; return; }
   box.className = 'ig-check warn';
-  box.innerHTML = `<div class="t">⚠ ${m.length} restaurant${m.length > 1 ? 's' : ''} avec des informations manquantes sur la S${wk.week}</div><div class="ig-ck-list">` +
+  box.innerHTML = `<div class="t">${m.length} restaurant${m.length > 1 ? 's' : ''} avec des informations manquantes sur la S${wk.week}</div><div class="ig-ck-list">` +
     m.map(x => `<div class="ig-ck-r"><b>${igEsc(restoShort(x.r))}</b>${x.it.map(([k, v]) => `<span>${k} : <i>${igEsc(v)}</i></span>`).join(' &nbsp;·&nbsp; ')}</div>`).join('') +
     '</div><div class="ig-note" style="margin-top:8px">Tu peux imprimer quand même : les valeurs manquantes sont affichées « — » ou ne sont pas comptées dans les totaux. Complète la saisie puis relance pour un rapport complet.</div>';
 }
@@ -9763,7 +9763,7 @@ function igGo() {
   const ov = document.getElementById('igOverlay'); document.body.appendChild(ov);
   document.getElementById('igPages').innerHTML = pages.join('');
   document.getElementById('igBarTitle').textContent = 'Indices de gestion · ' + document.getElementById('igWeek').selectedOptions[0].textContent;
-  try { const mm = igMissing(igWeeks().find(w => w.key === key)); document.getElementById('igBarWarn').textContent = mm.length ? '⚠ Données manquantes : ' + mm.map(x => restoShort(x.r)).join(', ') : ''; } catch (e) {}
+  try { const mm = igMissing(igWeeks().find(w => w.key === key)); document.getElementById('igBarWarn').textContent = mm.length ? 'Données manquantes : ' + mm.map(x => restoShort(x.r)).join(', ') : ''; } catch (e) {}
   const z = Math.min(1, (window.innerWidth - 16) / 794); document.getElementById('igPages').style.zoom = z < 1 ? z : 1;
   document.getElementById('igModal').classList.remove('open'); ov.classList.add('open'); ov.scrollTop = 0; document.body.style.overflow = 'hidden';
 }
@@ -11363,7 +11363,7 @@ function secRender() {
   card.innerHTML = '<div class="sec-bar">' + chips + (secCan() ? '<button class="sec-btn pri" type="button" onclick="secEdit(\'\')">+ Ajouter un contrôle</button>' : '<span style="font-size:.74rem;color:var(--muted)">Consultation seule</span>') + '</div>'
     + '<div class="sec-sum">' + pill('all', 'Tous', SEC.rows.filter(x => x.actif !== false).length) + pill('late', secDot('late') + 'En retard', cnt.late) + pill('soon', secDot('soon') + 'Dans ' + SEC_SOON + ' j', cnt.soon) + pill('never', secDot('never') + 'Jamais fait', cnt.never) + pill('ok', secDot('ok') + 'À jour', cnt.ok) + '</div>'
     + '<div style="margin:0 0 10px"><input class="sec-in" id="secQ" type="search" placeholder="Rechercher : contrôle, société, contact" value="' + secE(SEC.q) + '" oninput="secSetQ(this.value)" aria-label="Rechercher un contrôle"></div>'
-    + (SEC.loading ? '<div class="hint">⏳ Chargement…</div>' : '<div id="secList">' + secListHtml() + '</div>')
+    + (SEC.loading ? '<div class="hint">Chargement…</div>' : '<div id="secList">' + secListHtml() + '</div>')
     + '<div class="hint" style="margin-top:10px">Échéance = dernière visite + périodicité. « Bientôt » = dans ' + SEC_SOON + ' jours ou moins. Les visites s\'ajoutent (jamais effacées en silence) ; un contrôle abandonné se désactive dans « Modifier ».</div>';
 }
 // ── fenêtres : visite effectuée, historique, ajout / modification ──
@@ -11773,18 +11773,18 @@ function pbdRender() {
     <div class="faq-sub">Comment lire le dashboard et ce que signifie chaque indicateur.</div>
     <div class="faq-body">
 
-      <div class="faq-sec-title" style="color:#6d28d9;border-color:#6d28d9">🧭 Utiliser le dashboard</div>
+      <div class="faq-sec-title" style="color:#6d28d9;border-color:#6d28d9">Utiliser le dashboard</div>
       <div class="faq-item"><div class="faq-q">Choisir un restaurant</div><div class="faq-a">Les onglets en haut basculent entre <b>Vue Franchise</b> (les 8 restaurants cumulés) et chaque site. Toutes les vues, cartes et le commentaire suivent ce choix.</div></div>
       <div class="faq-item"><div class="faq-q">Les modes (<span data-y="0">2026</span> · <span data-y="1">2025</span> · N-1 · Prév · Classement)</div><div class="faq-a"><b><span data-y="0">2026</span></b> : l'année en cours. <b><span data-y="1">2025</span></b> : l'année passée seule. <b>N-1</b> : <span data-y="0">2026</span> face à <span data-y="1">2025</span> côte à côte. <b>Prév</b> : le réel <span data-y="0">2026</span> face au prévisionnel (budget). <b>Classement</b> : comparer les restaurants entre eux sur un indicateur.</div></div>
       <div class="faq-item"><div class="faq-q">Comparable « à date »</div><div class="faq-a">Les écarts avec <span data-y="1">2025</span> ne comptent que la <b>même période écoulée</b> : au 12 juillet <span data-y="0">2026</span>, on compare au 1<sup>er</sup>→12 juillet <span data-y="1">2025</span>, jamais à l'année pleine. Sur les courbes, <span data-y="1">2025</span> peut s'afficher sur toute l'année pour référence, mais le pourcentage d'évolution reste à date.</div></div>
       <div class="faq-item"><div class="faq-q">Détail d'un indicateur</div><div class="faq-a">Cliquer une carte KPI ouvre le graphique et le tableau mois par mois, avec bascule <b>Annuel / Mensuel</b> et navigation d'un restaurant à l'autre.</div></div>
       <div class="faq-item"><div class="faq-q">Bandeau semaine</div><div class="faq-a">Sous les bannières, les chiffres clés de la <b>semaine en cours</b> (CA, alim, transactions, VPHE, pertes) vs la semaine équivalente de l'an dernier, et le CA vs le <b>prévisionnel</b>. Les flèches ◀ ▶ changent de période ; le bouton <b>Par restaurant</b> affiche tous les restaurants côte à côte (clic sur un titre de colonne pour les classer) ; la météo et les commentaires saisis s'affichent dessous. Cliquer une carte déroule le détail jour par jour.</div></div>
-      <div class="faq-item"><div class="faq-q">Recherche par période 🔍</div><div class="faq-a">Choisir un restaurant et une période — un raccourci (cette semaine, ce mois, cette année) ou des dates au calendrier — pour obtenir CA, alim, transactions et VPHE sur cette période vs 2025.</div></div>
+      <div class="faq-item"><div class="faq-q">Recherche par période </div><div class="faq-a">Choisir un restaurant et une période — un raccourci (cette semaine, ce mois, cette année) ou des dates au calendrier — pour obtenir CA, alim, transactions et VPHE sur cette période vs 2025.</div></div>
       <div class="faq-item"><div class="faq-q">Exporter</div><div class="faq-a"><b>Exporter</b> produit un fichier <b>Excel</b> mis en forme (restaurants et indicateurs au choix, mois par mois, cumul et comparaison N-1) ou une <b>image</b> de la vue affichée.</div></div>
       <div class="faq-item"><div class="faq-q">Connexion</div><div class="faq-a">La case <b>Se souvenir de moi sur cet appareil</b> évite de retaper le mot de passe. À ne cocher que sur ton propre appareil. <button onclick="logoutDevice()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:800;font-size:.76rem;cursor:pointer">Se déconnecter de cet appareil</button></div></div>
       <div class="faq-item"><div class="faq-q">Indices de gestion</div><div class="faq-a"><b>Indices</b> (bouton rouge) génère le <b>rapport hebdomadaire imprimable</b> (A4, 2 pages) : CA de la semaine et détail jour par jour, puis classements des restaurants (CA, OEPE, R2P, UVHE, pertes, VPHE, analyses, Hello McDo, réseaux, OPH, TCHE, FID, turn over). Choisis la semaine, ajoute les événements et campagnes, puis « Imprimer / PDF ». Les comparaisons de CA se font à jours équivalents (même jour de semaine l'an dernier). Un bloc sans donnée est masqué ; « vs S-1 » demande que la semaine et la précédente soient saisies dans l'onglet Hebdomadaire.</div></div>
 
-      <div class="faq-sec-title" style="color:#0ea5e9;border-color:#0ea5e9">🗄️ Sources des données</div>
+      <div class="faq-sec-title" style="color:#0ea5e9;border-color:#0ea5e9">Sources des données</div>
       <dl class="faq-def">
         <dt>CA</dt><dd><b>TBJ</b> · <b>Easy@work</b></dd>
         <dt>KPI / Heures Equipier</dt><dd><b>TBJ</b> · <b>Easy@work</b></dd>
@@ -11797,7 +11797,7 @@ function pbdRender() {
         <dt>Formation</dt><dd><b>Tableau de bord formation</b></dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#f59e0b;border-color:#f59e0b">💵 Chiffre d'affaires (CA)</div>
+      <div class="faq-sec-title" style="color:#f59e0b;border-color:#f59e0b">Chiffre d'affaires (CA)</div>
       <dl class="faq-def">
         <dt>CA Net Total</dt><dd>Chiffre d'affaires total hors taxes, tous canaux confondus.</dd>
         <dt>CA Net Alimentaire</dt><dd>Part alimentaire du CA (hors ventes non-alimentaires).</dd>
@@ -11805,7 +11805,7 @@ function pbdRender() {
         <dt>Panier Moyen (PM)</dt><dd>CA net total ÷ nombre de transactions.</dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#22c55e;border-color:#22c55e">🍔 QSP (Qualité · Service · Propreté)</div>
+      <div class="faq-sec-title" style="color:#22c55e;border-color:#22c55e">QSP (Qualité · Service · Propreté)</div>
       <dl class="faq-def">
         <dt>OEPE</dt><dd><b>Order End to Present End</b> (secondes) : de la fin de la prise de commande au Drive jusqu'à la remise de la commande au client au dernier point de service — plus bas = mieux.</dd>
         <dt>R2P</dt><dd><b>Ready To Present</b> (secondes) : de la fin de la prise de commande (comptoir ou bornes) jusqu'à ce que le plateau soit entièrement assemblé et prêt à être remis au client — plus bas = mieux.</dd>
@@ -11816,7 +11816,7 @@ function pbdRender() {
         <dt>Audit Mérieux</dt><dd>Score de l'audit d'hygiène / sécurité alimentaire (%).</dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#3b82f6;border-color:#3b82f6">🤝 Ressources Humaines (RH)</div>
+      <div class="faq-sec-title" style="color:#3b82f6;border-color:#3b82f6">Ressources Humaines (RH)</div>
       <dl class="faq-def">
         <dt>Effectif</dt><dd>Nombre de salariés sur le mois.</dd>
         <dt>ETP</dt><dd>Équivalent temps plein.</dd>
@@ -11825,7 +11825,7 @@ function pbdRender() {
         <dt>Absentéisme imprév. / injust.</dt><dd>Taux d'absences imprévisibles et injustifiées — plus bas = mieux.</dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#14b8a6;border-color:#14b8a6">⏱️ KPI / Heures Equipier</div>
+      <div class="faq-sec-title" style="color:#14b8a6;border-color:#14b8a6">KPI / Heures Equipier</div>
       <dl class="faq-def">
         <dt>VPHE</dt><dd>Vente par heure équipier : CA net alim ÷ heures équipiers.</dd>
         <dt>VPHG</dt><dd>Vente par heure globale : CA net alim ÷ <b>heures totales</b> (équipiers + managers).</dd>
@@ -11833,7 +11833,7 @@ function pbdRender() {
         <dt>TCHE</dt><dd>Transactions par heure équipier.</dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#a855f7;border-color:#a855f7">📈 Financier</div>
+      <div class="faq-sec-title" style="color:#a855f7;border-color:#a855f7">Financier</div>
       <dl class="faq-def">
         <dt>Marge</dt><dd>Marge brute en % du CA alimentaire.</dd>
         <dt>PAC</dt><dd>Profit Après Contrôlables, en % du CA alimentaire.</dd>
@@ -11845,7 +11845,7 @@ function pbdRender() {
         <dt>Écart de Rendement</dt><dd>Écart théorique/réel des matières en % du CA alim — objectif 0,5 %.</dd>
       </dl>
 
-      <div class="faq-sec-title" style="color:#f97316;border-color:#f97316">⭐ Excellence Opérationnelle (visites)</div>
+      <div class="faq-sec-title" style="color:#f97316;border-color:#f97316">Excellence Opérationnelle (visites)</div>
       <dl class="faq-def">
         <dt>RGRV</dt><dd><b>Running Great Restaurant Visit</b> : visite d'évaluation de l'excellence opérationnelle — QSP, sécurité alimentaire et gestion des opérations.</dd>
         <dt>CFV</dt><dd><b>Customer First Visit</b> : QSP du restaurant mesuré lors d'une visite mystère non annoncée.</dd>
@@ -11907,8 +11907,8 @@ body.dark-mode .suivi-sel option { background:var(--card); color:var(--text); }
     </div>
     <div class="suivi-bar">
       <button class="suivi-filter sf-active" data-f="all" onclick="setSuiviFilter('all')">Toutes</button>
-      <button class="suivi-filter" data-f="wait" onclick="setSuiviFilter('wait')">🟠 En attente</button>
-      <button class="suivi-filter" data-f="done" onclick="setSuiviFilter('done')">✅ Traité</button>
+      <button class="suivi-filter" data-f="wait" onclick="setSuiviFilter('wait')">En attente</button>
+      <button class="suivi-filter" data-f="done" onclick="setSuiviFilter('done')">Traité</button>
       <button class="suivi-refresh" onclick="loadSuivi()">↻ Actualiser</button>
     </div>
     <div class="suivi-body" id="suiviBody"><div class="suivi-empty">Chargement…</div></div>
@@ -11980,11 +11980,11 @@ function renderSuivi() {
 
   const opt = (list, cur) => list.map(v => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
   const tools = `<div class="suivi-tools">
-    <select class="suivi-sel" onchange="setSuiviResto(this.value)"><option value="all"${suiviResto==='all'?' selected':''}>🏠 Tous les restaurants</option>${opt(restos, suiviResto)}</select>
-    <select class="suivi-sel" onchange="setSuiviInterv(this.value)"><option value="all"${suiviInterv==='all'?' selected':''}>🔧 Tous les intervenants</option>${opt(intervs, suiviInterv)}</select>
+    <select class="suivi-sel" onchange="setSuiviResto(this.value)"><option value="all"${suiviResto==='all'?' selected':''}>Tous les restaurants</option>${opt(restos, suiviResto)}</select>
+    <select class="suivi-sel" onchange="setSuiviInterv(this.value)"><option value="all"${suiviInterv==='all'?' selected':''}>Tous les intervenants</option>${opt(intervs, suiviInterv)}</select>
     ${(suiviResto !== 'all' || suiviInterv !== 'all') ? `<button class="suivi-sel-clear" onclick="setSuiviReset()">✕ Réinitialiser</button>` : ''}
     <span class="suivi-count">${items.length} demande${items.length > 1 ? 's' : ''}</span>
-    <button type="button" id="svxBtn" class="suivi-xl" onclick="suiviExportXlsx()" title="Exporter la liste affichée (filtres appliqués) et tous les commentaires au format Excel">📊 Exporter Excel</button>
+    <button type="button" id="svxBtn" class="suivi-xl" onclick="suiviExportXlsx()" title="Exporter la liste affichée (filtres appliqués) et tous les commentaires au format Excel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:5px;" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exporter Excel</button>
   </div>`;
 
   if (!items.length) { body.innerHTML = tools + '<div class="suivi-empty">Aucune demande pour ce filtre.</div>'; return; }
@@ -11995,10 +11995,10 @@ function renderSuivi() {
     h += `<tr>
       <td data-label="Date">${fdate(i.date)}</td>
       <td data-label="Restaurant"><b>${esc(i.restaurant)}</b><br><span style="color:var(--muted);font-size:.68rem">${esc(i.demandeur)}</span></td>
-      <td data-label="Demande" style="max-width:230px">${esc(i.description)}${i.photos ? ` <a href="${esc(i.photos)}" target="_blank" style="color:#0d9488;font-weight:700;white-space:nowrap">📷 photo(s)</a>` : ''}<br><span style="color:var(--muted);font-size:.68rem">→ ${esc(i.techniciens)}${i.superviseur ? ' · '+esc(i.superviseur) : ''}</span>${suiviComCell(i, done)}</td>
+      <td data-label="Demande" style="max-width:230px">${esc(i.description)}${i.photos ? ` <a href="${esc(i.photos)}" target="_blank" style="color:#0d9488;font-weight:700;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-2px;margin-right:4px;" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>photo(s)</a>` : ''}<br><span style="color:var(--muted);font-size:.68rem">→ ${esc(i.techniciens)}${i.superviseur ? ' · '+esc(i.superviseur) : ''}</span>${suiviComCell(i, done)}</td>
       <td data-label="Urgence" class="${/URGENT/i.test(urg)?'suivi-urg-high':''}">${esc(urg)}</td>
       <td data-label="Traité par" style="font-size:.72rem;color:var(--muted)">${done ? esc(i.valide_par||'') : '—'}</td>
-      <td data-label="Statut"><span class="suivi-badge ${done?'sb-done':'sb-wait'}">${done?'✅ Traité':'🟠 En attente'}</span>${suiviReactBadge(i, done)}</td>
+      <td data-label="Statut"><span class="suivi-badge ${done?'sb-done':'sb-wait'}">${done?'Traité':'En attente'}</span>${suiviReactBadge(i, done)}</td>
       <td data-label="" class="suivi-act-cell">${done ? suiviReactBtn(i) : `<button class="suivi-done-btn" onclick="markSuiviDone('${esc(i.id)}')">Marquer traité</button>`}</td>
     </tr>`;
   }
@@ -12223,10 +12223,10 @@ function switchEspace(name) {
 // Espaces pas encore en place pour cette franchise : l'onglet reste visible, avec un message
 (function () {
   const soon = Object.entries(FRANCHISE_CFG.modules || {}).filter(([k, v]) => v === 'soon').map(x => x[0]);
-  const LBL = { interventions: 'Interventions', formation: 'Formation' }, ICO = { interventions: '🛠️', formation: '🎓' };
+  const LBL = { interventions: 'Interventions', formation: 'Formation' }, ICO = { interventions: '', formation: '' };
   soon.forEach(e => {
     const el = document.getElementById('espace-' + e);
-    if (el) el.innerHTML = `<div class="main"><div style="text-align:center;padding:80px 20px;color:var(--muted)"><div style="font-size:2.4rem">${ICO[e] || '⏳'}</div><div style="font-size:1.2rem;font-weight:800;color:var(--text);margin:10px 0 4px">${LBL[e] || e} — bientôt disponible</div><div>Cet espace sera mis en place prochainement.</div></div></div>`;
+    if (el) el.innerHTML = `<div class="main"><div style="text-align:center;padding:80px 20px;color:var(--muted)"><div style="font-size:2.4rem">${ICO[e] || ''}</div><div style="font-size:1.2rem;font-weight:800;color:var(--text);margin:10px 0 4px">${LBL[e] || e} — bientôt disponible</div><div>Cet espace sera mis en place prochainement.</div></div></div>`;
   });
   if (soon.includes('interventions')) { window.resetInterventionForm = () => {}; window.loadSuivi = () => {}; document.querySelectorAll('[onclick*="openSuiviModal"]').forEach(b => { b.style.display = 'none'; }); }
   if (soon.includes('formation')) { window.loadFormation = () => {}; }
@@ -12235,7 +12235,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261128-161930';
+const BUILD_VERSION = '20261128-163431';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
