@@ -3951,13 +3951,24 @@ function bcDismiss() { const x = BC.byKey[bcKey(curResto, +SIM.ty)]; if (!x) ret
 //   • le compte de résultat est recalculé avec le même moteur que l'onglet (bdCompute) à partir du contenu de la version (hypothèses + prévision de CA jour par jour) et des salaires auxquels j'ai droit.
 const BDF = { on: false, loading: false, data: null, year: null, err: '', mode: (() => { try { return localStorage.getItem('fpy_bdf_mode') || 'ep'; } catch (e) { return 'ep'; } })() };
 const bdfLvlName = { directeur: 'directeur', superviseur: 'superviseur', franchise: 'franchisé' };
+// Icônes dans le style du site : tracés fins (Feather), une seule couleur (celle du texte), jamais d'emoji en couleur
+const BDF_IC = {
+  dl: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  print: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  ok: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  alert: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+};
+const bdfIco = (n, s = 14, mr = 6) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;vertical-align:-${Math.round(s / 6)}px;margin-right:${mr}px" aria-hidden="true">${BDF_IC[n]}</svg>`;
 function bdfAvail() { try { return typeof lvCall === 'function' && typeof lvRefresh === 'function' && LV.backend !== false && RESTOS.length > 1 && RESTOS.some(x => lvCanView(x[0])); } catch (e) { return false; } }
 function bdfOpen() { BDF.on = true; renderBudget(); }
 function bdfClose() { BDF.on = false; renderBudget(); }
 function bdfMode(m) { BDF.mode = m; try { localStorage.setItem('fpy_bdf_mode', m); } catch (e) {} bdfRender(); }
 function bdfBar() {                                                         // sélecteur « Budget du restaurant | Vision Franchise » en tête de l'onglet
   const pn = document.getElementById('panel'); if (!pn || !bdfAvail() || pn.querySelector('#bdfBar')) return;
-  pn.insertAdjacentHTML('afterbegin', `<div id="bdfBar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0" type="button" onclick="bdfOpen()" title="Tous les restaurants côte à côte, sur l'année">🏢 Vision Franchise</button></span></div>`);
+  pn.insertAdjacentHTML('afterbegin', `<div id="bdfBar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0" type="button" onclick="bdfOpen()" title="Tous les restaurants côte à côte, sur l'année">Vision Franchise</button></span></div>`);
 }
 async function bdfCompute(r, Y, level, j) {                                 // compte de résultat annuel d'une version (même moteur que l'onglet, sans rien écrire)
   const P = wfParse(j.record.donnees); if (!P) throw new Error('version illisible');
@@ -3991,9 +4002,9 @@ async function bdfLoad(Ty) {
 function bdfRender() {
   const pn = document.getElementById('panel'); if (!pn) return;
   const Ty = +SIM.ty, head = `<div class="panel-head"><div class="panel-title">Budget & PNL · Vision Franchise ${Ty}</div></div>`;
-  const tog = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px" type="button" onclick="bdfClose()">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">🏢 Vision Franchise</button></span></div>`;
+  const tog = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex"><button class="step" style="border-radius:8px 0 0 8px" type="button" onclick="bdfClose()">Un restaurant</button><button class="step" style="border-radius:0 8px 8px 0;background:#7c3aed;color:#fff;border-color:#7c3aed" type="button">Vision Franchise</button></span></div>`;
   if (BDF.loading || !BDF.data || BDF.year !== String(Ty)) {
-    pn.innerHTML = tog + head + `<div class="hint">⏳ Lecture des budgets de chaque restaurant…</div>`;
+    pn.innerHTML = tog + head + `<div class="hint">Lecture des budgets de chaque restaurant…</div>`;
     if (!BDF.loading) bdfLoad(Ty);
     return;
   }
@@ -4001,15 +4012,15 @@ function bdfRender() {
   const D = BDF.data, withT = D.filter(x => x.T), nFinal = D.filter(x => x.state === 'final').length, nTot = D.filter(x => x.state !== 'lock').length, allFinal = nTot > 0 && nFinal === nTot;
   const tot = {}; for (const x of BD_LINES) tot[x.k] = withT.reduce((a, d) => a + (d.T[x.k] || 0), 0);
   const mode = BDF.mode, fmtC = (n, a) => { const pc = a ? bdP(n / a) : '—'; return mode === 'e' ? bdE(n) : mode === 'p' ? pc : `${bdE(n)}<span class="bd-pc">${pc}</span>`; };
-  const badge = x => x.state === 'final' ? '<span style="color:#15803d;font-weight:800">✅ Finalisé</span>' : x.state === 'prov' ? `<span style="color:#b45309;font-weight:800" title="Version la plus avancée du circuit : ${bdfLvlName[x.level] || x.level}">🟠 Provisoire · ${bdfLvlName[x.level] || x.level}</span>` : x.state === 'lock' ? '<span style="color:var(--muted)">🔒 hors accès</span>' : x.state === 'err' ? `<span style="color:var(--red)" title="${escH(x.err)}">⚠ illisible</span>` : '<span style="color:var(--muted)">— aucune saisie</span>';
+  const badge = x => x.state === 'final' ? `<span style="color:#15803d;font-weight:800">${bdfIco('ok', 11, 4)}Finalisé</span>` : x.state === 'prov' ? `<span style="color:#b45309;font-weight:800" title="Version la plus avancée du circuit : ${bdfLvlName[x.level] || x.level}">${bdfIco('clock', 11, 4)}Provisoire · ${bdfLvlName[x.level] || x.level}</span>` : x.state === 'lock' ? `<span style="color:var(--muted)">${bdfIco('lock', 11, 4)}hors accès</span>` : x.state === 'err' ? `<span style="color:var(--red)" title="${escH(x.err)}">${bdfIco('alert', 11, 4)}illisible</span>` : '<span style="color:var(--muted)">— aucune saisie</span>';
   const cols = D.map(x => `<th style="min-width:118px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">${escH(x.nm)}</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${badge(x)}</span></th>`).join('');
   const rows = BD_LINES.map(x => { const cls = x.b ? (['pac', 'cf', 'rn'].includes(x.k) ? 'k' : 'b') : '';
     return `<tr class="${cls}"><td>${x.l}</td>${D.map(d => `<td>${d.T ? fmtC(d.T[x.k], d.T.alim) : '—'}</td>`).join('')}<td><b>${withT.length ? fmtC(tot[x.k], tot.alim) : '—'}</b></td></tr>`; }).join('');
-  const banner = allFinal ? `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#dcfce7;color:#166534;border:1.5px solid #86efac">✅ Les ${nFinal} budgets ${Ty} sont finalisés (publiés par le franchisé) : la vision Franchise est définitive.</div>`
-    : `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#fef3c7;color:#92400e;border:1.5px solid #fcd34d">🟠 Vision <b>provisoire</b> : ${nTot - nFinal} restaurant${nTot - nFinal > 1 ? 's' : ''} sur ${nTot} ${nTot - nFinal > 1 ? 'n\'ont' : 'n\'a'} pas encore de budget finalisé (version la plus avancée du circuit affichée). Le total Franchise est définitif quand tous sont ✅.</div>`;
+  const banner = allFinal ? `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#dcfce7;color:#166534;border:1.5px solid #86efac">${bdfIco('ok', 16, 8)}Les ${nFinal} budgets ${Ty} sont finalisés (publiés par le franchisé) : la vision Franchise est définitive.</div>`
+    : `<div class="entry-banner" style="display:block;margin:0 0 10px;background:#fef3c7;color:#92400e;border:1.5px solid #fcd34d">${bdfIco('clock', 16, 8)}Vision <b>provisoire</b> : ${nTot - nFinal} restaurant${nTot - nFinal > 1 ? 's' : ''} sur ${nTot} ${nTot - nFinal > 1 ? 'n\'ont' : 'n\'a'} pas encore de budget finalisé (version la plus avancée du circuit affichée). Le total Franchise est définitif quand tous sont finalisés.</div>`;
   const sw = (m, l, rd) => `<button class="step" style="border-radius:${rd};${mode === m ? 'background:#7c3aed;color:#fff;border-color:#7c3aed' : ''}" type="button" onclick="bdfMode('${m}')">${l}</button>`;
-  pn.innerHTML = tog + head + banner + `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex">${sw('e', '€', '8px 0 0 8px')}${sw('ep', '€ + %', '0')}${sw('p', '% du CA alim.', '0 8px 8px 0')}</span><button class="step" type="button" onclick="BDF.data=null;renderBudget()" title="Relire les budgets">↻ Actualiser</button><button class="step" type="button" onclick="bdfExcel()" title="Télécharger le tableau au format Excel (montants et % du CA alimentaire)">📊 Exporter Excel</button><button class="step" type="button" onclick="bdfPdf()" title="Aperçu A4 paysage : imprimer ou enregistrer en PDF">📄 PDF / Imprimer</button></div>
-    <div style="overflow-x:auto;border:1.5px solid var(--border);border-radius:12px"><table class="bd" style="min-width:${260 + 118 * (D.length + 1)}px"><thead><tr><th>Année ${Ty}</th>${cols}<th style="min-width:130px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">Franchise</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${allFinal ? '<span style="color:#15803d;font-weight:800">✅ Définitif</span>' : '<span style="color:#b45309;font-weight:800">🟠 Provisoire</span>'}</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+  pn.innerHTML = tog + head + banner + `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px"><span style="display:inline-flex">${sw('e', '€', '8px 0 0 8px')}${sw('ep', '€ + %', '0')}${sw('p', '% du CA alim.', '0 8px 8px 0')}</span><button class="step" type="button" onclick="BDF.data=null;renderBudget()" title="Relire les budgets">${bdfIco('refresh')}Actualiser</button><button class="step" type="button" onclick="bdfExcel()" title="Télécharger le tableau au format Excel (montants et % du CA alimentaire)">${bdfIco('dl')}Exporter Excel</button><button class="step" type="button" onclick="bdfPdf()" title="Aperçu A4 paysage : imprimer ou enregistrer en PDF">${bdfIco('print')}PDF / Imprimer</button></div>
+    <div style="overflow-x:auto;border:1.5px solid var(--border);border-radius:12px"><table class="bd" style="min-width:${260 + 118 * (D.length + 1)}px"><thead><tr><th>Année ${Ty}</th>${cols}<th style="min-width:130px"><span style="text-transform:none;font-size:.72rem;color:var(--text)">Franchise</span><br><span style="text-transform:none;font-weight:600;font-size:.62rem">${allFinal ? `<span style="color:#15803d;font-weight:800">${bdfIco('ok', 11, 4)}Définitif</span>` : `<span style="color:#b45309;font-weight:800">${bdfIco('clock', 11, 4)}Provisoire</span>`}</span></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="hint" style="margin-top:8px">Montants annuels du compte de résultat prévisionnel de chaque restaurant (mêmes formules que l'onglet « Un restaurant »). % = part du CA alimentaire. Les salaires par poste ne sont pris en compte que si ton accès y donne droit ; sinon le coût mensuel des managers saisi par l'échelon qui y a droit est repris. Lecture seule : rien n'est enregistré ici.</div>`;
 }
 // ── Export Excel et PDF de la Vision Franchise (mêmes données que l'écran ; rien n'est écrit dans l'application) ──
@@ -4047,11 +4058,11 @@ function bdfXlsxBook() {                                                    // c
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(false), 'Montants'); XLSX.utils.book_append_sheet(wb, sheet(true), '% du CA alim.'); return wb;
 }
 async function bdfExcel() {
-  if (!BDF.data) return; const b = event && event.target && event.target.closest ? event.target.closest('button') : null, t0 = b ? b.textContent : '';
-  if (b) { b.disabled = true; b.textContent = '⏳ Export…'; }
+  if (!BDF.data) return; const b = event && event.target && event.target.closest ? event.target.closest('button') : null, t0 = b ? b.innerHTML : '';
+  if (b) { b.disabled = true; b.textContent = 'Export…'; }
   try { await bdfXlsxLoad(); XLSX.writeFile(bdfXlsxBook(), bdfFileBase() + '.xlsx'); }
   catch (e) { alert('Export Excel impossible : ' + ((e && e.message) || e) + '. Vérifiez la connexion et réessayez.'); }
-  if (b) { b.disabled = false; b.textContent = t0; }
+  if (b) { b.disabled = false; b.innerHTML = t0; }
 }
 function bdfPdfClose() { const h = document.getElementById('bdfOv'); if (h) h.remove(); const c = document.getElementById('bdfCss'); if (c) c.remove(); document.body.classList.remove('bdf-on'); document.removeEventListener('keydown', bdfPdfKey); }
 function bdfPdfKey(e) { if (e.key === 'Escape') bdfPdfClose(); }
@@ -4076,9 +4087,9 @@ tr.b td{font-weight:800;background:#e7eefb}tr.k td{font-weight:800;background:#e
 .note{font-size:8.5px;color:#555;margin-top:8px;max-width:1000px;line-height:1.4}
 @media print{.bar,.hint{display:none!important}.wrap{padding:0!important;display:block!important}.pg{box-shadow:none!important;padding:0!important}}
 </style>
-<div class="bar"><span>${E('Budget & PNL · Vision Franchise ' + Ty)}</span><button class="pri" id="go" type="button">🖨 Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
+<div class="bar"><span>${E('Budget & PNL · Vision Franchise ' + Ty)}</span><button class="pri" id="go" type="button">${bdfIco('print', 16, 8)}Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
 <div class="hint">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » (ou votre imprimante), format A4 paysage. Le tableau est ajusté à la largeur de la page ; s'il est long, il continue sur la page suivante avec ses titres.</div>
-<div class="wrap"><div class="pg" id="pg"><div class="sheet" id="sheet"><h1>${E('Budget & PNL · Vision Franchise ' + Ty)}</h1><div class="sub">${allFinal ? '✅ Définitif : tous les budgets sont finalisés' : '🟠 PROVISOIRE : au moins un restaurant n\'a pas de budget finalisé'} · établi le ${bdfStamp()} · % = part du CA alimentaire</div>
+<div class="wrap"><div class="pg" id="pg"><div class="sheet" id="sheet"><h1>${E('Budget & PNL · Vision Franchise ' + Ty)}</h1><div class="sub">${allFinal ? 'Définitif : tous les budgets sont finalisés' : 'PROVISOIRE : au moins un restaurant n\'a pas de budget finalisé'} · établi le ${bdfStamp()} · % = part du CA alimentaire</div>
 <table><thead><tr><th>Année ${Ty}</th>${th}</tr></thead><tbody>${rows}</tbody></table>
 <div class="note">Montants annuels du compte de résultat prévisionnel de chaque restaurant (version la plus avancée du circuit de validation ; « Finalisé » = publié par le franchisé). Les salaires par poste ne sont repris que si l'accès de la personne y donne droit.</div></div></div></div>`;
   document.body.appendChild(host);
@@ -4172,7 +4183,7 @@ function pxpPrint(o) {
 @media print{.bar,.hint{display:none!important}.wrap{padding:0!important;display:block!important}.pg{box-shadow:none!important;zoom:1!important;margin:0!important}}
 .sheet{font-family:'Segoe UI Historic','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000;background:#fff;width:287mm;height:200mm;overflow:hidden}
 </style>
-<div class="bar"><span>${pxpEsc(o.title)}${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><button class="pri" id="go" type="button">🖨 Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
+<div class="bar"><span>${pxpEsc(o.title)}${o.sub ? ' · ' + pxpEsc(o.sub) : ''}</span><button class="pri" id="go" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:8px" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimer / Enregistrer en PDF</button><button class="sec" id="x" type="button">Fermer</button></div>
 <div class="hint">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » (ou votre imprimante) : la feuille tient sur une page A4 paysage.</div>
 <div class="wrap"><div class="pg" id="pg"><div class="sheet">${dom.body.innerHTML}</div></div></div>`;
   document.body.appendChild(host);
