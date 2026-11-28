@@ -11148,7 +11148,7 @@ function plgChBody() {
   return '<div class="plg-chat"><div class="plg-cl" id="plgCl">' + plgChList(R) + '</div>'
     + (lv >= 2 ? '<div class="plg-cf"><textarea id="plgCt" rows="1" maxlength="1000" placeholder="Écrire à l\'équipe de ce restaurant…" aria-label="Message" oninput="plgChDraft(this)" onkeydown="plgChKey(event)">' + plgE(dr) + '</textarea><button type="button" class="plg-btn pri" id="plgCs" onclick="plgChSend()">Envoyer</button></div><div class="plg-mm" style="margin:0">Entrée envoie · Maj + Entrée = nouvelle ligne. Tu peux supprimer tes propres messages (corbeille) ; ils ne se modifient pas. Ils sont lus par toutes les personnes qui ont le planning de ce restaurant.</div>'
       : '<div class="plg-mm" style="margin:0">Lecture seulement : tu peux lire le fil, pas y écrire.</div>')
-    + plgChNotifHtml() + '<div id="plgCe" class="plg-mm" style="margin:0;color:var(--red)"></div></div>';
+    + plgChNotifHtml() + '<div id="plgCmw">' + plgChMailHtml() + '</div><div id="plgCe" class="plg-mm" style="margin:0;color:var(--red)"></div></div>';
 }
 // Notification du navigateur (facultative, par appareil) : prévient d'un nouveau message tant que le site est ouvert dans le navigateur, même en arrière-plan. Sans contenu du message (écran verrouillé).
 function plgChNotifHtml() {
@@ -11157,6 +11157,29 @@ function plgChNotifHtml() {
   if (p === 'granted') return '<div class="plg-mm" style="margin:0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Notifications activées sur cet appareil (tant que ce site reste ouvert dans le navigateur).</div>';
   if (p === 'denied') return '<div class="plg-mm" style="margin:0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px" aria-hidden="true"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Notifications bloquées dans ton navigateur (réglages du site) : tu verras seulement les pastilles.</div>';
   return '<div class="plg-mm" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="plg-btn" onclick="plgChNotifAsk()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Me prévenir d\'un nouveau message sur cet appareil</button><span>Notification du navigateur, tant que ce site est ouvert (même en arrière-plan).</span></div>';
+}
+// E-mail de prévenance (Apps Script : action chat_notify) : envoyé APRÈS l'enregistrement du message, en arrière-plan, sans jamais gêner l'envoi. Jamais le texte du message.
+// Chaque personne règle pour elle-même « Me prévenir par e-mail » (base : planning_chat_pref) ; la case n'apparaît que si la base sait le faire.
+function plgChMailUrl() { try { return (typeof FRANCHISE_CFG !== 'undefined' && FRANCHISE_CFG.apps_script_url) || ''; } catch (e) { return ''; } }
+function plgChMail(R, id) {
+  try { const url = plgChMailUrl(); if (!url || !id) return; fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'chat_notify', restaurant: R, msg_id: id }) }).catch(() => { }); } catch (e) { }
+}
+function plgChMailHtml() {
+  const m = PLG.chat.mail; if (m === null || !plgChMailUrl()) return '';              // undefined : pas encore lu · null : indisponible
+  return '<label class="plg-mm" style="margin:0;display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="plgCm"' + (m && !m.off ? ' checked' : '') + (m === undefined ? ' disabled' : '') + ' onchange="plgChMailSet(this)">'
+    + 'Me prévenir par e-mail d\'un nouveau message (sans son texte, au plus un e-mail toutes les 30 minutes)</label>';
+}
+async function plgChMailLoad() {
+  if (PLG.chat.mail !== undefined || !plgChMailUrl()) return; PLG.chat.mail = undefined;
+  let r = null; try { r = await plgApi('/rest/v1/rpc/planning_chat_pref', 'POST', { f: PLG.FR }); } catch (e) { }
+  PLG.chat.mail = (r && r.ok && r.j && typeof r.j.off === 'boolean') ? { off: r.j.off } : null;
+  const w = document.getElementById('plgCmw'); if (w) w.innerHTML = plgChMailHtml();
+}
+async function plgChMailSet(el) {
+  const off = !el.checked, er = document.getElementById('plgCe'); if (er) er.textContent = ''; el.disabled = true;
+  let r = null; try { r = await plgApi('/rest/v1/rpc/planning_chat_pref', 'POST', { f: PLG.FR, coupe: off }); } catch (e) { }
+  if (r && r.ok && r.j && typeof r.j.off === 'boolean') PLG.chat.mail = { off: r.j.off }; else { el.checked = !el.checked; if (er) er.textContent = '✗ réglage impossible pour le moment.'; }
+  el.disabled = false;
 }
 async function plgChNotifAsk() { try { await Notification.requestPermission(); } catch (e) { } plgRender(); }
 function plgChNotify() {
@@ -11189,6 +11212,7 @@ async function plgChSend() {
   try {
     const r = await plgApi('/rest/v1/rpc/planning_chat_post', 'POST', { f: PLG.FR, resto: R, msg: t });
     if (!r.ok) { const e2 = document.getElementById('plgCe'); if (e2) e2.textContent = '✗ ' + ((r.j && r.j.message) || 'envoi impossible') + ' — ton message est conservé.'; return; }
+    plgChMail(R, r.j && r.j.id);
     PLG.chat.draft[R] = ''; const t2 = document.getElementById('plgCt'); if (t2 && R === PLG.resto) { t2.value = ''; t2.style.height = ''; }
     await plgChFetchNew(R); const el = document.getElementById('plgCl'); if (el) el.scrollTop = el.scrollHeight;
   } finally { PLG.chat.sending = false; const b2 = document.getElementById('plgCs'); if (b2) b2.disabled = false; const t3 = document.getElementById('plgCt'); if (t3) t3.focus(); }
@@ -11197,6 +11221,7 @@ async function plgChOpen() {                                                    
   const R = PLG.resto; if (!R || !plgChOn()) return;
   const c = PLG.chat.by[R] || (PLG.chat.by[R] = { msgs: [], last: 0, loaded: false, seenAtOpen: 0 }); c.seenAtOpen = PLG.chat.seen[R] || 0;
   await plgChFetchNew(R); plgChMarkSeen(R); plgChPaint(R, true); const ta = document.getElementById('plgCt'); if (ta) ta.focus();
+  plgChMailLoad();
   plgChBadges();
 }
 function plgChBadges() {                                                        // pastilles sans redessiner la page (tuile, onglets des restaurants, pastille de l'espace)
@@ -12235,7 +12260,7 @@ function switchEspace(name) {
 
 <!-- ════════ DÉTECTION DE MISE À JOUR ════════ -->
 <script>
-const BUILD_VERSION = '20261128-163431';
+const BUILD_VERSION = '20261128-164708';
 (function () {
   if (BUILD_VERSION === '__BUILD' + '_VERSION__') return; // template non généré
   try {
